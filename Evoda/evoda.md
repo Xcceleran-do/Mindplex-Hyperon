@@ -125,7 +125,9 @@ function rule_covering(KG, target, max_rules, ...):
         return rules
 ```
 
----
+## Implementation Notes
+
+The described algorithm can be implemented and used directly without requiring adaptations at this stage. For future improvements, concepts from hypergraph theory could be incorporated to enhance rule learning and representation.
 
 ## Summary
 

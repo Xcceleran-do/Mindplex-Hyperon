@@ -18,8 +18,8 @@ This branch is dedicated to the implementation and experimentation of symbolic a
 
 **Guidelines for contributors:**
 - Select a symbolic, graph-based recommendation method or algorithm for implementation.
-- Document the selected approach, your implementation details, and analysis in the `docs` folder. Include a summary of the method, core algorithms or logic, and how it is adapted or integrated into Mindplex Hyperon.
 - Create a dedicated folder named after the symbolic the algorithm you are implementing, in the root directory for your implementation.
+- Document the selected approach, your implementation details, and analysis  as .md file in your folder. Include a summary of the method, core algorithms or logic, and how it is adapted or integrated into Mindplex Hyperon.
 - Ensure your code is modular and adheres to the project's contribution standards.
 - Provide clear explanations and comments to support understanding and future enhancements.
 
