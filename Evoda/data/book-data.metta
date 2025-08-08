@@ -1,0 +1,98 @@
+; Book to Author
+(author_of (Book "Emegua") (Author "Alemayew Wase"))
+(author_of (Book "Beneath the Acacia Tree") (Author "Liya Tesfaye"))
+(author_of (Book "Digital Abyss") (Author "Samuel D. Mekonnen"))
+(author_of (Book "Echoes of Sheba") (Author "Hanna Bekele"))
+
+; Book to Genre
+(genre_of (Book "Emegua") (Genre "Fiction"))
+(genre_of (Book "Emegua") (Genre "Spiritual"))
+(genre_of (Book "Beneath the Acacia Tree") (Genre "Historical"))
+(genre_of (Book "Beneath the Acacia Tree") (Genre "Drama"))
+(genre_of (Book "Digital Abyss") (Genre "Science Fiction"))
+(genre_of (Book "Digital Abyss") (Genre "Thriller"))
+(genre_of (Book "Digital Abyss") (Genre "Fiction"))
+(genre_of (Book "Echoes of Sheba") (Genre "Mythology"))
+(genre_of (Book "Echoes of Sheba") (Genre "Adventure"))
+(genre_of (Book "Echoes of Sheba") (Genre "Science Fiction"))
+
+; Book to Publication Year
+(publication_year_of (Book "Emegua") (Year 2005))
+(publication_year_of (Book "Beneath the Acacia Tree") (Year 2010))
+(publication_year_of (Book "Digital Abyss") (Year 2018))
+(publication_year_of (Book "Echoes of Sheba") (Year 2022))
+
+; User to Book (has read)
+(has_read (User "Robel Sisay") (Book "Emegua"))
+(has_read (User "Robel Sisay") (Book "Digital Abyss"))
+(has_read (User "Saron Melaku") (Book "Beneath the Acacia Tree"))
+(has_read (User "Saron Melaku") (Book "Echoes of Sheba"))
+(has_read (User "Saron Melaku") (Book "Emegua"))
+(has_read (User "Nahom Tadesse") (Book "Digital Abyss"))
+(has_read (User "Nahom Tadesse") (Book "Echoes of Sheba"))
+(has_read (User "Hana Desta") (Book "Beneath the Acacia Tree"))
+(has_read (User "Hana Desta") (Book "Emegua"))
+(has_read (User "Robel Sisay") (Book "Echoes of Sheba"))
+
+; User to Interest (from genres of Books they've read)
+(interested_in (User "Robel Sisay") (Genre "Fiction"))
+(interested_in (User "Robel Sisay") (Genre "Spiritual"))
+(interested_in (User "Robel Sisay") (Genre "Science Fiction"))
+(interested_in (User "Robel Sisay") (Genre "Thriller"))
+(interested_in (User "Robel Sisay") (Genre "Mythology"))
+(interested_in (User "Robel Sisay") (Genre "Adventure"))
+
+(interested_in (User "Saron Melaku") (Genre "Historical"))
+(interested_in (User "Saron Melaku") (Genre "Drama"))
+(interested_in (User "Saron Melaku") (Genre "Mythology"))
+(interested_in (User "Saron Melaku") (Genre "Adventure"))
+(interested_in (User "Saron Melaku") (Genre "Science Fiction"))
+(interested_in (User "Saron Melaku") (Genre "Fiction"))
+(interested_in (User "Saron Melaku") (Genre "Spiritual"))
+
+(interested_in (User "Nahom Tadesse") (Genre "Science Fiction"))
+(interested_in (User "Nahom Tadesse") (Genre "Thriller"))
+(interested_in (User "Nahom Tadesse") (Genre "Fiction"))
+(interested_in (User "Nahom Tadesse") (Genre "Mythology"))
+(interested_in (User "Nahom Tadesse") (Genre "Adventure"))
+
+(interested_in (User "Hana Desta") (Genre "Historical"))
+(interested_in (User "Hana Desta") (Genre "Drama"))
+(interested_in (User "Hana Desta") (Genre "Fiction"))
+(interested_in (User "Hana Desta") (Genre "Spiritual"))
+
+; User to User (friendship or similar interests)
+(friend (User "Robel Sisay") (User "Nahom Tadesse"))
+(friend (User "Saron Melaku") (User "Hana Desta"))
+(friend (User "Robel Sisay") (User "Saron Melaku"))
+
+(similar_interest (User "Robel Sisay") (User "Nahom Tadesse"))
+(similar_interest (User "Saron Melaku") (User "Hana Desta"))
+
+; Book to Book (similar genre)
+(similar_genre (Book "Emegua") (Book "Digital Abyss"))
+(similar_genre (Book "Echoes of Sheba") (Book "Digital Abyss"))
+(similar_genre (Book "Beneath the Acacia Tree") (Book "Emegua"))
+
+; Author to Genre
+(author_genre (Author "Alemayew Wase") (Genre "Fiction"))
+(author_genre (Author "Alemayew Wase") (Genre "Spiritual"))
+(author_genre (Author "Liya Tesfaye") (Genre "Historical"))
+(author_genre (Author "Liya Tesfaye") (Genre "Drama"))
+(author_genre (Author "Samuel D. Mekonnen") (Genre "Science Fiction"))
+(author_genre (Author "Samuel D. Mekonnen") (Genre "Thriller"))
+(author_genre (Author "Hanna Bekele") (Genre "Mythology"))
+(author_genre (Author "Hanna Bekele") (Genre "Adventure"))
+(author_genre (Author "Hanna Bekele") (Genre "Science Fiction"))
+
+; Author to User (favorite author)
+(favorite_author (User "Robel Sisay") (Author "Samuel D. Mekonnen"))
+(favorite_author (User "Saron Melaku") (Author "Liya Tesfaye"))
+(favorite_author (User "Nahom Tadesse") (Author "Hanna Bekele"))
+(favorite_author (User "Hana Desta") (Author "Alemayew Wase"))
+
+; Book to Language
+(language (Book "Emegua") (Language "Amharic"))
+(language (Book "Beneath the Acacia Tree") (Language "English"))
+(language (Book "Digital Abyss") (Language "English"))
+(language (Book "Echoes of Sheba") (Language "Amharic"))

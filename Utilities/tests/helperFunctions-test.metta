@@ -199,3 +199,15 @@
 !(assertEqual (range' 10 4) (10 9 8 7 6 5 4))
 !(assertEqual (range' 3 10) ())
 !(assertEqual (range' 12 10) (12 11 10))
+
+;; Test cases for bySecondAtom
+!(assertEqual (bySecondAtom (a 1) (b 2)) False)
+!(assertEqual (bySecondAtom (a 10) (b 2)) True)
+
+;; Test cases for randomAtom
+!(assertEqual (isMember (randomAtom (1 2 3)) (1 2 3)) True)
+!(assertEqual (isMember (randomAtom (1 2 3)) (4 5 6)) False)
+
+;; Test cases for flatten
+!(assertEqual (flatten ((1 2 3) (a b c))) (1 2 3 a b c))
+!(assertEqual (flatten ((1 2) ($x $y c) ((1) (2)))) (1 2 $x $y c (1) (2)))

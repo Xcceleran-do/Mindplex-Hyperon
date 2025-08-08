@@ -1,3 +1,4 @@
+!(bind random-int (py-atom random.random))
 ;; Helper functions that are going to be useful for writing any metta code
 (= (!= $a $b) (not (== $a $b)))
 
@@ -89,7 +90,7 @@
 (: any (-> Atom Bool))
 (= (any $bools) (isMember True $bools))
 
-(= (sum $list) (foldl-atom $list 0 $x $acc (+ $x $acc)))
+(= (sum $list) (foldl-atom $list 0 $acc $x (+ $x $acc)))
 
 ;; Function to count atom occrence in a list of atoms.
 (= (count $atom $list)
@@ -339,3 +340,27 @@
             (chain (eval (+ $min 1)) $nxt
             (chain (eval (range' $max $nxt $nacc)) $res $res))))) $final 
                 (return $final)))))
+
+
+; A function which return true if the second atom of the first experation is greater than the second's
+(: bySecondAtom (-> ($a Number) ($b Number) Bool))
+(= (bySecondAtom $x $y) 
+    (function
+    (chain (eval (index-atom $x 1)) $xSecond
+    (chain (eval (index-atom $y 1)) $ySecond
+    (chain (eval (> $xSecond $ySecond)) $bool
+    (return $bool))))
+    ))
+
+;; A function to randomly pick an atom from a given expression
+(: randomAtom (-> Expression Atom)) 
+(= (randomAtom $expr)
+    (function 
+        (chain (eval (size-atom $expr)) $size
+        (chain (eval (random-int &rng 0 $size)) $randIdx
+        (chain (eval (index-atom $expr $randIdx)) $rand
+        (return ($rand $randIdx)))))))
+
+;; This function takes an expression of expressions and returns it flatten
+(= (flatten $expr)
+    (foldl-atom $expr () $acc $x (eval (union-atom $acc $x))))
