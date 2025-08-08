@@ -1,7 +1,7 @@
-!(register-module! ../../../MINDPLEX-HYPERON)
-!(import! &self MINDPLEX-HYPERON:utilities:helperFunctions)
-!(import! &data MINDPLEX-HYPERON:Evoda:data:book-data)
-!(import! &self MINDPLEX-HYPERON:Evoda:evoda)
+!(register-module! ../../../Mindplex-Hyperon)
+!(import! &self Mindplex-Hyperon:Utilities:helperFunctions)
+!(import! &data Mindplex-Hyperon:Evoda:data:book-data)
+!(import! &self Mindplex-Hyperon:Evoda:evoda)
 !(bind! &kb (new-space))
 !(add-reducts &kb (collapse (get-atoms &data)))
 !(bind! rule1 ((has_read (User $x) (Book $y)) (has_read (User $z) (Book $y)) (friend (User $x) (User $z))));; user $x reads book $y because his friend $z has read the same book
