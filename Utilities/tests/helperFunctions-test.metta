@@ -205,8 +205,8 @@
 !(assertEqual (bySecondAtom (a 10) (b 2)) True)
 
 ;; Test cases for randomAtom
-!(assertEqual (isMember (randomAtom (1 2 3)) (1 2 3)) True)
-!(assertEqual (isMember (randomAtom (1 2 3)) (4 5 6)) False)
+!(assertEqual (let ($x $i) (randomAtom (1 2 3)) (isMember $x (1 2 3))) True)
+!(assertEqual (let ($x $i) (randomAtom (1 2 3)) (isMember $x (4 5 6))) False)
 
 ;; Test cases for flatten
 !(assertEqual (flatten ((1 2 3) (a b c))) (1 2 3 a b c))
