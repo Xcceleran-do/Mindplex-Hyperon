@@ -68,6 +68,6 @@
 !(assertEqual (argmax (rule1 rule2 rule3) countSupport &kb) rule2)
 
 ;; Test cases for ruleCovering 
-; !(assertEqual (let $rules (ruleCovering 5 &kb (has_read (User "Saron Melaku") (Book $x)) 100 100 stdConfidence 0.1 0.7 ($a $b $c)) (size-atom $rules)) 5) ; we'll need to run it for significant amout of popSize and maxGen to gen a result which is not possible with metta. This may fail if the &kb data is covered with less than 5 rules (rare case)
+!(assertEqual (let $rules (ruleCovering 5 &kb (has_read (User "Saron Melaku") (Book $x)) 2 1 stdConfidence 0.1 0.7 ($a $b $c) ()) (size-atom $rules)) 5) ; we'll need to run it for significant amout of popSize and maxGen to gen a result which is not possible with metta. This may fail if the &kb data is covered with less than 5 rules (rare case)
 ; !(assertEqual (let $rules  (ruleCovering 5 &kb (has_read (User $y) (Book $x)) 100 100 stdConfidence 0.1 0.7 ($a $b $c)) (size-atom $rules)) 5) ; we'll need to run it for significant amout of popSize and maxGen to gen a result which is not possible with metta. This may fail if the &kb data is covered with less than 5 rules (rare case)
 ; !(assertEqual (let $rules  (ruleCovering 5 &kb (has_read (User $y) (Book "Emegua")) 100 100 stdConfidence 0.1 0.7 5 ($a $b $c)) (size-atom $rules)) 5) ; we'll need to run it for significant amout of popSize and maxGen to gen a result which is not possible with metta. This may fail if the &kb data is covered with less than 5 rules (rare case)
