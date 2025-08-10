@@ -60,14 +60,14 @@
 !(assertEqual (let $pop (initialPop (has_read (User $x) (Book $y)) 2 &kb) (size-atom $pop)) 2) 
 
 ;; Test cases for consAtom
-!(assertEqual (let $pop (consAtom ((author_of Book Author) (genre_of Book Genre) (publication_year_of Book Year) (has_read User Book) (interested_in User Genre) (friend User User) (similar_interest User User) (similar_genre Book Book) (author_genre Author Genre) (favorite_author User Author) (language Book Language)) 5 () (has_read (User $x) (Book $y))) (size-atom $pop)) 5)
-!(assertEqual (let $pop (consAtom ((author_of Book Author) (genre_of Book Genre) (publication_year_of Book Year) (has_read User Book) (interested_in User Genre) (friend User User) (similar_interest User User) (similar_genre Book Book) (author_genre Author Genre) (favorite_author User Author) (language Book Language)) 2 () (has_read (User $x) (Book $y))) (size-atom $pop)) 2) 
+!(assertEqual (let $pop (consAtom ((author_of Book Author) (genre_of Book Genre) (publication_year_of Book Year) (has_read User Book) (interested_in User Genre) (friend User User) (similar_interest User User) (similar_genre Book Book) (author_genre Author Genre) (favorite_author User Author) (language Book Language)) 5 () &kb (has_read (User $x) (Book $y))) (size-atom $pop)) 5)
+!(assertEqual (let $pop (consAtom ((author_of Book Author) (genre_of Book Genre) (publication_year_of Book Year) (has_read User Book) (interested_in User Genre) (friend User User) (similar_interest User User) (similar_genre Book Book) (author_genre Author Genre) (favorite_author User Author) (language Book Language)) 2 () &kb (has_read (User $x) (Book $y))) (size-atom $pop)) 2) 
 
 ;; Test cases for argmax
 !(assertEqual (argmax (rule1 rule2 rule3) stdConfidence &kb) rule3)
 !(assertEqual (argmax (rule1 rule2 rule3) countSupport &kb) rule2)
 
 ;; Test cases for ruleCovering 
-!(assertEqual (let $rules (ruleCovering 5 &kb (has_read (User "Saron Melaku") (Book $x)) 100 100 stdConfidence 0.1 0.7 ($a $b $c)) (size-atom $rules)) 5) ; we'll need to run it for significant amout of popSize and maxGen to gen a result which is not possible with metta. This may fail if the &kb data is covered with less than 5 rules (rare case)
+; !(assertEqual (let $rules (ruleCovering 5 &kb (has_read (User "Saron Melaku") (Book $x)) 100 100 stdConfidence 0.1 0.7 ($a $b $c)) (size-atom $rules)) 5) ; we'll need to run it for significant amout of popSize and maxGen to gen a result which is not possible with metta. This may fail if the &kb data is covered with less than 5 rules (rare case)
 ; !(assertEqual (let $rules  (ruleCovering 5 &kb (has_read (User $y) (Book $x)) 100 100 stdConfidence 0.1 0.7 ($a $b $c)) (size-atom $rules)) 5) ; we'll need to run it for significant amout of popSize and maxGen to gen a result which is not possible with metta. This may fail if the &kb data is covered with less than 5 rules (rare case)
 ; !(assertEqual (let $rules  (ruleCovering 5 &kb (has_read (User $y) (Book "Emegua")) 100 100 stdConfidence 0.1 0.7 5 ($a $b $c)) (size-atom $rules)) 5) ; we'll need to run it for significant amout of popSize and maxGen to gen a result which is not possible with metta. This may fail if the &kb data is covered with less than 5 rules (rare case)
