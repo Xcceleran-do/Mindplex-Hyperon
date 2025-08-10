@@ -131,7 +131,7 @@
     ))))
 
 ;; a function which manage the whole proccess of learning a rule. It generate initial population based on the target using singlton copy rule with a size of $popSize. Gets the argmax based on the ftness function and generate population by calling generatePop function.
-(: ruleLearning (-> Atom Expression Expression Number (-> Expression Atom Number) Number Number Expression Expression))
+(: ruleLearning (-> Atom Expression Number Number (-> Expression Atom Number) Number Number Expression Expression))
 (= (ruleLearning $kg $target $popSize $maxGen $fitnessFn $mutationRate $crossoverRate $variables)
     (let*(
         ($initialPop (initialPop $target $popSize $kg))
@@ -176,21 +176,23 @@
 (= (initialPop $target $popSize $kg)
     (let*(
         ($predicates' (getPredicates $kg))
-        ($atoms (consAtom $predicates' $popSize () $target))
+        ($atoms (consAtom $predicates' $popSize () $kg $target))
     )
     $atoms
     ))
 
 ;; a helper function for initialPop to generate atoms with a singltone copy rule on the target atom.
-(: consAtom (-> Expression Number Expression Expression Expression))
-(= (consAtom $preds $popSize $acc ($head ($sType $s)  ($oType $o)))
+(: consAtom (-> Expression Number Expression Atom Expression Expression))
+(= (consAtom $preds $popSize $acc $kg ($head ($sType $s)  ($oType $o)))
     (if (> $popSize 0)
         (let*(
             ((($pred $subjectType $objectType) $idx) (randomAtom $preds))
             ($bool (== $pred $head))
-            (($accum $popSize') (if $bool ($acc $popSize) ((cons-atom (($head ($sType $s')  ($oType $o)) ($pred ($subjectType $s) ($objectType $o))) $acc) (- $popSize 1))))
+            ($count (countSupport (($pred ($subjectType $s) ($objectType $o))) $kg))
+            ($bool2 (< $count 1))
+            (($accum $popSize') (if (or $bool2 $bool) ($acc $popSize) ((cons-atom (($head ($sType $s)  ($oType $o)) ($pred ($subjectType $s) ($objectType $o))) $acc) (- $popSize 1))))
             )
-            (consAtom $preds $popSize' $accum ($head ($sType $s)  ($oType $o))))
+            (consAtom $preds $popSize' $accum $kg ($head ($sType $s)  ($oType $o))))
         $acc))
 
 ;; a function to pick the top one based on the fitness function
