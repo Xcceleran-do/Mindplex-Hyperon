@@ -32,7 +32,7 @@
     )
     $res
     )
-    ())
+    0)
 )
 ;; a function to select top 2 fittest rules from the population 
     ;; Args: 
@@ -134,8 +134,7 @@
 (: ruleLearning (-> Atom Expression Number Number (-> Expression Atom Number) Number Number Expression Expression))
 (= (ruleLearning $kg $target $popSize $maxGen $fitnessFn $mutationRate $crossoverRate $variables)
     (let*(
-        ($initialPop (initialPop $target $popSize $kg))
-        (() (println! $initialPop))
+        ($initialPop (initialPop $target $popSize $kg $variables))
         ($bestSet ((argmax $initialPop $fitnessFn $kg)))
         ($genList (range 1 $maxGen))
         ($newBest (foldl-atom $genList $initialPop $accum $genNum (generatePop $bestSet $accum $kg $target $popSize $maxGen $fitnessFn $mutationRate $crossoverRate $variables)))
@@ -153,7 +152,7 @@
         (($child1 $child2) (crossover $parent1 $parent2 $crossoverRate))
         ($child1' (mutate $child1 $initialPop $mutationRate $kg $variables))
         ($child2' (mutate $child2 $initialPop $mutationRate $kg $variables))
-        ($newBest (let $newBest' (if (isValidNewRule $child1 $bestSet $kg) (appendAtom $bestSet $child1') $bestSet) (if (isValidNewRule $child2 $newBest' $kg) (appendAtom $newBest' $child2') $newBest')))
+        ($newBest (let $newBest' (if (isValidNewRule $child1' $bestSet $kg) (appendAtom $bestSet $child1') $bestSet) (if (isValidNewRule $child2' $newBest' $kg) (appendAtom $newBest' $child2') $newBest')))
         ($bestSize (size-atom $newBest))
     )
     (if (< $bestSize $popSize) (generatePop $newBest $initialPop $kg $target $popSize $maxGen $fitnessFn $mutationRate $crossoverRate $variables) $newBest
@@ -172,27 +171,28 @@
     )
 
 ;; a function to initialize a new population set using a singltone copy rule 
-(: initialPop (-> Expression Number Atom Expression))
-(= (initialPop $target $popSize $kg)
+(: initialPop (-> Expression Number Atom Expression Expression))
+(= (initialPop $target $popSize $kg $variables)
     (let*(
         ($predicates' (getPredicates $kg))
-        ($atoms (consAtom $predicates' $popSize () $kg $target))
+        ($atoms (consAtom $predicates' $popSize () $kg $target $variables))
     )
     $atoms
     ))
 
 ;; a helper function for initialPop to generate atoms with a singltone copy rule on the target atom.
-(: consAtom (-> Expression Number Expression Atom Expression Expression))
-(= (consAtom $preds $popSize $acc $kg ($head ($sType $s)  ($oType $o)))
+(: consAtom (-> Expression Number Expression Atom Expression Expression Expression))
+(= (consAtom $preds $popSize $acc $kg ($head ($sType $s)  ($oType $o)) $variables)
     (if (> $popSize 0)
         (let*(
             ((($pred $subjectType $objectType) $idx) (randomAtom $preds))
+            (($newO $objIdx) (randomAtom $variables))
             ($bool (== $pred $head))
             ($count (countSupport (($pred ($subjectType $s) ($objectType $o))) $kg))
             ($bool2 (< $count 1))
-            (($accum $popSize') (if (or $bool2 $bool) ($acc $popSize) ((cons-atom (($head ($sType $s)  ($oType $o)) ($pred ($subjectType $s) ($objectType $o))) $acc) (- $popSize 1))))
+            (($accum $popSize') (if (or $bool2 $bool) ($acc $popSize) ((cons-atom (($head ($sType $s)  ($oType $o)) ($pred ($subjectType $s) ($objectType $newO))) $acc) (- $popSize 1))))
             )
-            (consAtom $preds $popSize' $accum $kg ($head ($sType $s)  ($oType $o))))
+            (consAtom $preds $popSize' $accum $kg ($head ($sType $s)  ($oType $o)) $variables))
         $acc))
 
 ;; a function to pick the top one based on the fitness function
@@ -215,7 +215,6 @@
         ($fitness ($fitnessFn $curRule $kg))
         ($curRule' (cons-atom , $curRule))
         ($newAcc (cons-atom ($curRule $fitness) $acc))
-        ($_ (collapse (let $sup (match $kg $curRule' (car-atom $curRule)) (remove-atom $kg $sup))))
         ($remaining (collapse (get-atoms $kg)))
         ($maxRules' (- $maxRules 1))
     )
