@@ -1,0 +1,101 @@
+post_id,text,length,topic,style,structure,likes,shares,comments,views
+1,AI intro post,800,AI,Casual,List,500,200,50,10000
+2,AI advanced post,2000,AI,Formal,Narrative,100,50,20,5000
+3,Cooking basics,600,Cooking,Casual,List,300,100,30,8000
+4,Healthy recipes,900,Cooking,Formal,Narrative,200,80,25,6000
+5,Travel tips,700,Travel,Casual,List,400,150,40,9000
+6,Europe travel guide,1200,Travel,Formal,Narrative,150,60,15,4000
+7,AI trends 2025,1000,AI,Casual,Narrative,550,220,60,12000
+8,Machine learning 101,850,AI,Formal,List,120,55,18,4500
+9,Quick pasta,500,Cooking,Casual,List,320,110,28,7000
+10,Advanced baking,1100,Cooking,Formal,Narrative,180,70,22,5000
+11,Backpacking Asia,950,Travel,Casual,Narrative,420,160,38,9500
+12,Travel on budget,1050,Travel,Formal,List,130,50,12,3500
+13,AI for beginners,750,AI,Casual,List,480,190,48,9800
+14,Deep learning explained,1800,AI,Formal,Narrative,90,45,17,4200
+15,Easy salads,550,Cooking,Casual,List,310,105,27,6800
+16,Holiday meals,950,Cooking,Formal,Narrative,170,65,21,4800
+17,City guides,800,Travel,Casual,List,410,155,36,9200
+18,Travel safety,1150,Travel,Formal,Narrative,140,55,13,3300
+19,AI in healthcare,950,AI,Casual,Narrative,530,210,58,11500
+20,AI ethics,1600,AI,Formal,List,110,52,19,4700
+21,Quick desserts,600,Cooking,Casual,List,305,102,26,6700
+22,Meal prep,1000,Cooking,Formal,Narrative,165,62,20,4700
+23,Hidden gems,850,Travel,Casual,Narrative,415,158,37,9400
+24,Travel checklist,950,Travel,Formal,List,125,48,11,3200
+25,AI for business,800,AI,Casual,List,495,195,49,9900
+26,Neural networks,1700,AI,Formal,Narrative,95,47,16,4300
+27,One-pot meals,650,Cooking,Casual,List,315,108,29,6900
+28,World cuisines,1200,Cooking,Formal,Narrative,175,68,23,5100
+29,Travel packing,900,Travel,Casual,List,405,152,35,9100
+30,Travel insurance,1100,Travel,Formal,Narrative,135,53,14,3400
+31,AI in finance,1000,AI,Casual,Narrative,540,215,61,11800
+32,AI and society,1500,AI,Formal,List,105,51,18,4600
+33,Quick breakfasts,550,Cooking,Casual,List,308,104,25,6600
+34,Comfort food,950,Cooking,Formal,Narrative,168,63,19,4600
+35,Weekend getaways,850,Travel,Casual,Narrative,418,157,36,9300
+36,Travel apps,950,Travel,Formal,List,128,49,10,3100
+37,AI for kids,800,AI,Casual,List,485,192,47,9700
+38,AI research,1900,AI,Formal,Narrative,85,43,15,4100
+39,Simple soups,600,Cooking,Casual,List,312,106,28,6800
+40,Family dinners,1000,Cooking,Formal,Narrative,162,60,18,4500
+41,Travel hacks,800,Travel,Casual,List,412,154,34,9000
+42,Travel planning,1200,Travel,Formal,Narrative,138,54,13,3200
+43,AI in art,950,AI,Casual,Narrative,525,208,56,11300
+44,AI and music,1550,AI,Formal,List,108,50,17,4500
+45,Quick lunches,650,Cooking,Casual,List,318,109,27,6700
+46,Seasonal recipes,1100,Cooking,Formal,Narrative,178,69,22,5200
+47,Travel stories,900,Travel,Casual,Narrative,408,150,33,8900
+48,Travel budgeting,1050,Travel,Formal,List,132,51,12,3300
+49,AI for writers,850,AI,Casual,List,490,198,50,10000
+50,AI and law,1650,AI,Formal,Narrative,92,46,14,4000
+51,Healthy snacks,600,Cooking,Casual,List,314,107,26,6600
+52,Classic dishes,950,Cooking,Formal,Narrative,166,64,20,4700
+53,Travel essentials,850,Travel,Casual,List,407,153,32,8800
+54,Travel with kids,950,Travel,Formal,Narrative,130,52,11,3000
+55,AI in education,900,AI,Casual,Narrative,520,205,55,11200
+56,AI and jobs,1400,AI,Formal,List,112,53,16,4400
+57,Quick dinners,650,Cooking,Casual,List,316,110,28,6800
+58,Comfort classics,1200,Cooking,Formal,Narrative,172,67,21,5000
+59,Travel food,900,Travel,Casual,Narrative,410,151,31,8700
+60,Travel gear,1100,Travel,Formal,List,134,54,13,3200
+61,AI for marketing,950,AI,Casual,List,488,196,48,9800
+62,AI and ethics,1600,AI,Formal,Narrative,97,48,15,4200
+63,Simple salads,550,Cooking,Casual,List,309,103,24,6500
+64,Family favorites,950,Cooking,Formal,Narrative,164,61,19,4600
+65,Travel inspiration,850,Travel,Casual,List,409,156,30,8700
+66,Travel tips advanced,950,Travel,Formal,Narrative,129,50,10,2900
+67,AI for startups,800,AI,Casual,Narrative,515,202,53,11000
+68,AI and privacy,1500,AI,Formal,List,107,49,16,4300
+69,Quick snacks,600,Cooking,Casual,List,311,105,25,6600
+70,Seasonal favorites,1000,Cooking,Formal,Narrative,160,59,18,4400
+71,Travel diaries,900,Travel,Casual,Narrative,406,149,29,8600
+72,Travel planning pro,1050,Travel,Formal,List,131,52,11,3100
+73,AI for creators,850,AI,Casual,List,492,197,51,10100
+74,AI and future,1700,AI,Formal,Narrative,93,44,13,3900
+75,Quick meals,650,Cooking,Casual,List,313,108,26,6700
+76,Classic recipes,1200,Cooking,Formal,Narrative,174,66,20,4900
+77,Travel fun,900,Travel,Casual,List,404,150,28,8500
+78,Travel safety tips,1100,Travel,Formal,Narrative,136,55,12,3000
+79,AI in media,950,AI,Casual,Narrative,522,204,54,11100
+80,AI and bias,1550,AI,Formal,List,109,51,15,4400
+81,Quick breakfasts 2,550,Cooking,Casual,List,307,102,23,6400
+82,Comfort food 2,950,Cooking,Formal,Narrative,162,60,18,4500
+83,Weekend trips,850,Travel,Casual,Narrative,402,148,27,8400
+84,Travel checklist 2,950,Travel,Formal,List,127,49,10,2800
+85,AI for everyone,800,AI,Casual,List,486,193,46,9600
+86,Neural nets,1800,AI,Formal,Narrative,88,42,12,3800
+87,Simple dinners,600,Cooking,Casual,List,310,104,24,6500
+88,Family meals,1000,Cooking,Formal,Narrative,158,57,16,4300
+89,Travel hacks 2,800,Travel,Casual,List,400,148,26,8300
+90,Travel insurance 2,1100,Travel,Formal,Narrative,133,53,11,2700
+91,AI in sports,950,AI,Casual,Narrative,518,201,52,10900
+92,AI and society 2,1500,AI,Formal,List,106,48,14,4200
+93,Quick lunches 2,650,Cooking,Casual,List,312,106,23,6400
+94,Seasonal dishes,1100,Cooking,Formal,Narrative,170,68,19,4800
+95,Travel stories 2,900,Travel,Casual,Narrative,398,147,25,8200
+96,Travel budgeting 2,1050,Travel,Formal,List,129,50,9,2600
+97,AI for leaders,850,AI,Casual,List,484,191,45,9500
+98,AI and law 2,1650,AI,Formal,Narrative,91,43,11,3700
+99,Healthy snacks 2,600,Cooking,Casual,List,308,102,22,6300
+100,Classic meals,950,Cooking,Formal,Narrative,160,58,17,4200
