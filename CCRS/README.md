@@ -99,8 +99,22 @@ python main.py
 ```
 Past avg engagement for 'AI': 928.74.
 Recommended: Length=500, Style=Casual, Structure=Narrative (Predicted: 1598.83 engagement).
-Explanation: Top factors: topic_AI (+299.1), structure_Narrative (+295.5), structure_List (-153.3)
+Explanation (improved):
+Baseline (avg): 928.74. Predicted: 1598.83. Delta: +670.09.
+Top contributors:
+  topic_AI: +299.1 (45% of top contributions)
+  structure_Narrative: +295.5 (45% of top contributions)
+  structure_List: -153.3 (23% of top contributions)
+Recommendation: Recommendation increases predicted engagement mainly because the model favors Topic='AI' and Structure='Narrative' and disfavors Structure='List' — prefer Topic='AI', Structure='Narrative' over Structure='List'.
 ```
+
+**Explanation format**
+
+- **Baseline (avg):** average model prediction over the background samples (reference point).
+- **Predicted:** model prediction for the recommended candidate.
+- **Delta:** Predicted − Baseline (how much higher/lower the candidate is vs baseline).
+- **Top contributors:** signed SHAP contributions with relative percentages to show importance among top contributors.
+- **Recommendation sentence:** short human-friendly instruction derived from top contributors (what to prefer or avoid).
 
 ## Notes
 

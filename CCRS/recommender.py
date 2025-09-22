@@ -110,10 +110,91 @@ def explain_recommendation(top_config, model_obj, mean, std, feature_cols, train
     background_size = min(50, X_train.shape[0])
     explainer = shap.KernelExplainer(lambda v: loaded_model.predict(v), X_train[:background_size])
     shap_values = explainer.shap_values(x)
-    # Find top contributing features
-    shap_contrib = dict(zip(feature_cols, shap_values[0]))
-    top_feats = sorted(shap_contrib.items(), key=lambda kv: abs(kv[1]), reverse=True)[:3]
-    explanation = "Top factors: " + ", ".join([f"{k} ({float(v):+.1f})" for k, v in top_feats])
+    # Normalize shap_values to a 1-D array of floats corresponding to feature_cols
+    if isinstance(shap_values, list):
+        sv = np.array(shap_values[0])
+    else:
+        sv = np.array(shap_values)
+    sv = np.squeeze(sv)
+    if sv.ndim > 1:
+        sv = sv.ravel()
+    # Ensure we have one value per feature
+    sv = sv[:len(feature_cols)]
+    sv = [float(v) for v in sv]
+    shap_contrib = dict(zip(feature_cols, sv))
+
+    # Compute baseline (expected value) as mean prediction over the background
+    try:
+        preds_bg = np.array(loaded_model.predict(X_train[:background_size]))
+        baseline = float(np.mean(preds_bg.ravel()))
+    except Exception:
+        baseline = 0.0
+    # Predicted value for the input x
+    try:
+        preds_x = np.array(loaded_model.predict(x))
+        predicted = float(preds_x.ravel()[0])
+    except Exception:
+        predicted = 0.0
+    delta = predicted - baseline
+    # Select top features by absolute SHAP value
+    top_feats = sorted(shap_contrib.items(), key=lambda kv: abs(kv[1]), reverse=True)[:5]
+    # Build human-friendly lines: feature (contribution, percent-of-delta)
+    contrib_lines = []
+    total_abs = float(sum(abs(float(v)) for _, v in top_feats))
+    if total_abs == 0:
+        total_abs = 1.0
+    for k, v in top_feats:
+        v_f = float(v)
+        percent = (abs(v_f) / total_abs) * 100
+        contrib_lines.append(f"{k}: {v_f:+.1f} ({percent:.0f}% of top contributions)")
+    explanation = (
+        f"Baseline (avg): {baseline:.2f}. Predicted: {predicted:.2f}. Delta: {delta:+.2f}.\n"
+        f"Top contributors:\n  " + "\n  ".join(contrib_lines)
+    )
+
+    # Build a short recommendation sentence from top features.
+    def pretty(name):
+        if name.startswith('topic_'):
+            return f"Topic='{name.split('_',1)[1]}'"
+        if name.startswith('style_'):
+            return f"Style='{name.split('_',1)[1]}'"
+        if name.startswith('structure_'):
+            return f"Structure='{name.split('_',1)[1]}'"
+        return name
+
+    pos = {'topic': [], 'style': [], 'structure': [], 'other': []}
+    neg = {'topic': [], 'style': [], 'structure': [], 'other': []}
+    for k, v in top_feats:
+        if k.startswith('topic_'):
+            (pos if v > 0 else neg)['topic'].append((k, v))
+        elif k.startswith('style_'):
+            (pos if v > 0 else neg)['style'].append((k, v))
+        elif k.startswith('structure_'):
+            (pos if v > 0 else neg)['structure'].append((k, v))
+        else:
+            (pos if v > 0 else neg)['other'].append((k, v))
+
+    picks = []
+    avoids = []
+    for grp in ('topic', 'style', 'structure'):
+        if pos[grp]:
+            # take top positive contributor
+            picks.append(pretty(sorted(pos[grp], key=lambda x: -x[1])[0][0]))
+        if neg[grp]:
+            avoids.append(pretty(sorted(neg[grp], key=lambda x: x[1])[0][0]))
+
+    if picks and avoids:
+        rec = f"Recommendation increases predicted engagement mainly because the model favors {', '.join(picks)} and disfavors {', '.join(avoids)} — prefer {', '.join(picks)} over {', '.join(avoids)}."
+    elif picks:
+        rec = f"Recommendation increases predicted engagement mainly because the model favors {', '.join(picks)}. Consider preferring {', '.join(picks)}."
+    elif avoids:
+        rec = f"Recommendation increases predicted engagement mainly because the model disfavors {', '.join(avoids)}. Consider avoiding {', '.join(avoids)}."
+    else:
+        # fallback: mention top overall features
+        top_names = [pretty(k) for k, _ in top_feats[:3]]
+        rec = f"Recommendation driven by top features: {', '.join(top_names)}."
+
+    explanation = explanation + "\n" + "Recommendation: " + rec
     logging.info(f"SHAP explanation: {explanation}")
     return explanation
 
