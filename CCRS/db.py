@@ -23,6 +23,15 @@ NEO4J_URI = os.environ.get('NEO4J_URI')
 NEO4J_USER = os.environ.get('NEO4J_USER')
 NEO4J_PASSWORD = os.environ.get('NEO4J_PASSWORD')
 
+# Engagement score weights (defaults can be overridden via .env)
+# Avoid magic numbers by naming weights and allowing configuration.
+LIKES_WEIGHT = float(os.environ.get('ENG_WEIGHT_LIKES', 1.0))
+SHARES_WEIGHT = float(os.environ.get('ENG_WEIGHT_SHARES', 1.5))
+COMMENTS_WEIGHT = float(os.environ.get('ENG_WEIGHT_COMMENTS', 2.0))
+VIEWS_WEIGHT = float(os.environ.get('ENG_WEIGHT_VIEWS', 0.05))
+
+logging.info(f"Engagement weights: likes={LIKES_WEIGHT}, shares={SHARES_WEIGHT}, comments={COMMENTS_WEIGHT}, views={VIEWS_WEIGHT}")
+
 driver = GraphDatabase.driver(
     NEO4J_URI,
     auth=basic_auth(NEO4J_USER, NEO4J_PASSWORD)
@@ -45,8 +54,12 @@ def create_content(tx, row):
     """
     Create Content node and compute engagement_score (FR-1.1)
     """
+    # Compute engagement score using named, configurable weights.
     engagement_score = (
-        row['likes'] + row['shares'] * 1.5 + row['comments'] * 2 + row['views'] * 0.05
+        row['likes'] * LIKES_WEIGHT
+        + row['shares'] * SHARES_WEIGHT
+        + row['comments'] * COMMENTS_WEIGHT
+        + row['views'] * VIEWS_WEIGHT
     )
     tx.run(
         """

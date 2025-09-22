@@ -50,6 +50,17 @@ CCRS/
      ```
    - Make sure Neo4j is running and accessible.
 
+  Optional: configure engagement score weights in the same `.env` file. By default the system uses:
+
+  ```
+  ENG_WEIGHT_LIKES=1.0
+  ENG_WEIGHT_SHARES=1.5
+  ENG_WEIGHT_COMMENTS=2.0
+  ENG_WEIGHT_VIEWS=0.05
+  ```
+
+  These are named, configurable weights applied when computing `engagement_score = likes*W_likes + shares*W_shares + comments*W_comments + views*W_views`. Avoid changing them unless you understand how they affect the target metric; they are configurable to let you match domain importance for interactions.
+
 4. **Prepare your data:**
   - Place your CSV file (e.g., `sample_data.csv`) in the `data/` directory.
   - Ensure it has the following columns (a larger dataset improves model quality; ~50+ rows recommended):
