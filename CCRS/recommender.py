@@ -107,7 +107,8 @@ def explain_recommendation(top_config, model_obj, mean, std, feature_cols, train
 
     # SHAP KernelExplainer (uses model's predict function)
     loaded_model = model_obj if hasattr(model_obj, 'predict') else model.tf.keras.models.load_model(model.MODEL_PATH, compile=False)
-    explainer = shap.KernelExplainer(lambda v: loaded_model.predict(v), X_train[:50])
+    background_size = min(50, X_train.shape[0])
+    explainer = shap.KernelExplainer(lambda v: loaded_model.predict(v), X_train[:background_size])
     shap_values = explainer.shap_values(x)
     # Find top contributing features
     shap_contrib = dict(zip(feature_cols, shap_values[0]))
@@ -120,9 +121,11 @@ if __name__ == "__main__":
     # Example usage for manual testing
     from db import fetch_data
     data = fetch_data()
-    if len(data) < 50:
-        print("Need at least 50 posts for recommendations.")
+    if not data:
+        print("No data available for recommendations.")
     else:
+        if len(data) < 50:
+            print("Warning: fewer than 50 posts available — recommendations may be less reliable.")
         model_obj, mean, std, feature_cols = model.train_model(data)
         msg, top, cand_df, top3 = recommend_for_topic('AI', model_obj, mean, std, feature_cols)
         print(msg)

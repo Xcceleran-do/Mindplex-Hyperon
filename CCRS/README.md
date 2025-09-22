@@ -51,8 +51,8 @@ CCRS/
    - Make sure Neo4j is running and accessible.
 
 4. **Prepare your data:**
-   - Place your CSV file (e.g., `sample_data.csv`) in the `data/` directory.
-   - Ensure it has at least 50 rows and the following columns:
+  - Place your CSV file (e.g., `sample_data.csv`) in the `data/` directory.
+  - Ensure it has the following columns (a larger dataset improves model quality; ~50+ rows recommended):
      ```
      post_id,text,length,topic,style,structure,likes,shares,comments,views
      ```
@@ -93,7 +93,7 @@ Explanation: Top factors: topic_AI (+299.1), structure_Narrative (+295.5), struc
 
 ## Notes
 
-- Requires at least 50 posts for model training.
+- A larger dataset improves model quality; around 50+ posts is recommended but not required.
 - All code is modular and well-documented.
 - No UI is provided; all interaction is via the terminal and CSV files.
 

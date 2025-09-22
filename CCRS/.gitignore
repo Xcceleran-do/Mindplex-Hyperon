@@ -1,3 +1,5 @@
 .env
-step_by_step_guide.txt
-requirements.txt
+
+# Python cache directories
+__pycache__/
+**/__pycache__/

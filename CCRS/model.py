@@ -40,8 +40,7 @@ def train_model(data):
     logging.info("Starting model training.")
     df = pd.DataFrame(data)
     if len(df) < 50:
-        logging.error("Insufficient data for training (<50 posts).")
-        raise ValueError("Need at least 50 posts for training.")
+        logging.warning("Training on small dataset (<50 posts). Model quality may be poor.")
     # One-hot encode categorical features
     X = df[['length', 'topic', 'style', 'structure']]
     X = pd.get_dummies(X, columns=['topic', 'style', 'structure'])
@@ -51,10 +50,17 @@ def train_model(data):
     # Normalize
     X, mean, std = _normalize(X)
     X = X.values.astype(np.float32)
-    # Train/test split (manual, 80/20)
-    idx = int(0.8 * len(X))
-    X_train, X_test = X[:idx], X[idx:]
-    y_train, y_test = y[:idx], y[idx:]
+    # Train/test split (manual, 80/20). For small datasets ensure there is at least one test sample when possible.
+    if len(X) >= 5:
+        idx = int(0.8 * len(X))
+        if idx == len(X):
+            idx = len(X) - 1
+        X_train, X_test = X[:idx], X[idx:]
+        y_train, y_test = y[:idx], y[idx:]
+    else:
+        # Too small for a reliable test split — use all data for training
+        X_train, X_test = X, np.empty((0, X.shape[1]))
+        y_train, y_test = y, np.empty((0,))
     # Build model
     model = tf.keras.Sequential([
         tf.keras.layers.Input(shape=(X.shape[1],)),
@@ -104,9 +110,11 @@ def predict_engagement(input_df, mean, std, feature_cols):
 if __name__ == "__main__":
     from db import fetch_data
     data = fetch_data()
-    if len(data) < 50:
-        print("Need at least 50 posts for training.")
+    if not data:
+        print("No data available for training.")
     else:
+        if len(data) < 50:
+            print("Warning: fewer than 50 posts available — training will proceed but results may be less reliable.")
         model, mean, std, feature_cols = train_model(data)
         print("Model trained and saved.")
         # Test prediction

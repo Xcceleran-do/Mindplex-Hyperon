@@ -31,9 +31,8 @@ def main():
         recommender.performance_report()
         data = db.fetch_data()
         if len(data) < 50:
-            print("Need at least 50 posts for model training.")
-            logging.warning("Insufficient data for model training.")
-            return
+            print("Warning: fewer than 50 posts available — model may be less reliable.")
+            logging.warning("Fewer than 50 posts: proceeding with training, but model quality may be poor.")
         model_obj, mean, std, feature_cols = model.train_model(data)
         # Recommendation for a sample topic
         msg, top, cand_df, top3 = recommender.recommend_for_topic('AI', model_obj, mean, std, feature_cols)
