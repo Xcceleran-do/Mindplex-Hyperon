@@ -1,0 +1,152 @@
+2025-09-18 14:09:49,350 INFO:Neo4j schema setup completed.
+2025-09-18 14:09:55,181 INFO:100 posts imported successfully from data\sample_data.csv.
+2025-09-18 14:22:40,517 INFO:Generating performance report.
+2025-09-18 14:22:40,565 INFO:Performance report generated and saved to performance_report.csv.
+2025-09-18 14:46:05,621 INFO:Starting model training.
+2025-09-18 14:46:10,809 INFO:Model trained. Final loss: 3494.43
+2025-09-18 14:46:10,810 WARNING:You are saving your model as an HDF5 file via `model.save()` or `keras.saving.save_model(model)`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')` or `keras.saving.save_model(model, 'my_model.keras')`. 
+2025-09-18 14:46:10,831 INFO:Model saved to models\nn_model.h5
+2025-09-18 15:04:57,611 INFO:Starting model training.
+2025-09-18 15:05:02,493 INFO:Model trained. Final loss: 7189.52
+2025-09-18 15:05:02,494 WARNING:You are saving your model as an HDF5 file via `model.save()` or `keras.saving.save_model(model)`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')` or `keras.saving.save_model(model, 'my_model.keras')`. 
+2025-09-18 15:05:02,521 INFO:Model saved to models\nn_model.h5
+2025-09-18 15:05:02,522 INFO:Starting inference.
+2025-09-18 15:07:56,180 INFO:Starting model training.
+2025-09-18 15:08:01,447 INFO:Model trained. Final loss: 2830.35
+2025-09-18 15:08:01,447 WARNING:You are saving your model as an HDF5 file via `model.save()` or `keras.saving.save_model(model)`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')` or `keras.saving.save_model(model, 'my_model.keras')`. 
+2025-09-18 15:08:01,459 INFO:Model saved to models\nn_model.h5
+2025-09-18 15:08:01,459 INFO:Starting inference.
+2025-09-18 15:08:01,625 INFO:Inference complete. Predictions: [1333.3792]
+2025-09-19 13:35:47,925 INFO:Starting model training.
+2025-09-19 13:35:53,079 INFO:Model trained. Final loss: 3455.43
+2025-09-19 13:35:53,079 WARNING:You are saving your model as an HDF5 file via `model.save()` or `keras.saving.save_model(model)`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')` or `keras.saving.save_model(model, 'my_model.keras')`. 
+2025-09-19 13:35:53,119 INFO:Model saved to models\nn_model.h5
+2025-09-19 13:35:53,120 INFO:Generating recommendation for topic: AI
+2025-09-19 13:35:53,120 INFO:Starting inference.
+2025-09-19 13:35:53,308 INFO:Inference complete. Predictions: [1470.9236  1610.2727   737.2065   913.46497 1318.6055  1457.9546
+  583.53766  745.2492  1166.2871  1305.6362   438.06177  577.0333 ]
+2025-09-19 13:35:54,127 INFO:Recommendation for AI: Past avg engagement for 'AI': 928.74.
+Recommended: Length=500, Style=Casual, Structure=Narrative (Predicted: 1610.27 engagement).
+2025-09-19 13:35:54,129 INFO:Generating SHAP explanation.
+2025-09-19 13:37:07,506 INFO:Starting model training.
+2025-09-19 13:37:12,233 INFO:Model trained. Final loss: 3588.11
+2025-09-19 13:37:12,233 WARNING:You are saving your model as an HDF5 file via `model.save()` or `keras.saving.save_model(model)`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')` or `keras.saving.save_model(model, 'my_model.keras')`. 
+2025-09-19 13:37:12,245 INFO:Model saved to models\nn_model.h5
+2025-09-19 13:37:12,245 INFO:Generating recommendation for topic: AI
+2025-09-19 13:37:12,246 INFO:Starting inference.
+2025-09-19 13:37:12,384 INFO:Inference complete. Predictions: [1469.0254  1615.0016   736.2327   931.007   1313.3976  1459.2562
+  583.2462   756.1547  1157.6425  1303.5011   441.13525  581.33   ]
+2025-09-19 13:37:12,397 INFO:Recommendation for AI: Past avg engagement for 'AI': 928.74.
+Recommended: Length=500, Style=Casual, Structure=Narrative (Predicted: 1615.00 engagement).
+2025-09-19 13:37:12,399 INFO:Generating SHAP explanation.
+2025-09-19 13:37:12,708 INFO:num_full_subsets = 4
+2025-09-19 13:37:13,168 INFO:np.sum(w_aug) = np.float64(8.000000000000002)
+2025-09-19 13:37:13,168 INFO:np.sum(self.kernelWeights) = np.float64(0.9999999999999996)
+2025-09-19 13:37:13,172 INFO:phi = array([ 117.16340512,  295.5330171 ,   27.27951223,  -62.28645517,
+        151.08856282,   74.36030091, -151.3732722 ,  309.60675231])
+2025-09-19 13:38:08,396 INFO:Starting model training.
+2025-09-19 13:38:12,997 INFO:Model trained. Final loss: 3257.91
+2025-09-19 13:38:12,997 WARNING:You are saving your model as an HDF5 file via `model.save()` or `keras.saving.save_model(model)`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')` or `keras.saving.save_model(model, 'my_model.keras')`. 
+2025-09-19 13:38:13,006 INFO:Model saved to models\nn_model.h5
+2025-09-19 13:38:13,006 INFO:Generating recommendation for topic: AI
+2025-09-19 13:38:13,006 INFO:Starting inference.
+2025-09-19 13:38:13,143 INFO:Inference complete. Predictions: [1466.2859  1598.83     719.8366   891.5675  1322.395   1454.9392
+  572.8347   729.8181  1178.5043  1311.0483   435.22232  568.06866]
+2025-09-19 13:38:13,159 INFO:Recommendation for AI: Past avg engagement for 'AI': 928.74.
+Recommended: Length=500, Style=Casual, Structure=Narrative (Predicted: 1598.83 engagement).
+2025-09-19 13:38:13,161 INFO:Generating SHAP explanation.
+2025-09-19 13:38:13,398 INFO:num_full_subsets = 4
+2025-09-19 13:38:13,887 INFO:np.sum(w_aug) = np.float64(8.000000000000002)
+2025-09-19 13:38:13,887 INFO:np.sum(self.kernelWeights) = np.float64(0.9999999999999996)
+2025-09-19 13:38:13,889 INFO:phi = array([ 109.26291939,  299.11276815,   29.71951233,  -62.5023308 ,
+        149.48104819,   81.07204376, -153.33777059,  295.45607837])
+2025-09-19 13:38:13,892 INFO:SHAP explanation: Top factors: topic_AI (+299.1), structure_Narrative (+295.5), structure_List (-153.3)
+2025-09-19 13:49:12,149 INFO:CCRS system started.
+2025-09-19 13:49:12,254 INFO:Received notification from DBMS server: {severity: INFORMATION} {code: Neo.ClientNotification.Schema.IndexOrConstraintAlreadyExists} {category: SCHEMA} {title: `CREATE CONSTRAINT IF NOT EXISTS FOR (e:Content) REQUIRE (e.id) IS UNIQUE` has no effect.} {description: `CONSTRAINT constraint_c7957a24 FOR (e:Content) REQUIRE (e.id) IS UNIQUE` already exists.} {position: None} for query: 'CREATE CONSTRAINT IF NOT EXISTS FOR (c:Content) REQUIRE c.id IS UNIQUE'
+2025-09-19 13:49:12,270 INFO:Received notification from DBMS server: {severity: INFORMATION} {code: Neo.ClientNotification.Schema.IndexOrConstraintAlreadyExists} {category: SCHEMA} {title: `CREATE RANGE INDEX IF NOT EXISTS FOR (e:Topic) ON (e.name)` has no effect.} {description: `RANGE INDEX index_7344e3d9 FOR (e:Topic) ON (e.name)` already exists.} {position: None} for query: 'CREATE INDEX IF NOT EXISTS FOR (t:Topic) ON (t.name)'
+2025-09-19 13:49:12,270 INFO:Neo4j schema setup completed.
+2025-09-19 13:49:14,865 INFO:100 posts imported successfully from data\sample_data.csv.
+2025-09-19 13:49:14,865 INFO:Generating performance report.
+2025-09-19 13:49:14,912 INFO:Performance report generated and saved to performance_report.csv.
+2025-09-19 13:49:14,936 INFO:Starting model training.
+2025-09-19 13:49:20,646 INFO:Model trained. Final loss: 5489.02
+2025-09-19 13:49:20,647 WARNING:You are saving your model as an HDF5 file via `model.save()` or `keras.saving.save_model(model)`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')` or `keras.saving.save_model(model, 'my_model.keras')`. 
+2025-09-19 13:49:20,658 INFO:Model saved to models\nn_model.h5
+2025-09-19 13:49:20,658 INFO:Generating recommendation for topic: AI
+2025-09-19 13:49:20,659 INFO:Starting inference.
+2025-09-19 13:49:20,795 INFO:Inference complete. Predictions: [1468.4004  1647.6609   784.87714  995.318   1291.4359  1470.6963
+  607.9125   805.5472  1114.4712  1293.7316   440.13022  615.7764 ]
+2025-09-19 13:49:20,804 INFO:Recommendation for AI: Past avg engagement for 'AI': 928.74.
+Recommended: Length=500, Style=Casual, Structure=Narrative (Predicted: 1647.66 engagement).
+2025-09-19 13:49:20,805 INFO:Generating SHAP explanation.
+2025-09-19 13:49:21,049 INFO:num_full_subsets = 4
+2025-09-19 13:49:21,541 INFO:np.sum(w_aug) = np.float64(8.000000000000002)
+2025-09-19 13:49:21,541 INFO:np.sum(self.kernelWeights) = np.float64(0.9999999999999996)
+2025-09-19 13:49:21,543 INFO:phi = array([ 133.01810932,  296.27744347,   18.73007096,  -60.11218007,
+        142.96428932,   69.9480803 , -148.32058808,  337.0424231 ])
+2025-09-19 13:49:21,544 INFO:SHAP explanation: Top factors: structure_Narrative (+337.0), topic_AI (+296.3), structure_List (-148.3)
+2025-09-19 13:49:21,598 INFO:CCRS system completed successfully.
+2025-09-22 22:16:26,243 INFO:Engagement weights: likes=1.0, shares=1.5, comments=2.0, views=0.05
+2025-09-22 22:25:01,405 INFO:Engagement weights: likes=1.0, shares=1.5, comments=2.0, views=0.05
+2025-09-22 22:25:20,730 INFO:CCRS system started.
+2025-09-22 22:25:22,778 ERROR:Unable to retrieve routing information
+2025-09-22 22:25:22,779 ERROR:Schema setup failed: Unable to retrieve routing information
+2025-09-22 22:25:22,779 ERROR:System error: Unable to retrieve routing information
+2025-09-22 22:29:31,593 INFO:Engagement weights: likes=1.0, shares=1.5, comments=2.0, views=0.05
+2025-09-22 22:29:36,406 INFO:CCRS system started.
+2025-09-22 22:29:37,607 INFO:Received notification from DBMS server: {severity: INFORMATION} {code: Neo.ClientNotification.Schema.IndexOrConstraintAlreadyExists} {category: SCHEMA} {title: `CREATE CONSTRAINT IF NOT EXISTS FOR (e:Content) REQUIRE (e.id) IS UNIQUE` has no effect.} {description: `CONSTRAINT constraint_c7957a24 FOR (e:Content) REQUIRE (e.id) IS UNIQUE` already exists.} {position: None} for query: 'CREATE CONSTRAINT IF NOT EXISTS FOR (c:Content) REQUIRE c.id IS UNIQUE'
+2025-09-22 22:29:37,654 INFO:Received notification from DBMS server: {severity: INFORMATION} {code: Neo.ClientNotification.Schema.IndexOrConstraintAlreadyExists} {category: SCHEMA} {title: `CREATE RANGE INDEX IF NOT EXISTS FOR (e:Topic) ON (e.name)` has no effect.} {description: `RANGE INDEX index_7344e3d9 FOR (e:Topic) ON (e.name)` already exists.} {position: None} for query: 'CREATE INDEX IF NOT EXISTS FOR (t:Topic) ON (t.name)'
+2025-09-22 22:29:37,655 INFO:Neo4j schema setup completed.
+2025-09-22 22:29:44,093 INFO:100 posts imported successfully from data\sample_data.csv.
+2025-09-22 22:29:44,093 INFO:Generating performance report.
+2025-09-22 22:29:44,559 INFO:Performance report generated and saved to performance_report.csv.
+2025-09-22 22:29:44,616 INFO:Starting model training.
+2025-09-22 22:29:50,166 INFO:Model trained. Final loss: 3636.95
+2025-09-22 22:29:50,166 WARNING:You are saving your model as an HDF5 file via `model.save()` or `keras.saving.save_model(model)`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')` or `keras.saving.save_model(model, 'my_model.keras')`. 
+2025-09-22 22:29:51,138 INFO:Model saved to models\nn_model.h5
+2025-09-22 22:29:51,139 INFO:Generating recommendation for topic: AI
+2025-09-22 22:29:51,139 INFO:Starting inference.
+2025-09-22 22:29:51,287 INFO:Inference complete. Predictions: [1469.6212  1618.4524   736.9392   906.8968  1315.3911  1464.222
+  581.66095  743.2086  1161.1606  1309.9917   441.96896  579.52045]
+2025-09-22 22:29:51,558 INFO:Recommendation for AI: Past avg engagement for 'AI': 928.74.
+Recommended: Length=500, Style=Casual, Structure=Narrative (Predicted: 1618.45 engagement).
+2025-09-22 22:29:51,562 INFO:Generating SHAP explanation.
+2025-09-22 22:29:51,862 INFO:num_full_subsets = 4
+2025-09-22 22:29:52,511 INFO:np.sum(w_aug) = np.float64(8.000000000000002)
+2025-09-22 22:29:52,511 INFO:np.sum(self.kernelWeights) = np.float64(0.9999999999999996)
+2025-09-22 22:29:52,529 INFO:phi = array([ 115.32689934,  299.14230603,   27.1153348 ,  -61.81492597,
+        149.76679907,   76.87444942, -146.76971361,  305.04339255])
+2025-09-22 22:29:52,703 ERROR:System error: unsupported format string passed to numpy.ndarray.__format__
+2025-09-22 22:32:02,618 INFO:Engagement weights: likes=1.0, shares=1.5, comments=2.0, views=0.05
+2025-09-22 22:32:08,100 INFO:CCRS system started.
+2025-09-22 22:32:08,118 INFO:Received notification from DBMS server: {severity: INFORMATION} {code: Neo.ClientNotification.Schema.IndexOrConstraintAlreadyExists} {category: SCHEMA} {title: `CREATE CONSTRAINT IF NOT EXISTS FOR (e:Content) REQUIRE (e.id) IS UNIQUE` has no effect.} {description: `CONSTRAINT constraint_c7957a24 FOR (e:Content) REQUIRE (e.id) IS UNIQUE` already exists.} {position: None} for query: 'CREATE CONSTRAINT IF NOT EXISTS FOR (c:Content) REQUIRE c.id IS UNIQUE'
+2025-09-22 22:32:08,122 INFO:Received notification from DBMS server: {severity: INFORMATION} {code: Neo.ClientNotification.Schema.IndexOrConstraintAlreadyExists} {category: SCHEMA} {title: `CREATE RANGE INDEX IF NOT EXISTS FOR (e:Topic) ON (e.name)` has no effect.} {description: `RANGE INDEX index_7344e3d9 FOR (e:Topic) ON (e.name)` already exists.} {position: None} for query: 'CREATE INDEX IF NOT EXISTS FOR (t:Topic) ON (t.name)'
+2025-09-22 22:32:08,123 INFO:Neo4j schema setup completed.
+2025-09-22 22:32:10,468 INFO:100 posts imported successfully from data\sample_data.csv.
+2025-09-22 22:32:10,468 INFO:Generating performance report.
+2025-09-22 22:32:10,538 INFO:Performance report generated and saved to performance_report.csv.
+2025-09-22 22:32:10,582 INFO:Starting model training.
+2025-09-22 22:32:23,780 INFO:Model trained. Final loss: 2685.30
+2025-09-22 22:32:23,781 WARNING:You are saving your model as an HDF5 file via `model.save()` or `keras.saving.save_model(model)`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')` or `keras.saving.save_model(model, 'my_model.keras')`. 
+2025-09-22 22:32:23,807 INFO:Model saved to models\nn_model.h5
+2025-09-22 22:32:23,807 INFO:Generating recommendation for topic: AI
+2025-09-22 22:32:23,808 INFO:Starting inference.
+2025-09-22 22:32:24,162 INFO:Inference complete. Predictions: [1466.9878  1591.1062   694.82135  869.444   1332.6644  1456.7827
+  552.8864   711.7247  1198.3408  1322.4591   437.7562   554.01135]
+2025-09-22 22:32:24,188 INFO:Recommendation for AI: Past avg engagement for 'AI': 928.74.
+Recommended: Length=500, Style=Casual, Structure=Narrative (Predicted: 1591.11 engagement).
+2025-09-22 22:32:24,192 INFO:Generating SHAP explanation.
+2025-09-22 22:32:24,778 INFO:num_full_subsets = 4
+2025-09-22 22:32:26,204 INFO:np.sum(w_aug) = np.float64(8.000000000000002)
+2025-09-22 22:32:26,204 INFO:np.sum(self.kernelWeights) = np.float64(0.9999999999999996)
+2025-09-22 22:32:26,209 INFO:phi = array([ 102.19941031,  283.90416439,   37.34095579,  -56.04669345,
+        156.63995891,   79.53809914, -152.73130271,  288.60662771])
+2025-09-22 22:32:26,671 INFO:SHAP explanation: Baseline (avg): 851.66. Predicted: 1591.11. Delta: +739.45.
+Top contributors:
+  structure_Narrative: +288.6 (29% of top contributions)
+  topic_AI: +283.9 (29% of top contributions)
+  style_Casual: +156.6 (16% of top contributions)
+  structure_List: -152.7 (16% of top contributions)
+  length: +102.2 (10% of top contributions)
+Recommendation: Recommendation increases predicted engagement mainly because the model favors Topic='AI', Style='Casual', Structure='Narrative' and disfavors Structure='List' — prefer Topic='AI', Style='Casual', Structure='Narrative' over Structure='List'.
+2025-09-22 22:32:26,749 INFO:CCRS system completed successfully.
