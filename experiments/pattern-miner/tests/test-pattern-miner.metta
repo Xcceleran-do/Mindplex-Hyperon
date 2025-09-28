@@ -2,14 +2,7 @@
 
 ! (import! &self experiments:pattern-miner:pattern-miner)
 ! (import! &self experiments:utils:common-utils)
-
-! (import! &self experiments:frequent-pattern-miner:conj-exp)
-! (import! &self experiments:frequent-pattern-miner:freq-pat)
-! (import! &self experiments:frequent-pattern-miner:build-specialization)
-! (import! &self experiments:frequent-pattern-miner:candidate-patterns)
-! (import! &self experiments:frequent-pattern-miner:conjunction-expansion)
 ! (import! &self experiments:frequent-pattern-miner:frequent-pattern-miner)
-
 ! (import! &db experiments:data:small-ugly)
 
 ;; create the database 
@@ -30,8 +23,8 @@
 !(let 
     $answer (pattern-miner &res1 &db 3 0) 
     (that is it we have the answer:- $answer)) 
-; !(collapse (match &res1 $pattern $pattern )) ; de-comment the line where add-atom is used and u can de-comment this line to see the result
 !(println! "============ end ================")
+; !(collapse (match &res1 $pattern $pattern )) ; de-comment the line where add-atom is used and u can de-comment this line to see the result
 ;; Expected result 
           ; ((supportOf (, (Inheritance $y human) (Inheritance $y man)) 3) 
           ; (supportOf (, (Inheritance $j human) (Inheritance $j ugly)) 3) 
@@ -53,12 +46,12 @@
 
 !(bind! &res2 (new-space))
 
-; !(pattern-miner &res2 &db 3 1) 
-!(let 
-    $answer (pattern-miner &res1 &db 3 1) 
-    (that is it we have the answer:- $answer)) 
-!(println! "============ end ================")
+; !(let 
+;     $answer (pattern-miner &res1 &db 3 1) 
+;     (that is it we have the answer:- $answer)) 
+; !(println! "============ end ================")
 
+; !(pattern-miner &res2 &db 3 1) 
 ; !(collapse (match &res2 $pattern $pattern )) ; de-comment the line where add-atom is used and u can de-comment this line to see the result
 ;; Expected result
 ; ((supportOf (, (Inheritance $a88#3981498 human) (Inheritance $a88#3981498 man) (Inheritance $a88#3981498 ugly)) 3) 

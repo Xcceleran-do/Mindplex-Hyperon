@@ -1,5 +1,5 @@
 import type { Component } from 'solid-js';
-import { createSignal, createEffect, Show } from 'solid-js';
+import { createSignal, createEffect, Show, createResource, onMount } from 'solid-js';
 
 import MettaEditor from './components/MettaEditor/MettaEditor';
 import GraphVisualizer from './components/GraphVisualizer/GraphVisualizer';
@@ -14,15 +14,54 @@ import './styles/variables.css';
 import './styles/components.css';
 
 const App: Component = () => {
-  // Global state management for the application
-  const initialText = `; Sample Metta Knowledge Base
-(gender Chandler M)
-(age Alice 25)
-(is-brother John Adam) 
-(likes Alice Bob)`;
+  // Load initial text from small-ugly.metta file
+  const [initialTextResource] = createResource(async () => {
+    try {
+      const response = await fetch('/small-ugly.metta');
+      if (!response.ok) {
+        throw new Error('Failed to load file');
+      }
+      const text = await response.text();
+      return text;
+    } catch (error) {
+      console.error('Error loading initial text:', error);
+      // Fallback to the actual content from small-ugly.metta file
+      return `(Inheritance Allen sodaDrinker)
+(Inheritance Abe sodaDrinker)
+(Inheritance Lily sodaDrinker)
+(Inheritance Cason sodaDrinker)
+
+(Inheritance Lily ugly)
+(Inheritance Allen ugly)
+(Inheritance Abe ugly)
+(Inheritance Cason ugly)
+
+(Inheritance  woman)
+(Inheritance Emily woman)
+(Inheritance Lucy woman)
+
+; (Inheritance Allen man)
+; (Inheritance Abe man)
+; (Inheritance Cason man)
+
+; (Inheritance Allen human)
+; (Inheritance Abe human)
+; (Inheritance Cason human)
+
+`;
+    }
+  });
 
   // Core application state
-  const [mettaText, setMettaText] = createSignal(initialText);
+  const [mettaText, setMettaText] = createSignal('');
+
+  // Set initial text when resource loads
+  createEffect(() => {
+    const loadedText = initialTextResource();
+    if (loadedText) {
+      setMettaText(loadedText);
+    }
+  });
   const [graphData, setGraphData] = createSignal<GraphData>({
     nodes: [],
     edges: [],

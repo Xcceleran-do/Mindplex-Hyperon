@@ -36,6 +36,15 @@ const MettaEditor: Component<MettaEditorProps> = (props) => {
     updateLineNumbers(text());
   });
 
+  // Update text when initialText prop changes
+  createEffect(() => {
+    if (props.initialText && props.initialText !== text()) {
+      setText(props.initialText);
+      updateLineNumbers(props.initialText);
+      updateHighlighting(props.initialText);
+    }
+  });
+
   // Update line numbers when text changes
   const updateLineNumbers = (textValue: string) => {
     const lines = textValue.split('\n');
