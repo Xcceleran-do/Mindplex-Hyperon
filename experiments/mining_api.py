@@ -127,7 +127,32 @@ def get_mining_status(job_id: str):
         response['duration'] = job.end_time - job.start_time
     
     if job.status == 'completed' and job.result is not None:
-        response['result'] = job.result
+        # Ensure the result is JSON serializable (Hyperon / MeTTa atoms are not
+        # directly serializable by Flask's JSON encoder). Convert common
+        # containers recursively and fall back to string for unknown objects.
+        def make_json_serializable(o):
+            # primitive types
+            if o is None or isinstance(o, (str, int, float, bool)):
+                return o
+            # dict-like
+            if isinstance(o, dict):
+                return {k: make_json_serializable(v) for k, v in o.items()}
+            # list/tuple/set
+            if isinstance(o, (list, tuple, set)):
+                return [make_json_serializable(x) for x in o]
+            # dataclasses and objects: try to extract __dict__
+            if hasattr(o, '__dict__'):
+                try:
+                    return {k: make_json_serializable(v) for k, v in o.__dict__.items()}
+                except Exception:
+                    pass
+            # Fallback: convert to string (works for Hyperon atoms)
+            try:
+                return str(o)
+            except Exception:
+                return repr(o)
+
+        response['result'] = make_json_serializable(job.result)
     elif job.status == 'error' and job.error:
         response['error'] = job.error
     
