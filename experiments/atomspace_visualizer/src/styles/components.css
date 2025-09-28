@@ -62,10 +62,25 @@
   right: 80px;
 }
 
-.top-right-mining {
-  top: 90px;
-  right: 20px;
-  width: 280px;
+.bottom-center-mining {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 50vw;
+  display: none;
+  height: 10vh;
+  cursor: grab;
+  z-index: 100;
+}
+
+.bottom-center-mining:active {
+  cursor: grabbing;
+}
+
+.bottom-center-mining.dragging {
+  cursor: grabbing;
+  z-index: 1000;
 }
 
 .bottom-right-upper {

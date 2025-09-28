@@ -376,7 +376,7 @@ const App: Component = () => {
       </div>
 
       {/* Mining Interface */}
-      <div class="ui-card top-right-mining">
+      <div class="ui-card bottom-center-mining">
         <MiningInterface />
       </div>
 

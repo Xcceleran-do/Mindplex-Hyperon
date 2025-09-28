@@ -1,26 +1,58 @@
 .mining-interface {
   position: relative;
   width: 100%;
+  height: 100%;
+  cursor: grab;
+}
+
+.mining-interface:active {
+  cursor: grabbing;
+}
+
+.mining-interface.dragging {
+  cursor: grabbing;
+  z-index: 1000;
 }
 
 /* Mining Controls */
 .mining-controls {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
   gap: 15px;
-  padding: 20px;
+  padding: 15px 20px;
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
   border-radius: 15px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
   border: 1px solid rgba(255, 215, 0, 0.2);
+  height: 100%;
+  width: 100%;
 }
 
 .conjunction-input {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 14px;
+  gap: 8px;
+  font-size: 12px;
   color: #e0e0e0;
+  flex-shrink: 0;
+}
+
+.drag-indicator {
+  color: rgba(255, 215, 0, 0.6);
+  font-size: 16px;
+  cursor: grab;
+  user-select: none;
+  line-height: 1;
+}
+
+.drag-indicator:hover {
+  color: rgba(255, 215, 0, 0.9);
+}
+
+.mining-interface.dragging .drag-indicator {
+  cursor: grabbing;
 }
 
 .conjunction-input label {
@@ -29,13 +61,13 @@
 }
 
 .conjunction-input input {
-  padding: 8px 12px;
+  padding: 6px 10px;
   border: 2px solid rgba(255, 215, 0, 0.3);
-  border-radius: 8px;
+  border-radius: 6px;
   background: rgba(0, 0, 0, 0.4);
   color: #ffffff;
-  font-size: 14px;
-  width: 80px;
+  font-size: 12px;
+  width: 60px;
   transition: all 0.3s ease;
 }
 
@@ -48,21 +80,23 @@
 /* Mine Button */
 .mine-button {
   position: relative;
-  padding: 20px 40px;
+  padding: 12px 24px;
   background: linear-gradient(145deg, #ffd700 0%, #ffb000 50%, #ff8c00 100%);
   border: none;
-  border-radius: 15px;
+  border-radius: 10px;
   cursor: pointer;
-  font-size: 18px;
+  font-size: 14px;
   font-weight: bold;
   color: #1a1a2e;
   text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
   box-shadow: 
-    0 8px 25px rgba(255, 215, 0, 0.4),
+    0 4px 15px rgba(255, 215, 0, 0.4),
     inset 0 2px 4px rgba(255, 255, 255, 0.3);
   transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   transform-style: preserve-3d;
   overflow: hidden;
+  flex-grow: 1;
+  max-width: 300px;
 }
 
 .mine-button::before {
@@ -120,7 +154,7 @@
 }
 
 .pickaxe-icon, .gems-icon {
-  font-size: 24px;
+  font-size: 18px;
   animation: bounce 2s infinite ease-in-out;
 }
 
@@ -129,8 +163,8 @@
 }
 
 .button-text {
-  font-size: 20px;
-  letter-spacing: 1px;
+  font-size: 14px;
+  letter-spacing: 0.5px;
 }
 
 /* Mining Animation */
@@ -457,16 +491,31 @@
 /* Responsive Design */
 @media (max-width: 768px) {
   .mining-controls {
-    padding: 15px;
+    padding: 10px 15px;
+    gap: 10px;
   }
   
   .mine-button {
-    padding: 15px 30px;
-    font-size: 16px;
+    padding: 10px 20px;
+    font-size: 12px;
   }
   
   .button-text {
-    font-size: 18px;
+    font-size: 12px;
+  }
+  
+  .conjunction-input {
+    font-size: 10px;
+  }
+  
+  .conjunction-input input {
+    width: 50px;
+    font-size: 10px;
+    padding: 4px 8px;
+  }
+  
+  .pickaxe-icon, .gems-icon {
+    font-size: 14px;
   }
   
   .mining-scene {

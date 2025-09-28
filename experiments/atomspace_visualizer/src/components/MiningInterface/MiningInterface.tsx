@@ -1,4 +1,4 @@
-import { createSignal, createEffect, Show } from 'solid-js';
+import { createSignal, createEffect, Show, onMount } from 'solid-js';
 import './MiningInterface.css';
 
 export interface MiningResult {
@@ -19,6 +19,12 @@ const MiningInterface = (props: MiningInterfaceProps) => {
   const [miningResult, setMiningResult] = createSignal<MiningResult | null>(null);
   const [conjunctionCount, setConjunctionCount] = createSignal(3);
   const [showResult, setShowResult] = createSignal(false);
+  
+  // Drag functionality
+  const [isDragging, setIsDragging] = createSignal(false);
+  const [dragOffset, setDragOffset] = createSignal({ x: 0, y: 0 });
+  const [position, setPosition] = createSignal({ x: 0, y: 0 });
+  let miningInterfaceRef: HTMLDivElement | undefined;
 
   const startMining = async () => {
     setIsMining(true);
@@ -94,11 +100,66 @@ const MiningInterface = (props: MiningInterfaceProps) => {
     setMiningResult(null);
   };
 
+  // Drag functionality
+  const handleMouseDown = (e: MouseEvent) => {
+    if (!miningInterfaceRef) return;
+    
+    setIsDragging(true);
+    const rect = miningInterfaceRef.getBoundingClientRect();
+    setDragOffset({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    });
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    e.preventDefault();
+  };
+
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!isDragging()) return;
+
+    const newX = e.clientX - dragOffset().x;
+    const newY = e.clientY - dragOffset().y;
+
+    // Constrain to viewport bounds
+    const maxX = window.innerWidth - (miningInterfaceRef?.offsetWidth || 0);
+    const maxY = window.innerHeight - (miningInterfaceRef?.offsetHeight || 0);
+
+    setPosition({
+      x: Math.max(0, Math.min(newX, maxX)),
+      y: Math.max(0, Math.min(newY, maxY))
+    });
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+    document.removeEventListener('mousemove', handleMouseMove);
+    document.removeEventListener('mouseup', handleMouseUp);
+  };
+
+  onMount(() => {
+    // Clean up event listeners on unmount
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  });
+
   return (
-    <div class="mining-interface">
+    <div 
+      ref={miningInterfaceRef}
+      class={`mining-interface ${isDragging() ? 'dragging' : ''}`}
+      style={position().x !== 0 || position().y !== 0 ? 
+        `transform: translate(${position().x}px, ${position().y}px) translateX(-50%);` : 
+        ''
+      }
+      onMouseDown={handleMouseDown}
+    >
       {/* Mining Control Panel */}
       <div class="mining-controls">
         <div class="conjunction-input">
+          <span class="drag-indicator">⋮⋮</span>
           <label for="conjunction-count">Conjunction Count:</label>
           <input
             id="conjunction-count"
