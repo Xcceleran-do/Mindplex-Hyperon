@@ -17,5 +17,5 @@ metta4Miner.run("""
 
 def mine_pattern(numberOfConjunction):
     """this function will mine patterns with the given number of conjunction"""
-    answer = metta4Miner.run(""" !(pattern-miner &res1 &db 3 0) """)
+    answer = metta4Miner.run(f" !(pattern-miner &res1 &db 3 {numberOfConjunction-2}) f")
     return answer

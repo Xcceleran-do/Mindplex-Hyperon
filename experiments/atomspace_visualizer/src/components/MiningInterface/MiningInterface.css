@@ -1,0 +1,485 @@
+.mining-interface {
+  position: relative;
+  width: 100%;
+}
+
+/* Mining Controls */
+.mining-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  padding: 20px;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  border-radius: 15px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 215, 0, 0.2);
+}
+
+.conjunction-input {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: #e0e0e0;
+}
+
+.conjunction-input label {
+  font-weight: 600;
+  color: #ffd700;
+}
+
+.conjunction-input input {
+  padding: 8px 12px;
+  border: 2px solid rgba(255, 215, 0, 0.3);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.4);
+  color: #ffffff;
+  font-size: 14px;
+  width: 80px;
+  transition: all 0.3s ease;
+}
+
+.conjunction-input input:focus {
+  outline: none;
+  border-color: #ffd700;
+  box-shadow: 0 0 15px rgba(255, 215, 0, 0.3);
+}
+
+/* Mine Button */
+.mine-button {
+  position: relative;
+  padding: 20px 40px;
+  background: linear-gradient(145deg, #ffd700 0%, #ffb000 50%, #ff8c00 100%);
+  border: none;
+  border-radius: 15px;
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: bold;
+  color: #1a1a2e;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+  box-shadow: 
+    0 8px 25px rgba(255, 215, 0, 0.4),
+    inset 0 2px 4px rgba(255, 255, 255, 0.3);
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  transform-style: preserve-3d;
+  overflow: hidden;
+}
+
+.mine-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, 
+    transparent, 
+    rgba(255, 255, 255, 0.4), 
+    transparent
+  );
+  transition: left 0.5s ease;
+  z-index: 1;
+}
+
+.mine-button:hover:not(:disabled) {
+  transform: translateY(-3px) scale(1.05);
+  box-shadow: 
+    0 15px 35px rgba(255, 215, 0, 0.6),
+    inset 0 2px 4px rgba(255, 255, 255, 0.4);
+}
+
+.mine-button:hover:not(:disabled)::before {
+  left: 100%;
+}
+
+.mine-button:active:not(:disabled) {
+  transform: translateY(-1px) scale(1.02);
+  box-shadow: 
+    0 8px 20px rgba(255, 215, 0, 0.5),
+    inset 0 2px 4px rgba(255, 255, 255, 0.3);
+}
+
+.mine-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.mine-button.mining {
+  background: linear-gradient(145deg, #ff6b35 0%, #f7931e 50%, #ffd700 100%);
+  animation: miningPulse 2s infinite ease-in-out;
+}
+
+.button-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.pickaxe-icon, .gems-icon {
+  font-size: 24px;
+  animation: bounce 2s infinite ease-in-out;
+}
+
+.gems-icon {
+  animation-delay: 0.5s;
+}
+
+.button-text {
+  font-size: 20px;
+  letter-spacing: 1px;
+}
+
+/* Mining Animation */
+.mining-animation {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.pickaxe-swing {
+  font-size: 24px;
+  animation: pickaxeSwing 0.8s infinite ease-in-out;
+  transform-origin: bottom right;
+}
+
+.mining-text {
+  font-size: 18px;
+  animation: textPulse 1.5s infinite ease-in-out;
+}
+
+.sparkles {
+  display: flex;
+  gap: 5px;
+}
+
+.sparkle {
+  font-size: 16px;
+  animation: sparkleAnimation 1.2s infinite ease-in-out;
+}
+
+.sparkle:nth-child(2) { animation-delay: 0.3s; }
+.sparkle:nth-child(3) { animation-delay: 0.6s; }
+
+/* Mining Overlay */
+.mining-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.5s ease-in-out;
+}
+
+.mining-scene {
+  text-align: center;
+  color: #ffffff;
+  padding: 40px;
+  background: radial-gradient(circle, rgba(26, 26, 46, 0.9) 0%, rgba(15, 52, 96, 0.9) 100%);
+  border-radius: 20px;
+  border: 2px solid rgba(255, 215, 0, 0.3);
+  box-shadow: 0 0 50px rgba(255, 215, 0, 0.2);
+}
+
+.cave-entrance {
+  font-size: 60px;
+  margin-bottom: 20px;
+  animation: caveGlow 3s infinite ease-in-out;
+}
+
+.miner {
+  position: relative;
+  display: inline-block;
+  margin: 20px 0;
+}
+
+.miner-body {
+  font-size: 40px;
+  animation: minerBob 1.5s infinite ease-in-out;
+}
+
+.pickaxe-animation {
+  position: absolute;
+  top: -10px;
+  right: -20px;
+  font-size: 30px;
+  animation: pickaxeSwing 0.6s infinite ease-in-out;
+  transform-origin: bottom left;
+}
+
+.ore-particles {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  margin: 20px 0;
+}
+
+.particle {
+  font-size: 24px;
+  animation: particleFloat 2s infinite ease-in-out;
+}
+
+.particle:nth-child(1) { animation-delay: 0s; }
+.particle:nth-child(2) { animation-delay: 0.5s; }
+.particle:nth-child(3) { animation-delay: 1s; }
+.particle:nth-child(4) { animation-delay: 1.5s; }
+
+.progress-bar {
+  width: 300px;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  margin: 30px auto 20px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ffd700, #ffb000, #ff8c00);
+  border-radius: 4px;
+  animation: progressAnimation 3s infinite linear;
+}
+
+.mining-status p {
+  margin: 10px 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.sub-text {
+  font-size: 16px !important;
+  color: #cccccc !important;
+  font-style: italic;
+}
+
+/* Result Overlay */
+.result-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1001;
+  animation: fadeIn 0.5s ease-in-out;
+}
+
+.result-card {
+  position: relative;
+  max-width: 600px;
+  max-height: 80vh;
+  background: linear-gradient(145deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  border-radius: 20px;
+  border: 3px solid #ffd700;
+  box-shadow: 
+    0 0 50px rgba(255, 215, 0, 0.4),
+    inset 0 2px 4px rgba(255, 255, 255, 0.1);
+  animation: cardSlideIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  overflow: hidden;
+}
+
+.result-header {
+  padding: 30px;
+  text-align: center;
+  border-bottom: 2px solid rgba(255, 215, 0, 0.3);
+}
+
+.result-header.gold {
+  background: linear-gradient(135deg, #ffd700 0%, #ffb000 100%);
+  color: #1a1a2e;
+}
+
+.result-header.error {
+  background: linear-gradient(135deg, #ff4757 0%, #ff3838 100%);
+  color: #ffffff;
+}
+
+.result-header h2 {
+  margin: 0 0 10px 0;
+  font-size: 28px;
+  font-weight: bold;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.subtitle {
+  margin: 0;
+  font-size: 16px;
+  opacity: 0.9;
+  font-style: italic;
+}
+
+.result-content {
+  padding: 30px;
+  color: #ffffff;
+  overflow-y: auto;
+  max-height: 50vh;
+}
+
+.patterns-display {
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 20px;
+  border: 1px solid rgba(255, 215, 0, 0.2);
+}
+
+.patterns-text {
+  color: #e0e0e0;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  margin: 0;
+}
+
+.mining-stats {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  color: #ffd700;
+  font-weight: 600;
+}
+
+.mining-stats p {
+  margin: 0;
+  padding: 10px 15px;
+  background: rgba(255, 215, 0, 0.1);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 215, 0, 0.3);
+}
+
+.error-message {
+  background: rgba(255, 71, 87, 0.2);
+  border: 1px solid rgba(255, 71, 87, 0.4);
+  border-radius: 10px;
+  padding: 20px;
+  color: #ffcccb;
+  font-family: 'Courier New', monospace;
+}
+
+.close-button {
+  position: absolute;
+  top: 15px;
+  right: 20px;
+  background: none;
+  border: none;
+  color: #ffffff;
+  font-size: 30px;
+  cursor: pointer;
+  padding: 5px 10px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  z-index: 10;
+}
+
+.close-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffd700;
+  transform: scale(1.1);
+}
+
+/* Animations */
+@keyframes miningPulse {
+  0%, 100% { box-shadow: 0 8px 25px rgba(255, 215, 0, 0.4); }
+  50% { box-shadow: 0 8px 35px rgba(255, 107, 53, 0.6); }
+}
+
+@keyframes bounce {
+  0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-8px); }
+  60% { transform: translateY(-4px); }
+}
+
+@keyframes pickaxeSwing {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-30deg); }
+  75% { transform: rotate(15deg); }
+}
+
+@keyframes textPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes sparkleAnimation {
+  0%, 100% { transform: scale(1) rotate(0deg); opacity: 1; }
+  50% { transform: scale(1.3) rotate(180deg); opacity: 0.6; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes caveGlow {
+  0%, 100% { text-shadow: 0 0 20px rgba(139, 69, 19, 0.8); }
+  50% { text-shadow: 0 0 40px rgba(255, 215, 0, 0.6); }
+}
+
+@keyframes minerBob {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-5px); }
+}
+
+@keyframes particleFloat {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-20px) rotate(180deg); }
+}
+
+@keyframes progressAnimation {
+  0% { width: 0%; }
+  100% { width: 100%; }
+}
+
+@keyframes cardSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-50px) scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .mining-controls {
+    padding: 15px;
+  }
+  
+  .mine-button {
+    padding: 15px 30px;
+    font-size: 16px;
+  }
+  
+  .button-text {
+    font-size: 18px;
+  }
+  
+  .mining-scene {
+    padding: 20px;
+    margin: 20px;
+  }
+  
+  .result-card {
+    margin: 20px;
+    max-height: 70vh;
+  }
+  
+  .mining-stats {
+    flex-direction: column;
+  }
+}

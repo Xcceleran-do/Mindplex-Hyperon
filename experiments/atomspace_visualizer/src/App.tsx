@@ -6,6 +6,7 @@ import GraphVisualizer from './components/GraphVisualizer/GraphVisualizer';
 import Legend from './components/Legend/Legend';
 import ContextMenu from './components/ContextMenu/ContextMenu';
 import UIControls from './components/UIControls/UIControls';
+import MiningInterface from './components/MiningInterface/MiningInterface';
 import { GraphData, GraphNode, ParseError, LayoutAlgorithm, LayoutOptions, LayoutState } from './types';
 import { MettaParserImpl } from './services/parser/MettaParser';
 import { GraphEngineImpl } from './services/graph/GraphEngine';
@@ -372,6 +373,11 @@ const App: Component = () => {
         <button id="zoom-in" title="Zoom In" onClick={handleZoomIn}>+</button>
         <button id="zoom-out" title="Zoom Out" onClick={handleZoomOut}>−</button>
         <button id="recenter" title="Recenter" onClick={handleRecenter}>⌂</button>
+      </div>
+
+      {/* Mining Interface */}
+      <div class="ui-card top-right-mining">
+        <MiningInterface />
       </div>
 
       {/* Minimize/Maximize controls in top-right corner */}

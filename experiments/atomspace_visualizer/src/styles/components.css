@@ -62,6 +62,12 @@
   right: 80px;
 }
 
+.top-right-mining {
+  top: 90px;
+  right: 20px;
+  width: 280px;
+}
+
 .bottom-right-upper {
   bottom: 220px;
   right: 20px;
