@@ -1,5 +1,6 @@
 import { createSignal, createEffect, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
+import ButtonParticleEffects from './ButtonEffects';
 import './MiningInterface.css';
 
 export interface MiningResult {
@@ -141,57 +142,62 @@ const MiningInterface = (props: MiningInterfaceProps) => {
           />
         </div>
         
-        <button
-          class={`mine-button ${isMining() ? 'mining' : ''}`}
-          onClick={startMining}
-          disabled={isMining()}
-        >
-          <div class="button-content">
-            <Show when={!isMining()}>
-              <span class="pickaxe-icon">⛏️</span>
-              <span class="button-text">Mine the Gold</span>
-              <span class="gems-icon">💎</span>
-            </Show>
-            <Show when={isMining()}>
-              <div class="mining-animation">
-                <div class="pickaxe-swing">⛏️</div>
-                <span class="mining-text">Mining...</span>
-                <div class="sparkles">
-                  <span class="sparkle">✨</span>
-                  <span class="sparkle">⭐</span>
-                  <span class="sparkle">💫</span>
+        <div class="button-wrapper" style={{ position: 'relative' }}>
+          <ButtonParticleEffects active={!isMining()} />
+          <button
+            class={`mine-button ${isMining() ? 'mining' : ''}`}
+            onClick={startMining}
+            disabled={isMining()}
+          >
+            <div class="button-content generate-sparkles">
+              <Show when={!isMining()}>
+                <span class="pickaxe-icon">⛏️</span>
+                <span class="button-text">Mine Neural Gold</span>
+                <span class="gems-icon">💎</span>
+              </Show>
+              <Show when={isMining()}>
+                <div class="mining-animation">
+                  <div class="pickaxe-swing">⛏️</div>
+                  <span class="mining-text">Mining...</span>
+                  <div class="sparkles">
+                    <span class="sparkle">✨</span>
+                    <span class="sparkle">⭐</span>
+                    <span class="sparkle">💫</span>
+                  </div>
                 </div>
-              </div>
-            </Show>
-          </div>
-        </button>
+              </Show>
+            </div>
+          </button>
+        </div>
       </div>
 
-      {/* Mining HUD (always visible, bottom-center) rendered via Portal to ensure fixed positioning */}
-      <Portal>
-        <div class={`mining-hud ${isMining() ? 'active' : 'idle'}`}>
-          <div class="mining-scene">
-            <div class="cave-entrance">🕳️</div>
-            <div class="miner">
-              <div class="miner-body">👷</div>
-              <div class="pickaxe-animation">⛏️</div>
-            </div>
-            <div class="ore-particles">
-              <div class="particle">⚡</div>
-              <div class="particle">💎</div>
-              <div class="particle">🔥</div>
-              <div class="particle">✨</div>
-            </div>
-            <div class="progress-bar">
-              <div class="progress-fill"></div>
-            </div>
-            <div class="mining-status">
-              <p>Deep mining in progress...</p>
-              <p class="sub-text">Extracting precious patterns from the data ore</p>
+      {/* Mining HUD (only visible during mining) */}
+      <Show when={isMining()}>
+        <Portal>
+          <div class="mining-hud active">
+            <div class="mining-scene">
+              <div class="cave-entrance">🕳️</div>
+              <div class="miner">
+                <div class="miner-body">👷</div>
+                <div class="pickaxe-animation">⛏️</div>
+              </div>
+              <div class="ore-particles">
+                <div class="particle">⚡</div>
+                <div class="particle">💎</div>
+                <div class="particle">🔥</div>
+                <div class="particle">✨</div>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill"></div>
+              </div>
+              <div class="mining-status">
+                <p>Deep mining in progress...</p>
+                <p class="sub-text">Extracting precious patterns from the data ore</p>
+              </div>
             </div>
           </div>
-        </div>
-      </Portal>
+        </Portal>
+      </Show>
 
       {/* Result Card */}
       <Show when={showResult() && miningResult()}>

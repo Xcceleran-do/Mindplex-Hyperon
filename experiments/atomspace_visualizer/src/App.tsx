@@ -1,7 +1,7 @@
 import type { Component } from 'solid-js';
 import { createSignal, createEffect, Show, createResource, onMount } from 'solid-js';
 
-import MettaEditor from './components/MettaEditor/MettaEditor';
+// Remove MettaEditor import
 import GraphVisualizer from './components/GraphVisualizer/GraphVisualizer';
 import Legend from './components/Legend/Legend';
 import ContextMenu from './components/ContextMenu/ContextMenu';
@@ -85,7 +85,6 @@ const App: Component = () => {
   // Minimize state management
   const [isLegendMinimized, setIsLegendMinimized] = createSignal(false);
   const [isControlsMinimized, setIsControlsMinimized] = createSignal(false);
-  const [isMettaEditorMinimized, setIsMettaEditorMinimized] = createSignal(false);
 
   // Layout state management
   const [layoutState, setLayoutState] = createSignal<LayoutState>({
@@ -287,20 +286,14 @@ const App: Component = () => {
     setTimeout(() => setLegendPositionTrigger(prev => prev + 1), 100);
   };
 
-  const handleToggleMettaEditor = () => {
-    setIsMettaEditorMinimized(!isMettaEditorMinimized());
-  };
-
   const handleMinimizeAll = () => {
     setIsLegendMinimized(true);
     setIsControlsMinimized(true);
-    setIsMettaEditorMinimized(true);
   };
 
   const handleMaximizeAll = () => {
     setIsLegendMinimized(false);
     setIsControlsMinimized(false);
-    setIsMettaEditorMinimized(false);
   };
 
   // Calculate dynamic positions for legend and controls
@@ -384,26 +377,6 @@ const App: Component = () => {
       <div id="minimize-controls" class="ui-card top-right-secondary">
         <button title="Minimize All" onClick={handleMinimizeAll}>⊟</button>
         <button title="Maximize All" onClick={handleMaximizeAll}>⊞</button>
-      </div>
-
-      {/* Metta Editor in top-left - positioned as floating card */}
-      <div class={`ui-card top-left metta-editor-card ${isMettaEditorMinimized() ? 'minimized' : ''}`}>
-        <div class="card-header">
-          <h3>Metta Editor</h3>
-          <button class="minimize-btn" onClick={handleToggleMettaEditor}>
-            {isMettaEditorMinimized() ? '□' : '−'}
-          </button>
-        </div>
-        <Show when={!isMettaEditorMinimized()}>
-          <div class="card-content">
-            <MettaEditor
-              initialText={mettaText()}
-              onTextChange={handleTextChange}
-              onFileUpload={handleFileUpload}
-              parseErrors={parseErrors()}
-            />
-          </div>
-        </Show>
       </div>
 
       {/* Legend card in bottom-right area (upper) */}

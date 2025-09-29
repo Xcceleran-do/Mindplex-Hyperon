@@ -1,404 +1,193 @@
-import { Component, onMount, createSignal, createEffect, For } from 'solid-js';
-import { ParseError } from '../../types';
-import { MettaParserImpl } from '../../services/parser/MettaParser';
-import * as shiki from 'shiki';
-import mettaGrammar from '../../syntax/metta.tmLanguage.json';
+import { Component, For, createSignal, onCleanup } from 'solid-js';
 
-export interface MettaEditorProps {
-  initialText: string;
-  onTextChange: (text: string) => void;
-  onFileUpload: (file: File) => void;
-  parseErrors: ParseError[];
+export interface MiningProps {
+  conjunctionCount?: number;
+  miningApiUrl?: string;
 }
 
-const MettaEditor: Component<MettaEditorProps> = (props) => {
-  const [text, setText] = createSignal(props.initialText);
-  const [highlighted, setHighlighted] = createSignal('');
-  const [realTimeErrors, setRealTimeErrors] = createSignal<ParseError[]>([]);
-  const [lineNumbers, setLineNumbers] = createSignal<number[]>([]);
-  let highlighter: shiki.Highlighter | undefined;
-  let textareaRef: HTMLTextAreaElement | undefined;
-  let highlightedRef: HTMLDivElement | undefined;
-  const parser = new MettaParserImpl();
+type MiningCard = {
+  id: string;
+  title: string;
+  result: unknown;
+  x: number;
+  y: number;
+};
 
-  // Build a Shiki LanguageRegistration from the JSON grammar
-  const mettaLanguage: shiki.LanguageRegistration = {
-    name: 'metta',
-    ...mettaGrammar,
-  };
+const MettaEditor: Component<MiningProps> = (props) => {
+  const [isMining, setIsMining] = createSignal(false);
+  const [error, setError] = createSignal<string | null>(null);
+  const [cards, setCards] = createSignal<MiningCard[]>([]);
+  let componentActive = true;
 
-  onMount(async () => {
-    highlighter = await shiki.createHighlighter({
-      themes: ['github-light'],
-      langs: [mettaLanguage],
-    });
-    updateHighlighting(text());
-    updateLineNumbers(text());
+  onCleanup(() => {
+    componentActive = false;
   });
 
-  // Update text when initialText prop changes
-  createEffect(() => {
-    if (props.initialText && props.initialText !== text()) {
-      setText(props.initialText);
-      updateLineNumbers(props.initialText);
-      updateHighlighting(props.initialText);
+  const apiBase = () => props.miningApiUrl ?? '/api';
+
+  const toDisplayResult = (result: unknown) => {
+    if (typeof result === 'string') return result;
+    try {
+      return JSON.stringify(result, null, 2);
+    } catch {
+      return String(result);
     }
-  });
-
-  // Update line numbers when text changes
-  const updateLineNumbers = (textValue: string) => {
-    const lines = textValue.split('\n');
-    setLineNumbers(lines.map((_, index) => index + 1));
   };
 
-  // Enhanced highlighting with error overlay
-  const updateHighlighting = async (textValue: string) => {
-    if (!highlighter) return;
+  const addCard = (id: string, result: unknown) => {
+    setCards((prev) => [
+      ...prev,
+      {
+        id,
+        title: `Mining job ${prev.length + 1}`,
+        result,
+        x: 16 + prev.length * 24,
+        y: 16 + prev.length * 24,
+      },
+    ]);
+  };
 
-    // Get syntax highlighting with custom CSS
-    let highlightedHtml = highlighter.codeToHtml(textValue, {
-      lang: 'metta',
-      theme: 'github-light',
-      transformers: [
-        {
-          pre(node) {
-            // Remove default pre styling to match our textarea
-            node.properties.style = 'margin: 0; padding: 0; background: transparent; font-family: inherit; font-size: inherit; line-height: inherit; white-space: pre; word-wrap: break-word;';
-          },
-          code(node) {
-            // Remove default code styling
-            node.properties.style = 'font-family: inherit; font-size: inherit; line-height: inherit;';
-          }
-        }
-      ]
-    });
+  const removeCard = (id: string) => {
+    setCards((prev) => prev.filter((card) => card.id !== id));
+  };
 
-    // Perform real-time validation
-    const validation = parser.validateSyntax(textValue);
-    setRealTimeErrors([...validation.errors, ...validation.warnings]);
+  const updateCardPosition = (id: string, x: number, y: number) => {
+    setCards((prev) =>
+      prev.map((card) => (card.id === id ? { ...card, x, y } : card))
+    );
+  };
 
-    // Add error highlighting to the HTML
-    if (validation.errors.length > 0 || validation.warnings.length > 0) {
-      highlightedHtml = addErrorHighlighting(highlightedHtml, textValue, [...validation.errors, ...validation.warnings]);
+  const handleDragStart = (event: PointerEvent, id: string) => {
+    event.preventDefault();
+    const card = cards().find((c) => c.id === id);
+    if (!card) return;
+
+    const offsetX = event.clientX - card.x;
+    const offsetY = event.clientY - card.y;
+
+    const handleMove = (moveEvent: PointerEvent) => {
+      updateCardPosition(id, moveEvent.clientX - offsetX, moveEvent.clientY - offsetY);
+    };
+
+    const handleUp = () => {
+      window.removeEventListener('pointermove', handleMove);
+      window.removeEventListener('pointerup', handleUp);
+    };
+
+    window.addEventListener('pointermove', handleMove);
+    window.addEventListener('pointerup', handleUp);
+  };
+
+  const pollJob = async (jobId: string) => {
+    while (componentActive) {
+      const response = await fetch(`${apiBase()}/mine/${jobId}`);
+      if (!response.ok) throw new Error(`Failed to poll job ${jobId}`);
+      const payload = await response.json();
+      if (payload.status === 'completed') return payload.result;
+      if (payload.status === 'error') throw new Error(payload.error || 'Mining failed');
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
-
-    setHighlighted(highlightedHtml);
+    throw new Error('Mining cancelled');
   };
 
-  // Add error highlighting to the syntax-highlighted HTML
-  const addErrorHighlighting = (html: string, textValue: string, errors: ParseError[]): string => {
-    let modifiedHtml = html;
+  const startMining = async () => {
+    if (isMining()) return;
+    setError(null);
+    setIsMining(true);
 
-    // Create a map of line numbers to errors
-    const errorsByLine = new Map<number, ParseError[]>();
-    errors.forEach(error => {
-      if (!errorsByLine.has(error.line)) {
-        errorsByLine.set(error.line, []);
-      }
-      errorsByLine.get(error.line)!.push(error);
-    });
-
-    // Add error classes to lines with errors
-    errorsByLine.forEach((lineErrors, lineNumber) => {
-      const hasError = lineErrors.some(e => e.severity === 'error');
-      const hasWarning = lineErrors.some(e => e.severity === 'warning');
-
-      const errorClass = hasError ? 'error-line' : (hasWarning ? 'warning-line' : '');
-
-      if (errorClass) {
-        // Find the line in the HTML and add error styling
-        const linePattern = new RegExp(`(<span class="line">)(.*?)(</span>)`, 'g');
-        let lineIndex = 0;
-        modifiedHtml = modifiedHtml.replace(linePattern, (match, openTag, content, closeTag) => {
-          lineIndex++;
-          if (lineIndex === lineNumber) {
-            return `${openTag}<span class="${errorClass}">${content}</span>${closeTag}`;
-          }
-          return match;
-        });
-      }
-    });
-
-    return modifiedHtml;
-  };
-
-  // Handle text input with real-time validation
-  const handleInput = async (e: Event) => {
-    const value = (e.target as HTMLTextAreaElement).value;
-    setText(value);
-    props.onTextChange(value);
-    updateLineNumbers(value);
-    await updateHighlighting(value);
-  };
-
-  // Sync scroll between textarea and highlighted div
-  const handleScroll = (e: Event) => {
-    const target = e.target as HTMLTextAreaElement;
-    if (highlightedRef) {
-      // Use requestAnimationFrame for smooth synchronization
-      requestAnimationFrame(() => {
-        if (highlightedRef) {
-          highlightedRef.scrollTop = target.scrollTop;
-          highlightedRef.scrollLeft = target.scrollLeft;
-        }
+    try {
+      const response = await fetch(`${apiBase()}/mine`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conjunctionCount: props.conjunctionCount ?? 2 }),
       });
+      if (!response.ok) throw new Error('Failed to start mining');
+      const payload = await response.json();
+      if (!payload?.jobId) throw new Error('Missing job identifier');
+      const result = await pollJob(payload.jobId);
+      if (!componentActive) return;
+      addCard(payload.jobId, result);
+    } catch (err) {
+      if (!componentActive) return;
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      if (componentActive) setIsMining(false);
     }
   };
-
-  // Update highlighting when props.parseErrors change
-  createEffect(() => {
-    updateHighlighting(text());
-  });
 
   return (
-    <div style="
-      display: flex; 
-      flex-direction: column; 
-      height: 100%; 
-      width: 100%;
-      box-sizing: border-box;
-    ">
-      <h3 style="
-        margin: 0 0 12px 0; 
-        font-size: 14px; 
-        font-weight: 600; 
-        flex-shrink: 0;
-        line-height: 1.2;
-      ">
-        {realTimeErrors().length > 0 && (
-          <span style="
-            margin-left: 8px;
-            font-size: 11px;
-            font-weight: normal;
-            color: #dc2626;
-          ">
-            ({realTimeErrors().filter(e => e.severity === 'error').length} errors, {realTimeErrors().filter(e => e.severity === 'warning').length} warnings)
-          </span>
-        )}
-      </h3>
+    <div style="height:100%; width:100%; position:relative;">
+      <style>
+        {`
+          @keyframes metta-spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+          @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+          }
+        `}
+      </style>
 
-      {/* Editor Container with Line Numbers */}
-      <div style="
-        position: relative;
-        flex: 1;
-        min-height: 0;
-        margin-bottom: 8px;
-        border: 1px solid var(--border-light);
-        border-radius: 4px;
-        background: rgba(255, 255, 255, 0.8);
-        overflow: hidden;
-      ">
-        {/* Line Numbers */}
-        <div style="
-          position: absolute;
-          left: 0;
-          top: 0;
-          width: 40px;
-          height: 100%;
-          background: rgba(248, 250, 252, 0.9);
-          border-right: 1px solid var(--border-light);
-          font-family: 'Courier New', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
-          font-size: 13px;
-          font-weight: normal;
-          line-height: 1.5;
-          padding: 8px 4px;
-          margin: 0;
-          box-sizing: border-box;
-          overflow: hidden;
-          z-index: 2;
-          white-space: pre;
-        ">
-          <For each={lineNumbers()}>
-            {(lineNum) => {
-              const hasError = realTimeErrors().some(e => e.line === lineNum && e.severity === 'error');
-              const hasWarning = realTimeErrors().some(e => e.line === lineNum && e.severity === 'warning');
-              return (
-                <div style={`
-                  text-align: right;
-                  color: ${hasError ? '#dc2626' : hasWarning ? '#f59e0b' : '#6b7280'};
-                  font-weight: ${hasError || hasWarning ? '600' : 'normal'};
-                  position: relative;
-                `}>
-                  {lineNum}
-                  {(hasError || hasWarning) && (
-                    <span style={`
-                      position: absolute;
-                      right: -8px;
-                      top: 0;
-                      width: 4px;
-                      height: 100%;
-                      background: ${hasError ? '#dc2626' : '#f59e0b'};
-                      border-radius: 2px;
-                    `}></span>
-                  )}
-                </div>
-              );
-            }}
-          </For>
+      {!isMining() && (
+        <div style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%);">
+          <button
+            style="padding:10px 20px; font-size:14px; border:1px solid var(--border-light); border-radius:4px; background:white; cursor:pointer; transition:background 0.2s ease; box-shadow:0 2px 8px rgba(0,0,0,0.1);"
+            onClick={startMining}
+            onMouseEnter={(event) => (event.currentTarget.style.background = 'var(--bg-primary)')}
+            onMouseLeave={(event) => (event.currentTarget.style.background = 'white')}
+          >
+            Mine
+          </button>
         </div>
+      )}
 
-        {/* Textarea */}
-        <textarea
-          ref={textareaRef}
-          value={text()}
-          onInput={handleInput}
-          onScroll={handleScroll}
-          style="
-            position: absolute;
-            left: 44px;
-            top: 0;
-            right: 0;
-            bottom: 0;
-            font-family: 'Courier New', Consolas, 'Liberation Mono', Menlo, Courier, monospace; 
-            font-size: 13px; 
-            font-weight: normal;
-            background: transparent;
-            border: none;
-            padding: 8px;
-            margin: 0;
-            overflow: auto;
-            resize: none;
-            outline: none;
-            color: transparent;
-            caret-color: #374151;
-            z-index: 3;
-            line-height: 1.5;
-            white-space: pre;
-            word-wrap: break-word;
-            tab-size: 2;
-          "
-          spellcheck={false}
-        />
+      {error() && (
+        <div style="position:absolute; top:60%; left:50%; transform:translate(-50%, -50%); padding:8px 16px; border:1px solid #dc2626; border-radius:4px; background:rgba(220,38,38,0.05); color:#dc2626; font-size:12px; margin-top:16px; max-width:80%;">
+          {error()}
+        </div>
+      )}
 
-        {/* Syntax Highlighted Overlay */}
-        <div
-          ref={highlightedRef}
-          style="
-            position: absolute;
-            left: 44px;
-            top: 0;
-            right: 0;
-            bottom: 0;
-            font-family: 'Courier New', Consolas, 'Liberation Mono', Menlo, Courier, monospace; 
-            font-size: 13px; 
-            font-weight: normal;
-            padding: 8px;
-            margin: 0;
-            overflow: auto;
-            pointer-events: none;
-            z-index: 1;
-            line-height: 1.5;
-            white-space: pre;
-            word-wrap: break-word;
-            tab-size: 2;
-          "
-          innerHTML={highlighted()}
-        />
-      </div>
-
-      {/* Action Buttons */}
-      <div style="
-        margin-bottom: 8px; 
-        display: flex; 
-        gap: 8px; 
-        flex-shrink: 0;
-        align-items: center;
-      ">
-        <button
-          style="
-            padding: 4px 8px; 
-            font-size: 11px; 
-            border: 1px solid var(--border-light); 
-            border-radius: 3px; 
-            background: white; 
-            cursor: pointer;
-            transition: all 0.2s ease;
-          "
-          onClick={() => {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = '.metta,.txt';
-            input.onchange = (e) => {
-              const file = (e.target as HTMLInputElement).files?.[0];
-              if (file) props.onFileUpload(file);
-            };
-            input.click();
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-primary)'}
-          onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
-        >
-          Load File
-        </button>
-        <button
-          style="
-            padding: 4px 8px; 
-            font-size: 11px; 
-            border: 1px solid var(--border-light); 
-            border-radius: 3px; 
-            background: white; 
-            cursor: pointer;
-            transition: all 0.2s ease;
-          "
-          onClick={() => {
-            setText('');
-            props.onTextChange('');
-            updateLineNumbers('');
-            updateHighlighting('');
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-primary)'}
-          onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
-        >
-          Clear
-        </button>
-      </div>
-
-      {/* Error Display Panel */}
-      {(realTimeErrors().length > 0 || props.parseErrors.length > 0) && (
-        <div style="
-          max-height: 120px;
-          overflow-y: auto;
-          border: 1px solid var(--border-light);
-          border-radius: 4px;
-          background: rgba(255, 255, 255, 0.95);
-          flex-shrink: 0;
-        ">
-          <div style="
-            padding: 8px;
-            font-size: 11px;
-            font-weight: 600;
-            background: rgba(248, 250, 252, 0.8);
-            border-bottom: 1px solid var(--border-light);
-          ">
-            Issues ({realTimeErrors().filter(e => e.severity === 'error').length + props.parseErrors.filter(e => e.severity === 'error').length} errors, {realTimeErrors().filter(e => e.severity === 'warning').length + props.parseErrors.filter(e => e.severity === 'warning').length} warnings)
+      {isMining() && (
+        <div style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); text-align:center; animation:pulse 2s infinite ease-in-out;">
+          <div style="width:36px; height:36px; border:4px solid rgba(203,213,225,0.4); border-top-color:var(--accent, #3b82f6); border-radius:50%; animation:metta-spin 1.2s linear infinite; margin:0 auto 16px;"></div>
+          <div style="font-size:16px; font-weight:500; color:#1e293b; margin-bottom:8px;">
+            Deep mining in progress...
           </div>
-          <div style="padding: 4px;">
-            <For each={[...realTimeErrors(), ...props.parseErrors]}>
-              {(error) => (
-                <div style={`
-                  padding: 4px 8px;
-                  margin: 2px 0;
-                  border-left: 3px solid ${error.severity === 'error' ? '#dc2626' : '#f59e0b'};
-                  background: ${error.severity === 'error' ? 'rgba(220, 38, 38, 0.05)' : 'rgba(245, 158, 11, 0.05)'};
-                  border-radius: 2px;
-                  font-size: 11px;
-                  line-height: 1.3;
-                `}>
-                  <div style={`
-                    font-weight: 600;
-                    color: ${error.severity === 'error' ? '#dc2626' : '#f59e0b'};
-                    margin-bottom: 2px;
-                  `}>
-                    {error.severity === 'error' ? '⚠️' : '⚡'} Line {error.line}:{error.column}
-                  </div>
-                  <div style="color: #374151;">
-                    {error.message}
-                  </div>
-                </div>
-              )}
-            </For>
+          <div style="font-size:12px; color:#64748b;">
+            Extracting precious patterns from the data ore
           </div>
         </div>
       )}
+
+      <For each={cards()}>
+        {(card) => (
+          <div
+            style={`position:absolute; top:${card.y}px; left:${card.x}px; width:260px; max-width:70%; background:white; border:1px solid var(--border-light); border-radius:6px; box-shadow:0 6px 18px rgba(15,23,42,0.15); cursor:grab; z-index:10;`}
+            onPointerDown={(event) => handleDragStart(event, card.id)}
+          >
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 10px; border-bottom:1px solid var(--border-light); background:var(--bg-primary); border-radius:6px 6px 0 0;">
+              <span style="font-size:12px; font-weight:600; color:#1f2937;">{card.title}</span>
+              <button
+                style="border:none; background:transparent; color:#6b7280; font-size:12px; cursor:pointer;"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  removeCard(card.id);
+                }}
+              >
+                ✕
+              </button>
+            </div>
+            <div style="max-height:220px; overflow:auto; padding:10px; font-size:11px; line-height:1.4; color:#374151;">
+              <pre style="margin:0; font-family:'Courier New', Consolas, 'Liberation Mono', Menlo, Courier, monospace; white-space:pre-wrap; word-break:break-word;">
+                {toDisplayResult(card.result)}
+              </pre>
+            </div>
+          </div>
+        )}
+      </For>
     </div>
   );
 };
