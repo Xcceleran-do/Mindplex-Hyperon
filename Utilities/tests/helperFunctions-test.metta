@@ -211,3 +211,13 @@
 ;; Test cases for flatten
 !(assertEqual (flatten ((1 2 3) (a b c))) (1 2 3 a b c))
 !(assertEqual (flatten ((1 2) ($x $y c) ((1) (2)))) (1 2 $x $y c (1) (2)))
+
+;; Test cases for cartesian
+!(assertEqual (cartesian (a b) (c d)) ((a c) (a d) (b c) (b d)))
+!(assertEqual (cartesian (1 2) (3 4)) ((1 3) (1 4) (2 3) (2 4)))
+!(assertEqual (cartesian (x y) (1 2 3)) ((x 1) (x 2) (x 3) (y 1) (y 2) (y 3)))
+
+;; Test cases for multiCartesian
+!(assertEqual (multiCartesian ((1 2) (a b) (x z))) ((1 a x) (1 a z) (1 b x) (1 b z) (2 a x) (2 a z) (2 b x) (2 b z)))
+!(assertEqual (multiCartesian ((x) (1 2 3) (a b))) ((x 1 a) (x 1 b) (x 2 a) (x 2 b) (x 3 a) (x 3 b)))
+!(assertEqual (multiCartesian ((1) (a b) (x z) (3 4))) ((1 a x 3) (1 a x 4) (1 a z 3) (1 a z 4) (1 b x 3) (1 b x 4) (1 b z 3) (1 b z 4)))

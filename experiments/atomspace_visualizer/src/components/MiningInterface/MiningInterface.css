@@ -207,11 +207,31 @@
   height: 100vh;
   background: rgba(0, 0, 0, 0.8);
   display: flex;
-  align-items: center;
+  /* place content at the bottom center */
+  align-items: flex-end;
   justify-content: center;
+  padding-bottom: 60px; /* distance from bottom */
   z-index: 1000;
   animation: fadeIn 0.5s ease-in-out;
 }
+
+/* Persistent HUD at bottom-center */
+.mining-hud {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 20px;
+  z-index: 999;
+  pointer-events: none; /* allow clicks through except specific interactive children */
+}
+.mining-hud .mining-scene {
+  pointer-events: auto;
+  width: 420px;
+  padding: 16px;
+  border-radius: 12px;
+}
+.mining-hud.idle { opacity: 0.6; }
+.mining-hud.active { opacity: 1; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
 
 .mining-scene {
   text-align: center;
@@ -243,10 +263,12 @@
 .pickaxe-animation {
   position: absolute;
   top: -10px;
-  right: -20px;
+  /* center the pickaxe relative to the miner */
+  left: 50%;
+  transform: translateX(-50%);
   font-size: 30px;
   animation: pickaxeSwing 0.6s infinite ease-in-out;
-  transform-origin: bottom left;
+  transform-origin: bottom center;
 }
 
 .ore-particles {
@@ -310,18 +332,31 @@
 }
 
 .result-card {
-  position: relative;
-  max-width: 600px;
+  position: fixed;
+  left: 50%;
+  bottom: 20px; /* keep the card at the bottom of the viewport */
+  transform: translateX(-50%);
+  cursor: grab;
+  touch-action: none;
+  width: 50vw; /* 50% of the viewport width */
+  height: 20vh; /* 20% of the viewport height */
+  min-width: 320px;
+  max-width: 1100px;
+  min-height: 140px;
   max-height: 80vh;
   background: linear-gradient(145deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
   border-radius: 20px;
   border: 3px solid #ffd700;
-  box-shadow: 
+  box-shadow:
     0 0 50px rgba(255, 215, 0, 0.4),
     inset 0 2px 4px rgba(255, 255, 255, 0.1);
   animation: cardSlideIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  overflow: hidden;
+  overflow: auto;
 }
+
+.result-card:hover { cursor: pointer; } /* hand cursor on hover */
+
+.result-card.dragging { cursor: grabbing; }
 
 .result-header {
   padding: 30px;
@@ -532,3 +567,5 @@
     flex-direction: column;
   }
 }
+
+.result-card.dragging { cursor: grabbing; }

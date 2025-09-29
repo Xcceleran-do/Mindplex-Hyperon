@@ -1,4 +1,5 @@
-import { createSignal, createEffect, Show, onMount } from 'solid-js';
+import { createSignal, createEffect, Show } from 'solid-js';
+import { Portal } from 'solid-js/web';
 import './MiningInterface.css';
 
 export interface MiningResult {
@@ -19,12 +20,6 @@ const MiningInterface = (props: MiningInterfaceProps) => {
   const [miningResult, setMiningResult] = createSignal<MiningResult | null>(null);
   const [conjunctionCount, setConjunctionCount] = createSignal(3);
   const [showResult, setShowResult] = createSignal(false);
-  
-  // Drag functionality
-  const [isDragging, setIsDragging] = createSignal(false);
-  const [dragOffset, setDragOffset] = createSignal({ x: 0, y: 0 });
-  const [position, setPosition] = createSignal({ x: 0, y: 0 });
-  let miningInterfaceRef: HTMLDivElement | undefined;
 
   const startMining = async () => {
     setIsMining(true);
@@ -100,51 +95,33 @@ const MiningInterface = (props: MiningInterfaceProps) => {
     setMiningResult(null);
   };
 
-  // Drag functionality
-  const handleMouseDown = (e: MouseEvent) => {
-    if (!miningInterfaceRef) return;
-    
-    setIsDragging(true);
-    const rect = miningInterfaceRef.getBoundingClientRect();
-    setDragOffset({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top
-    });
-    
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
+  // Drag state for the result card
+  const [dragging, setDragging] = createSignal(false);
+  const [dragPos, setDragPos] = createSignal({ x: 0, y: 0 });
+  const [moved, setMoved] = createSignal(false);
+  const dragOffset = { x: 0, y: 0 };
+
+  const startDrag = (e: PointerEvent, el: HTMLElement) => {
     e.preventDefault();
+    setDragging(true);
+    setMoved(true);
+    const rect = el.getBoundingClientRect();
+    dragOffset.x = e.clientX - rect.left;
+    dragOffset.y = e.clientY - rect.top;
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', endDrag);
   };
 
-  const handleMouseMove = (e: MouseEvent) => {
-    if (!isDragging()) return;
-
-    const newX = e.clientX - dragOffset().x;
-    const newY = e.clientY - dragOffset().y;
-
-    // Constrain to viewport bounds
-    const maxX = window.innerWidth - (miningInterfaceRef?.offsetWidth || 0);
-    const maxY = window.innerHeight - (miningInterfaceRef?.offsetHeight || 0);
-
-    setPosition({
-      x: Math.max(0, Math.min(newX, maxX)),
-      y: Math.max(0, Math.min(newY, maxY))
-    });
+  const onPointerMove = (e: PointerEvent) => {
+    if (!dragging()) return;
+    setDragPos({ x: e.clientX - dragOffset.x, y: e.clientY - dragOffset.y });
   };
 
-  const handleMouseUp = () => {
-    setIsDragging(false);
-    document.removeEventListener('mousemove', handleMouseMove);
-    document.removeEventListener('mouseup', handleMouseUp);
+  const endDrag = (_e: PointerEvent) => {
+    setDragging(false);
+    window.removeEventListener('pointermove', onPointerMove);
+    window.removeEventListener('pointerup', endDrag);
   };
-
-  onMount(() => {
-    // Clean up event listeners on unmount
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-  });
 
   return (
     <div 
@@ -198,9 +175,9 @@ const MiningInterface = (props: MiningInterfaceProps) => {
         </button>
       </div>
 
-      {/* Mining Animation Overlay */}
-      <Show when={isMining()}>
-        <div class="mining-overlay">
+      {/* Mining HUD (always visible, bottom-center) rendered via Portal to ensure fixed positioning */}
+      <Portal>
+        <div class={`mining-hud ${isMining() ? 'active' : 'idle'}`}>
           <div class="mining-scene">
             <div class="cave-entrance">🕳️</div>
             <div class="miner">
@@ -222,12 +199,21 @@ const MiningInterface = (props: MiningInterfaceProps) => {
             </div>
           </div>
         </div>
-      </Show>
+      </Portal>
 
       {/* Result Card */}
       <Show when={showResult() && miningResult()}>
         <div class="result-overlay" onClick={closeResult}>
-          <div class="result-card" onClick={(e) => e.stopPropagation()}>
+          <div
+            class={`result-card ${dragging() ? 'dragging' : ''}`}
+            onClick={(e) => e.stopPropagation()}
+            onPointerDown={(e) => startDrag(e as unknown as PointerEvent, e.currentTarget as HTMLElement)}
+            style={(() => {
+              if (!moved()) return {};
+              const p = dragPos();
+              return { left: `${p.x}px`, top: `${p.y}px`, transform: 'none', bottom: 'auto' } as any;
+            })()}
+          >
             <Show when={miningResult()?.status === 'completed'}>
               <div class="result-header gold">
                 <h2>🏆 The Gold 🏆</h2>
