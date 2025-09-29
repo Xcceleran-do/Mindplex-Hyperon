@@ -309,26 +309,33 @@
   right: 0;
   bottom: 0;
   background: rgba(0, 0, 0, 0.5);
-  z-index: 1000;
+  z-index: 22000; /* ensure overlay is above floating button */
   display: flex;
   justify-content: center;
   align-items: center;
+  padding-top: 2vh; /* reduce top padding so content sits higher */
 }
 
 .result-card {
-  position: absolute;
+  position: relative; /* center via overlay flexbox by default */
   width: 90%;
-  max-width: 500px;
+  max-width: 700px;
   background: white;
   border-radius: 10px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
   overflow: hidden;
   cursor: grab;
+  transform: translateY(-10vh); /* visually lift the centered card more */
 }
 
 .result-card.dragging {
   cursor: grabbing;
   box-shadow: 0 15px 50px rgba(0, 0, 0, 0.4);
+}
+
+/* When user moves the card we convert it to absolute positioning so it can be dragged */
+.result-card.absolute {
+  position: absolute;
 }
 
 .result-header {
@@ -414,6 +421,25 @@
   transform: scale(1.1);
 }
 
+.copy-button {
+  position: absolute;
+  top: 8px;
+  right: 44px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.12);
+  border: none;
+  color: white;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.15s ease;
+}
+
+.copy-button:hover {
+  background: rgba(255,255,255,0.24);
+  transform: scale(1.04);
+}
+
 /* Animations */
 @keyframes mine-border {
   0% { background-position: 0 0; }
@@ -477,8 +503,80 @@
   100% { width: 100%; }
 }
 
-/* Advanced button effects */
+/* Advanced button effects (cleaned / syntactically-correct) */
 .mine-button.mining {
   background: linear-gradient(135deg, #4b0082 0%, #9400d3 100%);
   animation: mining-glow 1.5s ease-in-out infinite;
+}
+
+/* Cool variant for compact mine button */
+.mine-button.cool {
+  background: linear-gradient(90deg, #ff5f6d 0%, #ffc371 50%, #ff7eb3 100%);
+  color: #0f1724;
+  padding: 14px 22px;
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(255,94,98,0.35), inset 0 -8px 18px rgba(255,255,255,0.06);
+  border: 2px solid rgba(255,255,255,0.14);
+  position: relative;
+  overflow: hidden;
+  z-index: 9999; /* make sure it's above particle canvas */
+  font-size: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto; /* ensure clickable */
+}
+
+.mine-button.cool::before {
+  content: '';
+  position: absolute;
+  left: -120%;
+  top: -20%;
+  width: 40%;
+  height: 140%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.45), transparent);
+  transform: skewX(-20deg);
+  filter: blur(6px);
+  transition: left 0.9s cubic-bezier(.2,.9,.3,1);
+}
+
+.mine-button.cool:hover::before {
+  left: 120%;
+}
+
+.mine-button.cool .pickaxe-icon {
+  animation: spinNudge 1.3s infinite linear;
+}
+
+/* Idle pulse to draw attention when not mining */
+.mine-button.cool:not(.mining) {
+  animation: idlePulse 2.6s ease-in-out infinite;
+}
+
+@keyframes idlePulse {
+  0% { box-shadow: 0 10px 30px rgba(255,94,98,0.14); transform: translateY(0); }
+  50% { box-shadow: 0 22px 48px rgba(255,94,98,0.24); transform: translateY(-3px); }
+  100% { box-shadow: 0 10px 30px rgba(255,94,98,0.14); transform: translateY(0); }
+}
+
+@keyframes spinNudge {
+  0% { transform: rotate(0deg) translateY(0); }
+  50% { transform: rotate(-6deg) translateY(-3px); }
+  100% { transform: rotate(0deg) translateY(0); }
+}
+
+.mine-button.cool:hover {
+  transform: translateY(-6px) scale(1.03);
+  box-shadow: 0 18px 46px rgba(255,94,98,0.26);
+}
+
+/* Floating left-center quick access: ensure the Mine button is visible
+   and clickable by pinning it to the left-center of the viewport. */
+.mine-button.cool.floating-left {
+  position: fixed !important;
+  left: 20px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  z-index: 9000 !important; /* keep visible but below the modal overlay */
+  pointer-events: auto !important;
 }
