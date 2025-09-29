@@ -14,16 +14,32 @@ import threading
 import uuid
 from dataclasses import dataclass
 from typing import Dict, Any, Optional
+from hyperon import MeTTa
 
-# Add the current directory to Python path to import talk_with_metta
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+metta4Miner = MeTTa()
 
-try:
-    from talk_with_metta import mine_pattern
-except ImportError as e:
-    print(f"Error importing mine_pattern: {e}")
-    print("Make sure talk_with_metta.py is in the same directory")
-    sys.exit(1)
+metta4Miner.run("""
+    ! (register-module! ../experiments)
+
+    ! (import! &self experiments:pattern-miner:pattern-miner)
+    ! (import! &self experiments:utils:common-utils)
+    ! (import! &self experiments:frequent-pattern-miner:frequent-pattern-miner)
+    ! (import! &tempo experiments:data:small-ugly)
+
+    !(bind! &db (new-space)) ;; create the database
+                
+    !(add-reduct &db (get-atoms &tempo)) ;; add the data to the database
+                
+    !(bind! &dbb (new-space)) ;; create the database
+                
+    !(bind! &res1 (new-space)) ;; space to hold the miner result
+""")
+
+def mine_pattern(numberOfConjunction):
+    """this function will mine patterns with the given number of conjunction"""
+    answer = metta4Miner.run(f" !(pattern-miner &res1 &db 3 {numberOfConjunction-2})")
+
+    return answer
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all domains on all routes

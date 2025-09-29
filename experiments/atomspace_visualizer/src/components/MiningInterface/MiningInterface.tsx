@@ -124,15 +124,7 @@ const MiningInterface = (props: MiningInterfaceProps) => {
   };
 
   return (
-    <div 
-      ref={miningInterfaceRef}
-      class={`mining-interface ${isDragging() ? 'dragging' : ''}`}
-      style={position().x !== 0 || position().y !== 0 ? 
-        `transform: translate(${position().x}px, ${position().y}px) translateX(-50%);` : 
-        ''
-      }
-      onMouseDown={handleMouseDown}
-    >
+    <div class="mining-interface">
       {/* Mining Control Panel */}
       <div class="mining-controls">
         <div class="conjunction-input">
