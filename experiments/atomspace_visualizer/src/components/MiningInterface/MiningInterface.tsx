@@ -1,6 +1,6 @@
 import { createSignal, createEffect, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
-// ButtonParticleEffects removed temporarily for stability
+import ButtonParticleEffects from './ButtonEffects';
 import './MiningInterface.css';
 
 export interface MiningResult {
@@ -96,22 +96,33 @@ const MiningInterface = (props: MiningInterfaceProps) => {
     setMiningResult(null);
   };
 
-  // Copy feedback state
-  const [copyStatus, setCopyStatus] = createSignal<'idle' | 'copied'>('idle');
+  // Drag state for the result card
+  const [dragging, setDragging] = createSignal(false);
+  const [dragPos, setDragPos] = createSignal({ x: 0, y: 0 });
+  const [moved, setMoved] = createSignal(false);
+  const dragOffset = { x: 0, y: 0 };
 
-  const copyResultToClipboard = async () => {
-    try {
-      const text = JSON.stringify(miningResult(), null, 2);
-      await navigator.clipboard.writeText(text);
-      setCopyStatus('copied');
-      setTimeout(() => setCopyStatus('idle'), 2000);
-    } catch (err) {
-      console.error('Failed to copy result:', err);
-    }
+  const startDrag = (e: PointerEvent, el: HTMLElement) => {
+    e.preventDefault();
+    setDragging(true);
+    setMoved(true);
+    const rect = el.getBoundingClientRect();
+    dragOffset.x = e.clientX - rect.left;
+    dragOffset.y = e.clientY - rect.top;
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', endDrag);
   };
 
-  // Dragging removed: card is non-draggable by design. It will be centered and
-  // its content will scroll if it's large.
+  const onPointerMove = (e: PointerEvent) => {
+    if (!dragging()) return;
+    setDragPos({ x: e.clientX - dragOffset.x, y: e.clientY - dragOffset.y });
+  };
+
+  const endDrag = (_e: PointerEvent) => {
+    setDragging(false);
+    window.removeEventListener('pointermove', onPointerMove);
+    window.removeEventListener('pointerup', endDrag);
+  };
 
   return (
     <div class="mining-interface">
@@ -132,7 +143,12 @@ const MiningInterface = (props: MiningInterfaceProps) => {
         </div>
         
         <div class="button-wrapper" style={{ position: 'relative' }}>
-            <button class={`mine-button cool floating-left ${isMining() ? 'mining' : ''}`} onClick={startMining} disabled={isMining()}>
+          <ButtonParticleEffects active={!isMining()} />
+          <button
+            class={`mine-button ${isMining() ? 'mining' : ''}`}
+            onClick={startMining}
+            disabled={isMining()}
+          >
             <div class="button-content generate-sparkles">
               <Show when={!isMining()}>
                 <span class="pickaxe-icon">⛏️</span>
@@ -185,36 +201,51 @@ const MiningInterface = (props: MiningInterfaceProps) => {
 
       {/* Result Card */}
       <Show when={showResult() && miningResult()}>
-        <div class="result-overlay">
-          <div class="result-card" onClick={(e) => e.stopPropagation()}>
-            {/* Unified result display: show whatever the backend returned */}
-            <div class={`result-header ${miningResult()!.status === 'completed' ? 'gold' : 'error'}`}>
-              <h2>{miningResult()!.status === 'completed' ? '🏆 Result' : '⚠️ Result'}</h2>
-              <p class="subtitle">{miningResult()!.status}</p>
-            </div>
-            <div class="result-content">
-              <div class="patterns-display">
-                <pre class="patterns-text">{JSON.stringify(miningResult()!, null, 2)}</pre>
+        <div class="result-overlay" onClick={closeResult}>
+          <div
+            class={`result-card ${dragging() ? 'dragging' : ''}`}
+            onClick={(e) => e.stopPropagation()}
+            onPointerDown={(e) => startDrag(e as unknown as PointerEvent, e.currentTarget as HTMLElement)}
+            style={(() => {
+              if (!moved()) return {};
+              const p = dragPos();
+              return { left: `${p.x}px`, top: `${p.y}px`, transform: 'none', bottom: 'auto' } as any;
+            })()}
+          >
+            <Show when={miningResult()?.status === 'completed'}>
+              <div class="result-header gold">
+                <h2>🏆 The Gold 🏆</h2>
+                <p class="subtitle">Precious patterns extracted from the depths</p>
               </div>
-              <div class="mining-stats">
-                <p><strong>Duration:</strong> {(() => {
-                    const d = miningResult()?.duration;
-                    return (typeof d === 'number') ? d.toFixed(2) + 's' : '-';
-                  })()}</p>
-                <p><strong>Conjunctions:</strong> {conjunctionCount()}</p>
+              <div class="result-content">
+                <div class="patterns-display">
+                  <pre class="patterns-text">{JSON.stringify(miningResult()?.result, null, 2)}</pre>
+                </div>
+                <div class="mining-stats">
+                  <p><strong>Duration:</strong> {miningResult()?.duration?.toFixed(2)}s</p>
+                  <p><strong>Conjunctions:</strong> {conjunctionCount()}</p>
+                </div>
               </div>
-            </div>
+            </Show>
+            
+            <Show when={miningResult()?.status === 'error'}>
+              <div class="result-header error">
+                <h2>⚠️ Mining Failed ⚠️</h2>
+                <p class="subtitle">The mine collapsed!</p>
+              </div>
+              <div class="result-content">
+                <div class="error-message">
+                  <p>{miningResult()?.error}</p>
+                </div>
+              </div>
+            </Show>
 
             <button class="close-button" onClick={closeResult}>
               ×
             </button>
-            <button class="copy-button" onClick={copyResultToClipboard} title="Copy result">
-              {copyStatus() === 'copied' ? 'Copied' : 'Copy'}
-            </button>
           </div>
         </div>
       </Show>
-      {/* floating button removed for aesthetics; use the in-panel Mine button instead */}
     </div>
   );
 };

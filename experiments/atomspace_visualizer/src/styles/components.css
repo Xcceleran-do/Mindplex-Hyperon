@@ -68,7 +68,7 @@
   left: 50%;
   transform: translateX(-50%);
   width: 50vw;
-  display: block; /* make mining controls visible by default */
+  display: none;
   height: 10vh;
   cursor: grab;
   z-index: 100;

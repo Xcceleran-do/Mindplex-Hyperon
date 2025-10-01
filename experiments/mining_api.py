@@ -9,30 +9,14 @@ import sys
 import time
 import traceback
 from flask import Flask, request, jsonify
-# The following imports may not resolve in all IDE environments; keep them
-# for runtime but silence static analysis warnings when necessary.
-try:
-    from flask_cors import CORS  # type: ignore
-except Exception:  # pragma: no cover - IDE/static analysis fallback
-    # Provide a no-op CORS if the package isn't available to avoid runtime import errors in some editors
-    def CORS(app=None, **kwargs):
-        return None
+from flask_cors import CORS
 import threading
 import uuid
 from dataclasses import dataclass
 from typing import Dict, Any, Optional
-try:
-    from hyperon import MeTTa  # type: ignore
-    metta4Miner = MeTTa()
-except Exception:
-    # If hyperon/MeTTa isn't importable in the current environment (IDE or test)
-    # create a minimal stub so the rest of the module can be loaded for static
-    # inspection and test runs that don't execute mining.
-    class _StubMeTTa:
-        def run(self, *args, **kwargs):
-            return 'metta-stub-result'
+from hyperon import MeTTa
 
-    metta4Miner = _StubMeTTa()
+metta4Miner = MeTTa()
 
 metta4Miner.run("""
     ! (register-module! ../experiments)
@@ -59,7 +43,7 @@ def mine_pattern(numberOfConjunction):
 
 def mine_pattern_demo(numberOfConjunction):
     """this function will mine patterns with the given number of conjunction"""
-    answer = '((supportOf (some pattern $x) 4), (supportOf (some pattern $y) 3))'
+    answer = ((supportOf (some pattern $x) 4) (supportOf (some pattern $y) 3))
 
     return answer
 
