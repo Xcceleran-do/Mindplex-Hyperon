@@ -1,17 +1,17 @@
-# Frequenc Pattern Miner
+# Frequent Pattern Miner
 
-The `frequenct-pattern-miner` is a modular pipeline for mining **frequent patterns** from a given atomspace. It extracts abstract patterns, specializes them, filters them by support, and constructs deeper conjunctive patterns and returns only the meaningful based on the support they have.
+The `frequent-pattern-miner` is a modular pipeline for mining **frequent patterns** from a given atomspace. It extracts abstract patterns, specializes them, filters them by support, and constructs conjunctive patterns, returning only the ones that meet the support threshold.
 
 ---
 
 
 ## 🔧 Purpose
 
-To find  patterns that **frequently occur** in the atomspace , using a multi-step symbolic mining approach that includes abstraction, specialization, support evaluation, and conjunctive expansion.
+To find patterns that **frequently occur** in the atomspace, using a multi-step symbolic mining approach that includes abstraction, specialization, support evaluation, and conjunction generation.
 
 ---
 
-##  Parameters
+## Parameters
 
 | Parameter      | Description                                                                 |
 |----------------|-----------------------------------------------------------------------------|
@@ -21,11 +21,11 @@ To find  patterns that **frequently occur** in the atomspace , using a multi-ste
 | `$aptrnspace`  | Space to store abstract patterns.                                           |
 | `$conjspace`   | Space to store pattern conjunctions.                                        |
 | `$minsup`      | Minimum support threshold for a pattern to be considered frequent.         |
-| `$depth`       | Depth of conjunction expansion (via De Bruijn index).                      |
+| `$depth`       | Conjunction size (number of clauses per conjunction). For example: 2 → pairs, 3 → triples. |
 
 ---
 
-##  How It Works (Pipeline Overview)
+## How It Works (Pipeline Overview)
 
 ### Step 1 — Abstract Pattern Mining (`abstract-pattern`)
 - Extract **unique link patterns** from the database.
@@ -40,10 +40,9 @@ To find  patterns that **frequently occur** in the atomspace , using a multi-ste
 - Evaluate the **support of specialized patterns**.
 - If the support ≥ `$minsup`, store them in `$cndpspace` as **candidates**.
 
-### Step 4 — Conjunction Expansion (`do-conjunct`)
-- Recursively **combine candidate patterns** into deeper conjunctions up to `$depth`.
-- Clean up redundant clauses.
-- Keep only conjunctions meeting support requirements, storing them in `$conjspace`.
+### Step 4 — Conjunction Generation (`do-conjunct`)
+- Build unique combinations of size `$depth` from candidate patterns.
+- Evaluate support for each conjunction and keep only those meeting `$minsup`, storing them in `$conjspace`.
 
 ### Step 5 — Finalization
 - Format and return the valid patterns with support annotations.
@@ -52,7 +51,7 @@ To find  patterns that **frequently occur** in the atomspace , using a multi-ste
 
 ## Output
 
-- A structured set of **frequent patterns** (including conjunctions) stored in `$kb`, each annotated with its computed support value.
+- A structured set of **frequent patterns** (including conjunctions) stored in your result space, each annotated with its computed support value.
 - These patterns are useful for reasoning, classification, or higher-level symbolic analysis.
 
 

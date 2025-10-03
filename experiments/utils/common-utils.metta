@@ -2,11 +2,6 @@
 ;; Common Utils ;;
 ;;;;;;;;;;;;;;;;;;
 
-;predicate to check if a given expression is a pattern or not
-
-(= (checkPat $x) (let $type (get-metatype $x) (if (not (== $type Expression)) False (and  ( > (size-atom $x) 1) (let $head (car-atom $x) (== (get-metatype $head) Symbol))) ) ))
-
-
 ;;;;;;;;;; functions related to Conjunction ;;;;;;;;;;;;
 
 ;; Extracts conjuncts from a conjunctive expression,
@@ -14,13 +9,6 @@
   unify (, $ncnj $ptrn) $cnj (let $result (get-conjuncts $ncnj) (cons-atom $ptrn $result) ) ($cnj)
 ))
 
-
-
-;;Determines the number of conjunctive clauses in a pattern.
-(= (n_conjuncts_new $pattern) (
-   let ($head $tail) (decons-atom $pattern) (
-    if (== $head ,) (tuple-count $tail) 1)
-))
 
 ;; =============================================================================
 ;; Function: flatten
@@ -46,41 +34,6 @@
   (cons-atom , $flatten)  
 ))
 
-
-
-(= (add-atom-nodup $space $atom) (add-atom $space $atom))
-
-      
-;; =============================================================================
-;; Function: conjunct-pattern
-;; -----------------------------------------------------------------------------
-;; Purpose:  
-;;   Converts a list of blocks (`$blks`) into a conjunctive pattern (logical AND)
-;;   and  adds it to a database (`$db`) 
-;;  
-;; Inputs:  
-;;   - `$blks`: A list of blocks (e.g., `(A B C)`).  
-;;   - `$db`  : A database to which the pattern is added as an atom.  
-;;             
-;;  
-;; Output:  
-;;   - A conjunctive pattern combining `$blks` (e.g., `(, A B C)`).  
-;;  
-;; How it works:  
-;;   1. Combines `$blks` into a conjunction using `cons-atom` (e.g., `(, A B C)`).  
-;;   2. adds the pattern to it via `add-atom` (side effect).  
-;;   3. Returns the generated pattern, regardless of `$db`.  
-;;  
-;; Notes:  
-;;  
-;;   - No checks are done on `$blks` (e.g., empty lists may produce `(and)`).  
-;; =============================================================================
-(= (conjunct-pattern $blks $db) (
-let* ( ($pattern (cons-atom , $blks)) ($dummy (add-atom $db $pattern))) $pattern
-))
-
-
-(= (pow-py $base $power) (pow-math $base $power)) 
 
 
 ;; =============================================================================
@@ -695,7 +648,7 @@ let* ( ($pattern (cons-atom , $blks)) ($dummy (add-atom $db $pattern))) $pattern
 ;; This is very slow, use the grounded python function instead
 
 ;    (: tuple-count (-> Any Number))
-   (= (tuple-count $atom) (size-atom $atom))
+(= (tuple-count $atom) (size-atom $atom))
 
 ;; Tuple count grounded python function
 ; (import! &self  helper)
@@ -729,7 +682,7 @@ let* ( ($pattern (cons-atom , $blks)) ($dummy (add-atom $db $pattern))) $pattern
  ;; Count the number of instances of a given pattern
 ;;(: counter (-> hyperon::space::DynSpace Atom Number))
 (= (counter $db $ptrn)
-    (let $result (collapse (match $db $ptrn $ptrn))
+    (let $result (collapse (match $db $ptrn 1))
          (tuple-count $result)
     )
 )
@@ -745,9 +698,7 @@ let* ( ($pattern (cons-atom , $blks)) ($dummy (add-atom $db $pattern))) $pattern
 ; (: sup-eval (-> hyperon::space::DynSpace Atom Number Boolean))
 
 (= (sup-eval $db $pattern $ms)
-    (let $sup (counter $db $pattern)
-        (if (>= $sup $ms) True False)
-    )
+    ( let $sup (counter $db $pattern) (if (>= $sup $ms) True False) )
 )
 
 ;; returns the number of support of a pattern

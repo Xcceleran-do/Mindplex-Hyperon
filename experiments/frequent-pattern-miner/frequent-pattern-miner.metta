@@ -7,8 +7,6 @@
 ! (import! &self conjunction-expansion)
 
 
-
-
 ---------------------------------------------
 ;; abstract-pattern
 ---------------------------------------------
@@ -19,13 +17,10 @@
 ;; 4: Calculate the support for the Abstract patterns and store the ones satisfy the minimum support in a space
 ;(: abstract-pattern (-> SpaceType Number SpaceType Atoms))
 (= (abstract-pattern $dbspace $minsup $aptrnspace)        
- (let $linkunique (unique (match $dbspace ($link $x $y) $link))
-                       ( let True (sup-eval $dbspace ($linkunique $z $t) $minsup)
-                         (add-atom $aptrnspace (AbstractPattern ($linkunique $x $y))))))
-
-
-
-
+        (let $linkUnique (unique (match $dbspace ($link $x $y) $link))
+                ( if (sup-eval $dbspace ($linkUnique $z $t) $minsup) (add-atom $aptrnspace (AbstractPattern ($linkUnique $x $y))) () ) 
+        )
+)
 
 
 --------------------------------------------------------
@@ -39,15 +34,15 @@
 ;; 5: format the patterns and add them to the knowledge base with their support
 
 ;(: frequency-pattern-miner (-> SpaceType SpaceType SpaceType SpaceType SpaceType Number Number Atoms))
-(= (frequency-pattern-miner $dbspace $specspace $cndpspace $aptrnspace $conjspace $minsup $depth)
+(= (frequency-pattern-miner $dbspace $aptrnspace $conjspace $minsup $depth)
    (let*(
            (() (println! "==== Frequent miner started ====="))
-           (() (abstract-pattern $dbspace $minsup $aptrnspace))
+           ($demo (collapse (abstract-pattern $dbspace $minsup $aptrnspace)))
            (() (println! (" abstract ended and got" (collapse (get-atoms $aptrnspace)))))
            ($unflattenedSpecializedPatterns  (collapse (match $aptrnspace (AbstractPattern $pattern) (build-specialization $pattern $dbspace))))
            ($specializedPatterns  (flattenSixo $unflattenedSpecializedPatterns))
            ($candidatePatterns (candidatePattern $dbspace $specializedPatterns $minsup)); get candidate patterns
-           (() (println! (" candidatePatterns ended and got" $candidatePatterns)))
+           (() (println! ("candidatePatterns ended and got" $candidatePatterns)))
            ($temp3  (conjunct $dbspace $candidatePatterns $conjspace $minsup $depth ))
            (() (println! (" conjucts ended and got" (collapse (get-atoms $conjspace)))))
            ($temp4 (collapse (formatter  $conjspace $dbspace $depth)))      
@@ -55,4 +50,7 @@
 )
 
 
+;; Flattens a nested structure of atoms in `$expr` into a single-level set by
+;; recursively applying `union-atom` to accumulate all elements. Uses `foldl-atom`
+;; to traverse and combine elements, starting from an () set.
 (= (flattenSixo $expr) (foldl-atom $expr () $acc $x (eval (union-atom $acc $x))))

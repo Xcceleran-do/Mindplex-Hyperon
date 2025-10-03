@@ -37,13 +37,12 @@ metta4Miner.run("""
 
 def mine_pattern(numberOfConjunction):
     """this function will mine patterns with the given number of conjunction"""
-    answer = metta4Miner.run(f" !(pattern-miner &res1 &db 3 {numberOfConjunction-2})")
-
+    answer = metta4Miner.run(f" !(pattern-miner &res1 &db 3 {numberOfConjunction})")
     return answer
 
 def mine_pattern_demo(numberOfConjunction):
     """this function will mine patterns with the given number of conjunction"""
-    answer = ((supportOf (some pattern $x) 4) (supportOf (some pattern $y) 3))
+    answer = "((supportOf (some pattern $x) 4) (supportOf (some pattern $y) 3))"
 
     return answer
 

@@ -6,7 +6,7 @@ It is a **functional implementation** of a pattern mining pipeline written in Me
 ##  How It Works
 
 1. **Frequent Pattern Mining**:  
-   The miner first extracts frequent patterns from the input corpus using a specified minimum support and pattern depth.
+   The miner first extracts frequent patterns from the input corpus using a specified minimum support and conjunction size (`depth`).
 
 2. **Surprisingness Scoring** *(Optional)*:  
    If a **surprisingness mode** is selected, the patterns are evaluated based on how unexpected they are.
@@ -29,12 +29,12 @@ It is a **functional implementation** of a pattern mining pipeline written in Me
 | `isurp-old`  | Computes surprisingness **without normalization**.|
 | `nisurp-old` | Computes surprisingness **with normalization**.   |
 
-##  Requirements
+## Requirements
 - MeTTa v0.2.4
 - A corpus (dataset) you want to mine patterns from
 - Clone and structure this `hyperon-miner` module
 
-##  How to Run
+## How to Run
 ### Example Call
 ```
 ;; Register  the hyperon-miner based on your folder structure 
@@ -58,16 +58,16 @@ It is a **functional implementation** of a pattern mining pipeline written in Me
 ;; - $kb: space where results are stored
 ;; - $db: database space to mine
 ;; - $minsup: minimum support (integer)
-;; - $depth: number of conjucts of the pattern 
-                    0 -> 2 conjucts   (, (link A B) (link C B))
-                    1 -> 3 conjucts   (, (link A B) (link A C) (link A D))
+;; - $depth: conjunction size (number of clauses per pattern)
+;;           2 -> pairs   (, (link A B) (link C B))
+;;           3 -> triples (, (link A B) (link A C) (link A D))
 ;; - $surp-mode: 'none' | 'isurp-old' | 'nisurp-old' (surprisingness methods)
 
 !(pattern-miner &res &db 3 0 none)
 ```
 
 
-##  Expected Output Format
+## Expected Output Format
 
 ### Without Surprisingness (`none`)
 ```

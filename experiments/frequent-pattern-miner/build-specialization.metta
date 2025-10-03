@@ -1,9 +1,11 @@
 ! (import! &self freq-pat)
 
-
 ---------------------------------------
 ;; dontExist
 ---------------------------------------
+;; Function to check if a specialized atom does not already exist in a pool of specialized atoms.
+;; Iterates through the pool and compares each atom with the selected atom using alpha equivalence.
+;; Returns False if an equivalent atom is found, otherwise returns True.
 ( = (dontExist $selectedAtom $poolOfSpecialized)
     (foldl-atom $poolOfSpecialized True $truthValue $currentAtom  
         (
@@ -13,8 +15,6 @@
         )
     )
 )
-
-
 
 ---------------------------------------
 ;; depth-handler
