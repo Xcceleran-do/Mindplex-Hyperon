@@ -1,5 +1,20 @@
-
 ! (import! &self freq-pat)
+
+
+---------------------------------------
+;; dontExist
+---------------------------------------
+( = (dontExist $selectedAtom $poolOfSpecialized)
+    (foldl-atom $poolOfSpecialized True $truthValue $currentAtom  
+        (
+            if (=alpha $currentAtom $selectedAtom)
+                False
+                $truthValue
+        )
+    )
+)
+
+
 
 ---------------------------------------
 ;; depth-handler
@@ -28,6 +43,40 @@
     )
 )))
 
+
+
+
+;---------------------------------------
+;; createSpecials
+;---------------------------------------
+;; Function to create specialized patterns from a list of substitution pairs.
+;; For each pair in $shabPairs, generates two specialized atoms by substituting
+;; the elements into the pattern, checks if they already exist in the accumulator,
+;; and adds them if they do not exist. Returns the updated accumulator containing
+;; all unique specialized atoms.
+
+( = (createSpecials $pair $acc)
+        (
+            unify ($link $shabx $shaby) $pair
+            (
+                let* (
+                        ($spec1 (Specialized ($link $shabx $y) )) 
+                        ($spec2 (Specialized ($link $x $shaby) )) 
+                        ($canAddSpec1 (dontExist $spec1 $acc))
+                        ($canAddSpec2 (dontExist $spec2 $acc))
+                        ($newAcc (if $canAddSpec1 (cons-atom $spec1 $acc) $acc))
+                    )   
+                    (if $canAddSpec1
+                        ( if $canAddSpec2 (cons-atom $spec2 $newAcc) $newAcc )
+                        ( if $canAddSpec2  (cons-atom $spec2 $acc) $acc )
+                    )
+            )
+            (println! (================= not  created specials for $pair with =====================))
+        )
+)
+
+
+
 -------------------------------------------------------------------------------
 ; build-specialization
 -------------------------------------------------------------------------------
@@ -38,27 +87,14 @@
 ; - add the specialization to the specialization space
 ;(: build-specialization (-> Pattern SpaceType SpaceType Atom))
 ; (: build-specialization (-> Pattern SpaceType SpaceType Any))
-(= (build-specialization ($link $x $y) $dbspace $specspace) 
-            (let*
-                (  
-                     (() (println! "==== Build specialization started ====="))
-                    ( ($link $x1 $y1) (replacev ($link $x $y)))                            ; replacev is a function that replaces index with variables
-                    ( ($subx $suby) (match $dbspace ($link $x1 $y1) ($x1 $y1)))            ; getting the substitution /valuation of the pattern
-                    ($shabx (depth-handler $subx))                                    ;handle depth in the x node
-                    ($shaby (depth-handler $suby))                                    ; handle depth in the y node                               
-                    ($spec1 (replace (SpecializationOf ($link $shabx $y1) ($link $x $y)))) ;build the specialization and change the variables to indexs 
-                    ($spec2 (replace (SpecializationOf ($link $x1 $shaby) ($link $x $y)))) ;build the specialization and change the variables to indexs
-                )
-            (
-                superpose (
-                    (remove-atom $specspace $spec1) ; remove the old specialization to avoid redundancy
-                    (add-atom $specspace $spec1) ; add the new specialization
-                    (remove-atom $specspace $spec2)
-                    (add-atom $specspace $spec2)
-                )
-
+(= (build-specialization ($link $x $y) $dbspace) 
+    (let*
+        (  
+            (() (println! "==== Build specialization started ====="))
+            ( $shabPairs (collapse (match $dbspace ($link $x $y) ($link (depth-handler $x) (depth-handler $y)))))               
         )
-)
+        ( foldl-atom $shabPairs () $acc $pair (createSpecials $pair $acc) )
+    )
 )
 
 

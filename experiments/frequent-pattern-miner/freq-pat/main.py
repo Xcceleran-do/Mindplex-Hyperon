@@ -161,14 +161,45 @@ def replace_with_variable(metta: MeTTa, pattern):
     return [metta.parse_single(str_pattern)]
 
 def sort_conjunction(metta: MeTTa, conjunction):
-    print(f"Sorting conjunction: {conjunction}")
-    nested_str = str(conjunction)
+    nested_str = _canonicalize_metta_expr(str(conjunction))
     atoms = re.findall(r'\([^()]+\)', nested_str)  # Match only atomic elements
     sorted_elements =  sorted(atoms)
     flattend_str = f"( {' '.join(sorted_elements)})"
     return [metta.parse_single(flattend_str)]
 
 
+
+# =========================
+# Alpha-like equality (ignore variable identifiers)
+# =========================
+def _canonicalize_metta_expr(expr_str: str) -> str:
+    """Canonicalize a MeTTa expression string for equality modulo variables.
+
+    - Strip instance suffixes like $x#123 -> $x
+    - Rename variables to $V0, $V1, ... in order of first appearance
+    - Normalize whitespace
+    """
+    # Remove instance suffixes
+    s = re.sub(r"\$([A-Za-z_][\w-]*)#[0-9]+", r"$\1", expr_str)
+
+    var_map: dict[str, str] = {}
+    counter = 0
+
+    def repl(m: re.Match) -> str:
+        nonlocal counter
+        base = m.group(1)
+        key = base
+        if key not in var_map:
+            var_map[key] = f"$V{counter}"
+            counter += 1
+        return var_map[key]
+
+    # Replace variables to canonical placeholders
+    s = re.sub(r"\$([A-Za-z_][\w-]*)", repl, s)
+    # Normalize spaces
+    s = re.sub(r"\s+", " ", s).strip()
+    s = s.replace("( ", "(").replace(" )", ")")
+    return s
 
 
 @register_atoms(pass_metta=True)
@@ -184,8 +215,9 @@ def redundancy(metta):
         "replacev", lambda pattern: replace_with_variable(metta, pattern), unwrap=False
     )
     sort_conj = OperationAtom(
-        "sort_conj", lambda conjunction: sort_conjunction(metta, conjunction), unwrap=False
+        "sort_conj", lambda conjunction: sort_conjunction(metta, conjunction),["Atom", "Atom"], unwrap=False
     )
+    
     return {r"redunpat": redundancyFreeAtom, r"replace": replace, r"replacev": replacev, r"sort_conj": sort_conj}
 
 

@@ -20,9 +20,7 @@
 ;; surprissingness mode none
 ;; minimum support 3
 
-!(let 
-    $answer (pattern-miner &res1 &db 3 0) 
-    (that is it we have the answer:- $answer)) 
+!(pattern-miner &res1 &db 3 4) 
 !(println! "============ end ================")
 ; !(collapse (match &res1 $pattern $pattern )) ; de-comment the line where add-atom is used and u can de-comment this line to see the result
 ;; Expected result 

@@ -1,10 +1,13 @@
 
+! (import! &self freq-pat)
+! (import! &self conj-exp)
+
 ! (import! &self build-specialization)
 ! (import! &self candidate-patterns)
 ! (import! &self conjunction-expansion)
 
-! (import! &self freq-pat)
-! (import! &self conj-exp)
+
+
 
 ---------------------------------------------
 ;; abstract-pattern
@@ -18,7 +21,7 @@
 (= (abstract-pattern $dbspace $minsup $aptrnspace)        
  (let $linkunique (unique (match $dbspace ($link $x $y) $link))
                        ( let True (sup-eval $dbspace ($linkunique $z $t) $minsup)
-                         (add-atom $aptrnspace (AbstractPattern ($linkunique Z (S Z)))))))
+                         (add-atom $aptrnspace (AbstractPattern ($linkunique $x $y))))))
 
 
 
@@ -39,11 +42,17 @@
 (= (frequency-pattern-miner $dbspace $specspace $cndpspace $aptrnspace $conjspace $minsup $depth)
    (let*(
            (() (println! "==== Frequent miner started ====="))
-           (() (abstract-pattern $dbspace $minsup $aptrnspace)) ; prevent patterns that don't have a support from being specialized
-           ($var  (collapse (match $aptrnspace (AbstractPattern $pattern) (build-specialization $pattern $dbspace $specspace)))) ; specialized abstract patterns
-           ($temp2  (collapse (candidatePattern $dbspace $specspace $minsup $cndpspace))); get candidate patterns
-            ($temp3  (collapse (conjunct $dbspace $cndpspace $conjspace $minsup $depth ))) ; store candidate patterns
-            ($temp4  (collapse (formatter  $conjspace $dbspace $depth)))      
-        )  $temp4)
+           (() (abstract-pattern $dbspace $minsup $aptrnspace))
+           (() (println! (" abstract ended and got" (collapse (get-atoms $aptrnspace)))))
+           ($unflattenedSpecializedPatterns  (collapse (match $aptrnspace (AbstractPattern $pattern) (build-specialization $pattern $dbspace))))
+           ($specializedPatterns  (flattenSixo $unflattenedSpecializedPatterns))
+           ($candidatePatterns (candidatePattern $dbspace $specializedPatterns $minsup)); get candidate patterns
+           (() (println! (" candidatePatterns ended and got" $candidatePatterns)))
+           ($temp3  (conjunct $dbspace $candidatePatterns $conjspace $minsup $depth ))
+           (() (println! (" conjucts ended and got" (collapse (get-atoms $conjspace)))))
+           ($temp4 (collapse (formatter  $conjspace $dbspace $depth)))      
+        )  (final answer is $temp4))
 )
 
+
+(= (flattenSixo $expr) (foldl-atom $expr () $acc $x (eval (union-atom $acc $x))))

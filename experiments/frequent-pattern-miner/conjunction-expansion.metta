@@ -22,19 +22,22 @@
 
 ; ! (register-module! ../../experiments)
 ; ! (import! &self experiments:utils:common-utils)
-! (import! &self conj-exp)
 ! (import! &self freq-pat)
+! (import! &self conj-exp)
+
+; !(sort_conj (, (inherit $name tol) (inherit $sim tol)))
+; !(alpha_equal (inherit $name tol) (inherit $sim tol))
 
  ; The starting point for the conjunction expansion. It passes
  ; the Alpha Converted pattern (if necessary) to the expand_conjunction functions.
  ; if it passes the minimum variable check
 
-(= (expand_conjunction $cnjtion $pattern $db $ms $mv $es)
-    (if $es
-        (expand_conjunctin_es_rec $cnjtion $pattern $db $ms)
-        (expand_conjunction_rec $cnjtion $pattern $db $ms)
-    )
-)
+; (= (expand_conjunction $cnjtion $pattern $db $ms $mv $es)
+;     (if $es
+;         (expand_conjunctin_es_rec $cnjtion $pattern $db $ms)
+;         (expand_conjunction_rec $cnjtion $pattern $db $ms)
+;     )
+; )
 
 (= (count-atom-element $atom) (if (== $atom ()) 0 (+ 1 (count-atom-element (cdr-atom $atom)))))
 
@@ -118,7 +121,7 @@
 )))))
 
  
- ==============  alpha convert  =======================
+;  ==============  alpha convert  =======================
 
 (= (alpha_convert  $pattern_vars $cnjtion_vars)
     (extract_values (consolidate_keys (address_conflict $pattern_vars $cnjtion_vars)))
@@ -196,13 +199,12 @@
     )
 )
 
- ================= alpha convert end ================================
+;  ================= alpha convert end ================================
 
 
-(= (expand_conjunction_rec $cnjtion $apat $db $ms)
-    (let $npat (expand_conjunction_connect $cnjtion $apat (get_variable_for_pattern $cnjtion) (get_variable_for_pattern $apat))
-         (checker $db $npat $ms)
-        ; $npat
+(= (expand_conjunction_rec $patterns $db $ms $depth)
+    (let $theConjuncts (unique_combinations $patterns $depth)
+        (foldl-atom $theConjuncts () $acc $pattern (checker $db $pattern $ms $acc))
     )
 )
 
@@ -225,16 +227,15 @@
 )
 )
 
-(= (checker $db $pattern $ms) 
-   (let* (
-   ( () (println! (pattern $pattern)))
-   ($flat (flatten $pattern))
-   ) 
-   (if (sup-eval $db $flat $ms)
-        $pattern
-        ()
-    ))
+(= (checker $db (conjunct $truePattern) $ms $acc) 
+    (
+        if (sup-eval $db $truePattern $ms) 
+            (cons-atom $truePattern $acc) 
+            $acc
+    )
 )
+
+
 
 
 (= (remove_alpha_similar $list)
@@ -306,31 +307,11 @@
 ; returns:
 ; a superpose of conjunctions that satisfy the minimum support and are not redundant.
 ;(: do-conjunct SpaceType SpaceType Pattern Number Nat Atom)
-(= (do-conjunct $db $cndb $coming_conj  $ms Z)
+(= (do-conjunct $db $patterns $ms $depth)
     (let* (
-        (() (println! "==== Build conjunction with depth 0 ===="))
-        ($conjunct (replacev $coming_conj))
-        ($matches (match $cndb (CandidatePattern $pattern) (replacev $pattern)))
-        ($listconj (expand_conjunction $conjunct $matches $db $ms 2 False))
-        ($debconj (replace $listconj))
-        ($fitlered (remove_conjuncts_with_redundant_clauses $debconj))
-    )
-    $fitlered
-    )
-)
-
-(= (do-conjunct $db $cndb $coming_conj $ms (S $K))
-    (let* (
-        (() (println! "==== Build conjunction with depth greater than 0 ====="))
-        ($conjunct (replacev $coming_conj))
-        ($matches (match $cndb (CandidatePattern $pattern) (replacev $pattern)))
-        ($listconj (expand_conjunction $conjunct $matches $db $ms 2 False))
-        ($debconj (replace $listconj))
-        ($fitlered (remove_conjuncts_with_redundant_clauses $debconj))
-        ($varconj (replacev $fitlered))
-        ($conj (do-conjunct $db $cndb $varconj $ms $K))
-    )
-    $conj
+        (() (println! ("==== Build conjunction with depth ====" $depth)))
+        ($theConjuncts (unique_combinations_star $patterns $depth))
+        ) (foldl-atom $theConjuncts () $acc $pattern (checker $db $pattern $ms $acc))
     )
 )
 
@@ -344,7 +325,7 @@
 
 
 (= (format-helper $var-index $dbspace $depth) (
-     let $var (replacev $var-index) (supportOf $var (sup-num $dbspace $var))))
+     let $var (replacev $var-index) ))
 
 --------------------------------------------
 ;;  formatter
@@ -356,15 +337,13 @@
 ;; 4: add the results to the knowledge base with their support
 ;(: formatter (-> SpaceType SpaceType Number Atom ))
 (= (formatter  $conjspace $dbspace $depth) 
-   (let* 
-        (
+   (let* (
             (() (println! "==== Formating  started ====="))
             ($sorted  (match $conjspace $pattern (sort_conj $pattern)))
             ($res  (cons-atom ,  $sorted))
-            ($formatted (format-helper $res $dbspace (fromNumber $depth)))
-        ) 
-        $formatted
-    )
+            ($formatted (supportOf $res (sup-num $dbspace $res))) 
+        ) $formatted
+   )
 )
 
 -----------------------------------------------
@@ -372,9 +351,5 @@
 -----------------------------------------------
 ;; function to extract candidate patterns and call do-conjunct 
 ;(: conjunct (-> SpaceType SpaceType SpaceType Number Number Atom))
-(= (conjunct $dbspace $cndpspace $conjspace $minsup $depth )   
-      (let $pattern (match $cndpspace (CandidatePattern $Cpattern) $Cpattern)
-                   (let $conj  (do-conjunct $dbspace $cndpspace  $pattern $minsup (fromNumber $depth)) 
-                             (if (== $conj ()) () (add-atom $conjspace  $conj)))))   
-
-   
+(= (conjunct $dbspace $candidatePatterns $conjspace $minsup $depth )   
+      (let $listConj (do-conjunct $dbspace $candidatePatterns $minsup $depth) (add-atoms $conjspace $listConj))) 
