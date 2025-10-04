@@ -40,11 +40,11 @@ def mine_pattern(numberOfConjunction):
     answer = metta4Miner.run(f" !(pattern-miner &res1 &db 3 {numberOfConjunction})")
     return answer
 
-def mine_pattern_demo(numberOfConjunction):
-    """this function will mine patterns with the given number of conjunction"""
-    answer = "((supportOf (some pattern $x) 4) (supportOf (some pattern $y) 3))"
+# def mine_pattern_demo(numberOfConjunction):
+#     """this function will mine patterns with the given number of conjunction"""
+#     answer = "((supportOf (some pattern $x) 4) (supportOf (some pattern $y) 3))"
 
-    return answer
+#     return answer
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all domains on all routes
@@ -69,7 +69,7 @@ def run_mining_task(job_id: str, conjunction_count: int):
     
     try:
         print(f"Starting mining job {job_id} with {conjunction_count} conjunctions")
-        result = mine_pattern_demo(conjunction_count)
+        result = mine_pattern(conjunction_count)
         
         job.status = 'completed'
         job.result = result

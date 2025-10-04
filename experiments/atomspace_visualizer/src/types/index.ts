@@ -21,6 +21,8 @@ export interface GraphNode {
     originalExpression?: string;
     occurrences?: number; // How many times this node appears
     isGenerated?: boolean; // For hypergraph intermediate nodes
+    columnType?: 'article' | 'header' | 'property'; // For columnar layout
+    propertyName?: string; // Property name for property nodes
   };
 }
 
@@ -165,4 +167,18 @@ export interface ContextMenuProps {
   onClose: () => void;
   onDeleteNode: (nodeId: string) => void;
   onEditNode: (nodeId: string) => void;
+}
+
+// Filtering and Highlighting
+export interface FilterState {
+  active: boolean;
+  articleIds: Set<string>;
+  propertyFilters: Array<{ property: string; value: string }>;
+}
+
+export interface HighlightState {
+  highlightedNodes: Set<string>;
+  highlightedEdges: Set<string>;
+  dimmedNodes: Set<string>;
+  dimmedEdges: Set<string>;
 }

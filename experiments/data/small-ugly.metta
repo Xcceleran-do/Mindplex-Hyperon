@@ -1,5 +1,5 @@
 (topic 0 "AI")
-(length 0 "high")
+(length 0 "low")
 (tone 0 "Analytical")
 (writing_style 0 "Formal")
 (engagement_level 0 "high")
@@ -17,7 +17,7 @@
 (engagement_level 2 "high")
 
 (topic 3 "Home Decor")
-(length 3 5)
+(length 3 "low")
 (tone 3 "Analytical")
 (writing_style 3 "Informal")
 (engagement_level 3 "medium")
@@ -58,7 +58,6 @@
 (engagement_level 9 "high")
 
 
-
 ; (Inheritance Allen sodaDrinker)
 ; (Inheritance Abe sodaDrinker)
 ; (Inheritance Lily sodaDrinker)
@@ -80,5 +79,3 @@
 ; (Inheritance Allen human)
 ; (Inheritance Abe human)
 ; (Inheritance Cason human)
-
-
