@@ -233,7 +233,7 @@ const ColumnarVisualizer: Component<ColumnarVisualizerProps> = (props) => {
       ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`;
       const textMetrics = ctx.measureText(node.label);
       const textWidth = textMetrics.width;
-      const padding = 30; // Padding on each side
+      const padding = 40; // Padding on each side (increased for longer names)
       const width = (textWidth + padding * 2) * transform.scale;
       const height = 40 * transform.scale;
       
