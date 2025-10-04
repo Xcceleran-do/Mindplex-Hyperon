@@ -1,17 +1,17 @@
 .legendContainer {
   position: fixed;
-  bottom: 20px;
-  left: 20px;
+  top: var(--legend-top, 80px);
+  right: 20px;
   background: rgba(255, 255, 255, 0.95);
   border-radius: 12px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-  max-width: 320px;
-  max-height: 70vh;
+  width: 340px;
+  max-height: calc(50vh - 60px);
   overflow-y: auto;
   backdrop-filter: blur(10px);
   border: 1px solid rgba(0, 0, 0, 0.1);
-  transition: all 0.3s ease-in-out;
-  z-index: 1000;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 998;
 }
 
 .legendHeader {
@@ -178,20 +178,31 @@
   box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
 }
 
+/* Custom fancy scrollbar for legend */
 .legendContainer::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
 }
 
 .legendContainer::-webkit-scrollbar-track {
-  background: #f3f4f6;
-  border-radius: 3px;
+  background: rgba(241, 245, 249, 0.5);
+  border-radius: 4px;
+  margin: 4px 0;
 }
 
 .legendContainer::-webkit-scrollbar-thumb {
-  background: #9ca3af;
-  border-radius: 3px;
+  background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 1px 4px rgba(102, 126, 234, 0.3);
 }
 
 .legendContainer::-webkit-scrollbar-thumb:hover {
-  background: #6b7280;
+  background: linear-gradient(180deg, #5568d3 0%, #6a3f91 100%);
+  box-shadow: 0 2px 6px rgba(102, 126, 234, 0.5);
+  cursor: grab;
+}
+
+.legendContainer::-webkit-scrollbar-thumb:active {
+  cursor: grabbing;
+  background: linear-gradient(180deg, #4557c2 0%, #5a3580 100%);
 }

@@ -4,6 +4,7 @@ import { createSignal, createEffect, createResource } from 'solid-js';
 import ColumnarVisualizer from './components/ColumnarVisualizer/ColumnarVisualizer';
 import EnhancedLegend from './components/Legend/EnhancedLegend';
 import EnhancedUIControls from './components/UIControls/EnhancedUIControls';
+import MiningPanel from './components/MiningPanel/MiningPanel';
 import { GraphData, GraphNode, FilterState } from './types';
 import { MettaParserImpl } from './services/parser/MettaParser';
 import { ColumnarTransformer } from './services/graph/ColumnarTransformer';
@@ -53,13 +54,47 @@ const App: Component = () => {
 
   const [filterState, setFilterState] = createSignal<FilterState>({
     active: false,
-    articleIds: new Set(),
+    articleIds: [],
     propertyFilters: []
   });
+
+  // Track collapsed states for dynamic positioning
+  const [controlsCollapsed, setControlsCollapsed] = createSignal(true);
+  const [legendCollapsed, setLegendCollapsed] = createSignal(true);
 
   // Initialize parser and columnar transformer
   const parser = new MettaParserImpl();
   const columnarTransformer = new ColumnarTransformer();
+
+  // Update CSS variables for dynamic positioning
+  createEffect(() => {
+    const updatePositions = () => {
+      const controlsEl = document.querySelector('[class*="controlsContainer"]') as HTMLElement;
+      const legendEl = document.querySelector('[class*="legendContainer"]') as HTMLElement;
+      
+      if (controlsEl && legendEl) {
+        const controlsHeight = controlsEl.offsetHeight;
+        const legendTop = 20 + controlsHeight;
+        const legendHeight = legendEl.offsetHeight;
+        const miningTop = legendTop + legendHeight;
+        
+        document.documentElement.style.setProperty('--legend-top', `${legendTop}px`);
+        document.documentElement.style.setProperty('--mining-top', `${miningTop}px`);
+      }
+    };
+
+    // Update on mount and when layout changes
+    setTimeout(updatePositions, 100);
+    const observer = new MutationObserver(updatePositions);
+    observer.observe(document.body, { 
+      childList: true, 
+      subtree: true, 
+      attributes: true, 
+      attributeFilter: ['class', 'style'] 
+    });
+
+    return () => observer.disconnect();
+  });
 
   // Parse and transform data to columnar format
   createEffect(() => {
@@ -115,7 +150,7 @@ const App: Component = () => {
   const handleReset = () => {
     setFilterState({
       active: false,
-      articleIds: new Set(),
+      articleIds: [],
       propertyFilters: []
     });
     // Reset view by reloading
@@ -127,34 +162,35 @@ const App: Component = () => {
 
   return (
     <div class={styles.app}>
-      {/* Title bar */}
-      <div class={styles.titleBar}>
-        <h1>AtomSpace Visualizer - Columnar View</h1>
-        <div class={styles.stats}>
-          {graphData().metadata.nodeCount} nodes, {graphData().metadata.edgeCount} edges
+      {/* Scrollable graph container */}
+      <div class={styles.graphContainer}>
+        <div class={styles.graphCard}>
+          <ColumnarVisualizer
+            graphData={graphData()}
+            onNodeSelect={handleNodeSelect}
+            filterState={filterState()}
+            onFilterChange={handleFilterChange}
+          />
         </div>
       </div>
 
-      {/* Main visualization canvas */}
-      <ColumnarVisualizer
-        graphData={graphData()}
-        onNodeSelect={handleNodeSelect}
-        filterState={filterState()}
-        onFilterChange={handleFilterChange}
+      {/* Enhanced UI Controls - Top Right */}
+      <EnhancedUIControls
+        onZoomIn={handleZoomIn}
+        onZoomOut={handleZoomOut}
+        onReset={handleReset}
       />
 
-      {/* Enhanced Legend with filtering */}
+      {/* Enhanced Legend - Below Controls */}
       <EnhancedLegend
         graphData={graphData()}
         onFilterChange={handleFilterChange}
         filterState={filterState()}
       />
 
-      {/* Enhanced UI Controls */}
-      <EnhancedUIControls
-        onZoomIn={handleZoomIn}
-        onZoomOut={handleZoomOut}
-        onReset={handleReset}
+      {/* Mining Panel - Below Legend */}
+      <MiningPanel
+        onFilterChange={handleFilterChange}
       />
     </div>
   );

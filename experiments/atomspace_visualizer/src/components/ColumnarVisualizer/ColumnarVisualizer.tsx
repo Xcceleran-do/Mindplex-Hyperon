@@ -21,7 +21,7 @@ const ColumnarVisualizer: Component<ColumnarVisualizerProps> = (props) => {
   let animationFrameId: number;
   
   // Canvas transformation state
-  let transform: Transform = { x: 50, y: 50, scale: 1 };
+  let transform: Transform = { x: 50, y: 50, scale: 0.65 };
   let isPanning = false;
   let lastPanPoint: Point = { x: 0, y: 0 };
   let hoveredNode: GraphNode | null = null;
@@ -76,7 +76,7 @@ const ColumnarVisualizer: Component<ColumnarVisualizerProps> = (props) => {
     return null;
   };
 
-  // Update highlight state based on selected nodes and filters (supports multi-select)
+    // Update highlight state based on selected node and filter
   const updateHighlightState = () => {
     const highlighted = new Set<string>();
     const highlightedEdges = new Set<string>();
@@ -84,8 +84,21 @@ const ColumnarVisualizer: Component<ColumnarVisualizerProps> = (props) => {
     const dimmedEdges = new Set<string>();
 
     if (props.filterState.active) {
-      // Highlight selected articles and their connections
-      if (props.filterState.articleIds.size > 0) {
+      // Highlight selected article (legacy single selection)
+      if (props.filterState.articleId) {
+        const articleNodeId = `article-${props.filterState.articleId}`;
+        highlighted.add(articleNodeId);
+
+        for (const edge of props.graphData.edges) {
+          if (edge.source === articleNodeId) {
+            highlightedEdges.add(edge.id);
+            highlighted.add(edge.target);
+          }
+        }
+      }
+
+      // Highlight selected articles (multi-select)
+      if (props.filterState.articleIds && props.filterState.articleIds.length > 0) {
         for (const articleId of props.filterState.articleIds) {
           const articleNodeId = `article-${articleId}`;
           highlighted.add(articleNodeId);
@@ -101,7 +114,7 @@ const ColumnarVisualizer: Component<ColumnarVisualizerProps> = (props) => {
       }
 
       // Highlight selected property values and connected articles
-      if (props.filterState.propertyFilters.length > 0) {
+      if (props.filterState.propertyFilters && props.filterState.propertyFilters.length > 0) {
         for (const filter of props.filterState.propertyFilters) {
           const propertyNodeId = `${filter.property}-${filter.value}`;
           highlighted.add(propertyNodeId);
@@ -112,6 +125,19 @@ const ColumnarVisualizer: Component<ColumnarVisualizerProps> = (props) => {
               highlightedEdges.add(edge.id);
               highlighted.add(edge.source);
             }
+          }
+        }
+      }
+
+      // Legacy single property filter
+      if (props.filterState.property && props.filterState.value) {
+        const propertyNodeId = `${props.filterState.property}-${props.filterState.value}`;
+        highlighted.add(propertyNodeId);
+
+        for (const edge of props.graphData.edges) {
+          if (edge.target === propertyNodeId) {
+            highlightedEdges.add(edge.id);
+            highlighted.add(edge.source);
           }
         }
       }
@@ -202,8 +228,13 @@ const ColumnarVisualizer: Component<ColumnarVisualizerProps> = (props) => {
 
     // Draw node based on column type
     if (node.metadata.columnType === 'header') {
-      // Draw header as rectangle
-      const width = 120 * transform.scale;
+      // Draw header as rectangle with flexible width based on text
+      const fontSize = 14;
+      ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`;
+      const textMetrics = ctx.measureText(node.label);
+      const textWidth = textMetrics.width;
+      const padding = 30; // Padding on each side
+      const width = (textWidth + padding * 2) * transform.scale;
       const height = 40 * transform.scale;
       
       ctx.fillStyle = fillColor;
@@ -246,6 +277,22 @@ const ColumnarVisualizer: Component<ColumnarVisualizerProps> = (props) => {
     }
   };
 
+  // Get unique color for each article's line
+  const getArticleLineColor = (articleId: string, isHighlighted: boolean, isDimmed: boolean): string => {
+    if (isDimmed) return 'rgba(107, 114, 128, 0.1)';
+    if (isHighlighted) return '#f59e0b';
+    
+    // Generate unique color based on article ID
+    const match = articleId.match(/article-(\d+)/);
+    if (match) {
+      const articleNum = parseInt(match[1]);
+      const hue = (articleNum * 137) % 360; // Golden angle for good color distribution
+      return `hsla(${hue}, 70%, 55%, 0.7)`;
+    }
+    
+    return 'rgba(107, 114, 128, 0.4)';
+  };
+
   // Render edges as continuous curved lines from article through properties
   const renderArticleConnections = (ctx: CanvasRenderingContext2D, articleId: string) => {
     if (!canvasRef) return;
@@ -268,16 +315,14 @@ const ColumnarVisualizer: Component<ColumnarVisualizerProps> = (props) => {
     const isHighlighted = state.highlightedNodes.has(articleId);
     const isDimmed = state.dimmedNodes.has(articleId);
 
-    // Determine styling
-    let strokeColor = 'rgba(107, 114, 128, 0.3)';
-    let lineWidth = 2;
+    // Determine styling with unique color per article
+    const strokeColor = getArticleLineColor(articleId, isHighlighted, isDimmed);
+    let lineWidth = 2.5;
 
     if (isDimmed) {
-      strokeColor = 'rgba(107, 114, 128, 0.1)';
       lineWidth = 1;
     } else if (isHighlighted) {
-      strokeColor = '#f59e0b';
-      lineWidth = 3;
+      lineWidth = 4;
     }
 
     // Draw continuous curved line through all property values
@@ -316,15 +361,21 @@ const ColumnarVisualizer: Component<ColumnarVisualizerProps> = (props) => {
 
     ctx.stroke();
 
-    // Draw small circles at connection points for clarity
-    if (!isDimmed) {
+    // Draw connection markers at each node for better line tracking
+    if (!isDimmed && transform.scale > 0.5) {
       ctx.fillStyle = strokeColor;
+      // Marker at article start
+      ctx.beginPath();
+      ctx.arc(articleScreen.x, articleScreen.y, 5 * transform.scale, 0, 2 * Math.PI);
+      ctx.fill();
+      
+      // Markers at property connections
       for (const edge of edges) {
         const targetNode = props.graphData.nodes.find(n => n.id === edge.target);
         if (!targetNode) continue;
         const targetScreen = worldToScreen(targetNode.position);
         ctx.beginPath();
-        ctx.arc(targetScreen.x, targetScreen.y, 4 * transform.scale, 0, 2 * Math.PI);
+        ctx.arc(targetScreen.x, targetScreen.y, 5 * transform.scale, 0, 2 * Math.PI);
         ctx.fill();
       }
     }
@@ -405,7 +456,7 @@ const ColumnarVisualizer: Component<ColumnarVisualizerProps> = (props) => {
       // Update filter based on clicked node
       if (node.metadata.columnType === 'article') {
         const articleId = node.metadata.originalExpression || '';
-        const currentArticleIds = new Set(props.filterState.articleIds);
+        const currentArticleIds = new Set(props.filterState.articleIds || []);
         
         if (isMultiSelect) {
           // Toggle article in selection
@@ -421,9 +472,9 @@ const ColumnarVisualizer: Component<ColumnarVisualizerProps> = (props) => {
         }
         
         props.onFilterChange({
-          active: currentArticleIds.size > 0 || props.filterState.propertyFilters.length > 0,
-          articleIds: currentArticleIds,
-          propertyFilters: props.filterState.propertyFilters
+          active: currentArticleIds.size > 0 || (props.filterState.propertyFilters?.length || 0) > 0,
+          articleIds: Array.from(currentArticleIds),
+          propertyFilters: props.filterState.propertyFilters || []
         });
       } else if (node.metadata.columnType === 'property') {
         const propertyFilter = {
@@ -431,7 +482,7 @@ const ColumnarVisualizer: Component<ColumnarVisualizerProps> = (props) => {
           value: node.label
         };
         
-        let currentFilters = [...props.filterState.propertyFilters];
+        let currentFilters = [...(props.filterState.propertyFilters || [])];
         
         if (isMultiSelect) {
           // Toggle property filter
@@ -449,8 +500,8 @@ const ColumnarVisualizer: Component<ColumnarVisualizerProps> = (props) => {
         }
         
         props.onFilterChange({
-          active: props.filterState.articleIds.size > 0 || currentFilters.length > 0,
-          articleIds: props.filterState.articleIds,
+          active: (props.filterState.articleIds?.length || 0) > 0 || currentFilters.length > 0,
+          articleIds: props.filterState.articleIds || [],
           propertyFilters: currentFilters
         });
       }
@@ -460,7 +511,7 @@ const ColumnarVisualizer: Component<ColumnarVisualizerProps> = (props) => {
         selectedNode = null;
         props.onFilterChange({
           active: false,
-          articleIds: new Set(),
+          articleIds: [],
           propertyFilters: []
         });
       }

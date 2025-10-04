@@ -1,0 +1,382 @@
+.miningPanel {
+  position: fixed;
+  top: var(--mining-top, 140px);
+  right: 20px;
+  width: 340px;
+  max-height: calc(100vh - var(--mining-top, 140px) - 40px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 997;
+  overflow-y: auto;
+}
+
+.miningControls {
+  background: rgba(255, 255, 255, 0.95);
+  padding: 16px 20px;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.inputGroup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.inputGroup label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  white-space: nowrap;
+}
+
+.numberInput {
+  flex: 1;
+  padding: 8px 12px;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  transition: all 0.2s ease;
+}
+
+.numberInput:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.numberInput:disabled {
+  background: #f3f4f6;
+  cursor: not-allowed;
+}
+
+.mineButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.mineButton:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.mineButton:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.mineButton.mining {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.error {
+  background: #fee2e2;
+  border: 1px solid #ef4444;
+  color: #991b1b;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  animation: shake 0.5s ease;
+}
+
+@keyframes shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-8px);
+  }
+  75% {
+    transform: translateX(8px);
+  }
+}
+
+.loadingAnimation {
+  background: rgba(255, 255, 255, 0.95);
+  padding: 16px 20px;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.animationText {
+  font-size: 13px;
+  color: #6b7280;
+  margin-bottom: 8px;
+  text-align: center;
+  font-weight: 500;
+}
+
+.progressBar {
+  width: 100%;
+  height: 6px;
+  background: #e5e7eb;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: linear-gradient(90deg, #667eea, #764ba2, #667eea);
+  background-size: 200% 100%;
+  animation: progress 1.5s linear infinite;
+}
+
+@keyframes progress {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.resultsCard {
+  background: rgba(255, 255, 255, 0.98);
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  max-height: 500px;
+  display: flex;
+  flex-direction: column;
+}
+
+.resultsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  cursor: pointer;
+  user-select: none;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 12px 12px 0 0;
+  transition: background 0.2s ease;
+}
+
+.resultsHeader:hover {
+  background: linear-gradient(135deg, #5568d3 0%, #6a3f91 100%);
+}
+
+.resultsHeader h4 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.collapseButton {
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.collapseButton:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.resultsContent {
+  padding: 16px;
+  overflow-y: auto;
+  max-height: 400px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.resultsContent::-webkit-scrollbar {
+  width: 6px;
+}
+
+.resultsContent::-webkit-scrollbar-track {
+  background: #f3f4f6;
+  border-radius: 3px;
+}
+
+.resultsContent::-webkit-scrollbar-thumb {
+  background: #9ca3af;
+  border-radius: 3px;
+}
+
+.resultsContent::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
+.patternCard {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px;
+  transition: all 0.2s ease;
+}
+
+.patternCard:hover {
+  border-color: #667eea;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
+}
+
+.patternHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.patternIndex {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.supportBadge {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.patternProperties {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.propertyTag {
+  background: white;
+  border: 1px solid #d1d5db;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  display: flex;
+  gap: 4px;
+}
+
+.propertyName {
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.propertyValue {
+  color: #374151;
+  font-weight: 600;
+}
+
+.visualizeButton {
+  width: 100%;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.visualizeButton:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+}
+
+.clearButton {
+  width: 100%;
+  background: #ef4444;
+  color: white;
+  border: none;
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 4px;
+}
+
+.clearButton:hover {
+  background: #dc2626;
+  transform: translateY(-1px);
+}
+
+/* Custom fancy scrollbar for mining panel */
+.miningPanel::-webkit-scrollbar {
+  width: 8px;
+}
+
+.miningPanel::-webkit-scrollbar-track {
+  background: rgba(241, 245, 249, 0.5);
+  border-radius: 4px;
+  margin: 4px 0;
+}
+
+.miningPanel::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 1px 4px rgba(102, 126, 234, 0.3);
+}
+
+.miningPanel::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #5568d3 0%, #6a3f91 100%);
+  box-shadow: 0 2px 6px rgba(102, 126, 234, 0.5);
+  cursor: grab;
+}
+
+.miningPanel::-webkit-scrollbar-thumb:active {
+  cursor: grabbing;
+  background: linear-gradient(180deg, #4557c2 0%, #5a3580 100%);
+}

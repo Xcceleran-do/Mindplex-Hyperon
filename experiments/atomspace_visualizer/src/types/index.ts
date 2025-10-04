@@ -172,11 +172,12 @@ export interface ContextMenuProps {
 // Filtering and Highlighting
 export interface FilterState {
   active: boolean;
-  articleIds: Set<string>;
-  propertyFilters: Array<{ property: string; value: string }>;
-}
-
-export interface HighlightState {
+  property?: string;
+  value?: string;
+  articleId?: string;
+  articleIds?: string[]; // For multi-select articles
+  propertyFilters?: Array<{ property: string; value: string }>; // For multi-property filtering
+}export interface HighlightState {
   highlightedNodes: Set<string>;
   highlightedEdges: Set<string>;
   dimmedNodes: Set<string>;

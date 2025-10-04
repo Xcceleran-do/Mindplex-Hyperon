@@ -133,7 +133,7 @@ export class ColumnarTransformer {
 
   private createPropertyNodes(columns: PropertyColumn[], nodes: GraphNode[]): void {
     for (const column of columns) {
-      // Add column header node
+      // Add column header node with better color
       nodes.push({
         id: `header-${column.name}`,
         label: column.name.replace(/_/g, ' ').toUpperCase(),
@@ -142,8 +142,8 @@ export class ColumnarTransformer {
           x: column.position,
           y: 20
         },
-        color: '#8b5cf6',
-        size: 60,
+        color: this.getHeaderColor(column.name),
+        size: 70,
         metadata: {
           originalExpression: column.name,
           occurrences: 1,
@@ -223,16 +223,28 @@ export class ColumnarTransformer {
     }
   }
 
-  private getPropertyValueColor(propertyName: string): string {
+  private getHeaderColor(propertyName: string): string {
     const colorMap: Record<string, string> = {
-      topic: '#10b981',
-      length: '#f59e0b',
-      tone: '#ef4444',
-      writing_style: '#8b5cf6',
-      engagement_level: '#06b6d4'
+      topic: '#059669',
+      length: '#d97706',
+      tone: '#dc2626',
+      writing_style: '#7c3aed',
+      engagement_level: '#0284c7'
     };
 
-    return colorMap[propertyName] || '#6b7280';
+    return colorMap[propertyName] || '#4b5563';
+  }
+
+  private getPropertyValueColor(propertyName: string): string {
+    const colorMap: Record<string, string> = {
+      topic: '#34d399',
+      length: '#fbbf24',
+      tone: '#f87171',
+      writing_style: '#a78bfa',
+      engagement_level: '#38bdf8'
+    };
+
+    return colorMap[propertyName] || '#9ca3af';
   }
 
   private createMetadata(nodes: GraphNode[], edges: GraphEdge[]): GraphMetadata {

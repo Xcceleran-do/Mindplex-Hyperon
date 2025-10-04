@@ -43,7 +43,7 @@ const EnhancedLegend: Component<EnhancedLegendProps> = (props) => {
 
   const handleArticleClick = (articleId: string, e: MouseEvent) => {
     const isMultiSelect = e.ctrlKey || e.metaKey;
-    const currentArticleIds = new Set(props.filterState.articleIds);
+    const currentArticleIds = new Set(props.filterState.articleIds || []);
     
     if (isMultiSelect) {
       // Toggle article in selection
@@ -63,16 +63,16 @@ const EnhancedLegend: Component<EnhancedLegendProps> = (props) => {
     }
     
     props.onFilterChange({
-      active: currentArticleIds.size > 0 || props.filterState.propertyFilters.length > 0,
-      articleIds: currentArticleIds,
-      propertyFilters: props.filterState.propertyFilters
+      active: currentArticleIds.size > 0 || (props.filterState.propertyFilters?.length || 0) > 0,
+      articleIds: Array.from(currentArticleIds),
+      propertyFilters: props.filterState.propertyFilters || []
     });
   };
 
   const handlePropertyClick = (property: string, value: string, e: MouseEvent) => {
     const isMultiSelect = e.ctrlKey || e.metaKey;
     const propertyFilter = { property, value };
-    let currentFilters = [...props.filterState.propertyFilters];
+    let currentFilters = [...(props.filterState.propertyFilters || [])];
     
     if (isMultiSelect) {
       // Toggle property filter
@@ -96,8 +96,8 @@ const EnhancedLegend: Component<EnhancedLegendProps> = (props) => {
     }
     
     props.onFilterChange({
-      active: props.filterState.articleIds.size > 0 || currentFilters.length > 0,
-      articleIds: props.filterState.articleIds,
+      active: (props.filterState.articleIds?.length || 0) > 0 || currentFilters.length > 0,
+      articleIds: props.filterState.articleIds || [],
       propertyFilters: currentFilters
     });
   };
@@ -105,7 +105,7 @@ const EnhancedLegend: Component<EnhancedLegendProps> = (props) => {
   const clearFilter = () => {
     props.onFilterChange({
       active: false,
-      articleIds: new Set(),
+      articleIds: [],
       propertyFilters: []
     });
   };
@@ -125,10 +125,10 @@ const EnhancedLegend: Component<EnhancedLegendProps> = (props) => {
             <div class={styles.filterStatus}>
               <div>
                 <strong>Active filters:</strong>
-                {props.filterState.articleIds.size > 0 && (
-                  <div>Articles: {Array.from(props.filterState.articleIds).join(', ')}</div>
+                {props.filterState.articleIds && props.filterState.articleIds.length > 0 && (
+                  <div>Articles: {props.filterState.articleIds.join(', ')}</div>
                 )}
-                {props.filterState.propertyFilters.length > 0 && (
+                {props.filterState.propertyFilters && props.filterState.propertyFilters.length > 0 && (
                   <div>
                     Properties: {props.filterState.propertyFilters.map(f => `${f.property}=${f.value}`).join(', ')}
                   </div>
@@ -170,7 +170,7 @@ const EnhancedLegend: Component<EnhancedLegendProps> = (props) => {
                 {(article) => (
                   <button
                     class={`${styles.filterButton} ${
-                      props.filterState.articleIds.has(article)
+                      props.filterState.articleIds?.includes(article)
                         ? styles.active
                         : ''
                     }`}
@@ -192,7 +192,7 @@ const EnhancedLegend: Component<EnhancedLegendProps> = (props) => {
                     {(value) => (
                       <button
                         class={`${styles.filterButton} ${
-                          props.filterState.propertyFilters.some(
+                          props.filterState.propertyFilters?.some(
                             f => f.property === property && f.value === value
                           )
                             ? styles.active
