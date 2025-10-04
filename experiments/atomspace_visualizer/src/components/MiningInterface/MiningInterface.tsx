@@ -30,12 +30,12 @@ const MiningInterface = (props: MiningInterfaceProps) => {
 
     try {
       // Start mining job
-      const response = await fetch('http://localhost:5000/api/mine', {
+      const response = await fetch('http://localhost:8000/api/mine', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ conjunctionCount: conjunctionCount() }),
+        body: JSON.stringify({ conjunction_count: conjunctionCount() }),
       });
 
       if (!response.ok) {

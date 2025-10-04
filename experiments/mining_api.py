@@ -58,7 +58,9 @@ class MiningJob:
     start_time: float = 0
     end_time: Optional[float] = None
     conjunction_count: int = 0
-
+class rule:
+    pattern: str
+    support: int
 # In-memory storage for mining jobs
 mining_jobs: Dict[str, MiningJob] = {}
 
@@ -72,7 +74,7 @@ def run_mining_task(job_id: str, conjunction_count: int):
         result = mine_pattern(conjunction_count)
         
         job.status = 'completed'
-        job.result = result
+        job.result = result[0][0]
         job.end_time = time.time()
         print(f"Mining job {job_id} completed successfully")
         
@@ -93,7 +95,7 @@ def start_mining():
     """Start a new mining job"""
     try:
         data = request.get_json() or {}
-        conjunction_count = data.get('conjunctionCount', 2)
+        conjunction_count = data.get('conjunction_count', 2)
         
         # Validate conjunction count
         if not isinstance(conjunction_count, int) or conjunction_count < 1:
@@ -111,18 +113,28 @@ def start_mining():
         mining_jobs[job_id] = job
         
         # Start mining in background thread
-        thread = threading.Thread(
-            target=run_mining_task,
-            args=(job_id, conjunction_count),
-            daemon=True
-        )
-        thread.start()
-        
+        # thread = threading.Thread(
+        #     target=run_mining_task,
+        #     args=(job_id, conjunction_count),
+        #     daemon=True
+        # )
+        # thread.start()
+        run_mining_task(job_id, conjunction_count)
+        listOfRowPatterns = mining_jobs[job_id].result.get_children()
+        rules = []
+        for pattern in listOfRowPatterns:
+            pattern = pattern.get_children()
+            rules.append({
+                "pattern": f'{pattern[1]}',
+                "support": f'{pattern[2]}',
+            })
+        print(f"Mining job {job_id} finished with result: {rules}")
         return jsonify({
             'jobId': job_id,
-            'status': 'running',
-            'conjunctionCount': conjunction_count,
-            'message': 'Mining job started successfully'
+            'status': 'finished',
+            'conjunction count': conjunction_count,
+            'message': 'Mining job finished successfully',
+            'result': rules
         })
         
     except Exception as e:
@@ -139,7 +151,7 @@ def get_mining_status(job_id: str):
     response = {
         'jobId': job_id,
         'status': job.status,
-        'conjunctionCount': job.conjunction_count,
+        'conjunction count': job.conjunction_count,
         'startTime': job.start_time
     }
     
@@ -217,7 +229,7 @@ if __name__ == '__main__':
     # Run the Flask app
     app.run(
         host='0.0.0.0',
-        port=5000,
+        port=8000,
         debug=True,
         threaded=True
     )

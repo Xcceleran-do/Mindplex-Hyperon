@@ -30,7 +30,7 @@
 (topic 5 "Humor")
 (length 5 "low")
 (tone 5 "Humorous")
-(writing_style 5 "Minimalist (mostly visual)")
+(writing_style 5 "Minimalist visual")
 (engagement_level 5 "high")
 
 (topic 6 "Marketing")

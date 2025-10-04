@@ -5,6 +5,9 @@
 ! (import! &self experiments:frequent-pattern-miner:frequent-pattern-miner)
 ! (import! &db experiments:data:small-ugly)
 
+! (bind! purifiedDbSpace (new-space)) ; space to hold the database atoms
+! (add-reduct purifiedDbSpace (get-atoms &db))
+
 ;; space to hold the miner result
 !(bind! &res1 (new-space))
 
@@ -14,7 +17,7 @@
 ;; minimum support 3 -3rd arg
 ;; number of conjucts 2 -4th arg
 
-!(pattern-miner &res1 &db 3 3) 
+!(pattern-miner &res1 purifiedDbSpace 3 4) 
 !(println! "============ end ================")
 ;; demo result structure
           ; ((supportOf (, (Inheritance $y human) (Inheritance $y man)) 3) 

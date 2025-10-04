@@ -18,31 +18,8 @@
 ;; Returns:
 ;;  - Expression (list) of patterns that satisfy the support threshold.
 ; (:candidatePattern (-> SpaceType SpaceType Number Expression Expression))
-(= (candidatePattern  $dbspace $specializedPatterns $minsup)
+(= (candidatePattern  $dbspace $specializedPattern $minsup)
     (foldl-atom $specializedPatterns () $acc $specialPattern (candidatePatternMaker $dbspace $specialPattern $minsup $acc))
 )
 
 
-
-;; candidatePatternMaker
-;; ---------------------------------
-;; Builds the list of candidate patterns by checking the support of a
-;; Specialized pattern and adding it to the accumulator if it meets the
-;; minimum support threshold.
-;; Steps:
-;;  1. Evaluate support with `sup-eval` against `$dbspace` and `$minsup`.
-;;  2. If support passes, cons the `$pattern` onto `$acc`; otherwise keep `$acc`.
-;; Parameters:
-;;  - $dbspace: Space containing the database facts/patterns.
-;;  - (Specialized $pattern): The pattern under test, wrapped as Specialized.
-;;  - $minsup: Minimum support threshold (Number).
-;;  - $acc: Accumulator (Expression) of accepted candidate patterns.
-;; Returns:
-;;  - Updated accumulator Expression with `$pattern` added iff `sup-eval` returns True.
-; (:candidatePatternMaker (-> SpaceType (Specialized Pattern) Number Expression Expression))
-( = (candidatePatternMaker $dbspace (Specialized $pattern) $minsup $acc)
-    (
-        let $result (sup-eval $dbspace $pattern $minsup)
-            (if $result (cons-atom $pattern $acc) $acc )
-    )
-)

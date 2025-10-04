@@ -124,30 +124,9 @@
 ; a superpose of conjunctions that satisfy the minimum support and are not redundant.
 ;(: do-conjunct SpaceType SpaceType Pattern Number Nat Atom)
 (= (do-conjunct $db $patterns $ms $depth)
-    (let* (
-        (() (println! ("==== Build conjunction with depth ====" $depth)))
-        ($theConjuncts (unique_combinations_star $patterns $depth))
-        ) (foldl-atom $theConjuncts () $acc $pattern (checker $db $pattern $ms $acc))
-    )
+    ( trace! ("==== Build conjunction with depth ====" $depth) (unique_combinations_star $patterns $depth))
 )
 
---------------------------------------------
-;;  formatter
---------------------------------------------
-;; Formats conjunctions with their support annotation.
-;; 1: get the conjunctions from `$conjspace` and sort them using `sort_conj`
-;; 2: build a flattened conjunction using `cons-atom` with `,`
-;; 3: annotate with support using `supportOf` and `sup-num`
-;(: formatter (-> SpaceType SpaceType Number Atom ))
-(= (formatter  $conjspace $dbspace $depth) 
-   (let* (
-            (() (println! "==== Formating  started ====="))
-            ($sorted  (match $conjspace $pattern (sort_conj $pattern)))
-            ($res  (cons-atom ,  $sorted))
-            ($formatted (supportOf $res (sup-num $dbspace $res))) 
-        ) $formatted
-   )
-)
 
 -----------------------------------------------
 ;; conjunct 
@@ -157,5 +136,4 @@
 ;; 1: call `do-conjunct` to generate supported conjunctions
 ;; 2: add the resulting atoms into `$conjspace`
 ;(: conjunct (-> SpaceType SpaceType SpaceType Number Number Atom))
-(= (conjunct $dbspace $candidatePatterns $conjspace $minsup $depth )   
-      (let $listConj (do-conjunct $dbspace $candidatePatterns $minsup $depth) (add-atoms $conjspace $listConj))) 
+(= (conjunct $candidatePatterns $depth ) (unique_combinations_star $patterns $depth)) 

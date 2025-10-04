@@ -58,7 +58,7 @@ const MiningPanel: Component<MiningPanelProps> = (props) => {
     startLoadingAnimation();
 
     try {
-      const response = await fetch('http://localhost:5000/api/mine', {
+      const response = await fetch('http://localhost:8000/api/mine', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -72,15 +72,13 @@ const MiningPanel: Component<MiningPanelProps> = (props) => {
         throw new Error('Mining request failed');
       }
 
-      const result = await response.json();
-      
-      // Parse the result
-      const parsedResult = parseMiningResult(result);
-      setMiningResult(parsedResult);
+  const res = await response.json();
+      const parsedRes = parseMiningResult(res.result);
+      setMiningResult(parsedRes);
       setIsResultCollapsed(false);
     } catch (err) {
       console.error('Mining error:', err);
-      setError('Failed to mine patterns. Make sure the mining API is running on port 5000.');
+      setError('Failed to mine patterns. Make sure the mining API is running on port 8000.');
     } finally {
       setIsMining(false);
       stopLoadingAnimation();
@@ -88,38 +86,43 @@ const MiningPanel: Component<MiningPanelProps> = (props) => {
   };
 
   const parseMiningResult = (rawResult: any): MiningResult => {
-    // Parse the mining result format
-    // Expected format: [(supportOf (, (property $V0 value) ...) count)]
+    // Expected format:
+    // [ { pattern: "(, (prop $V0 \"val\") (prop2 $V0 \"val2\"))", support: "5" }, ... ]
+    console.log('Raw mining result:', rawResult);
     const patterns: MiningResult['support'] = [];
 
     try {
-      // Extract patterns from the result
-      const resultStr = JSON.stringify(rawResult);
-      const supportRegex = /supportOf\s*\([^)]+\)\s*(\d+)/g;
-      let match;
+      if (Array.isArray(rawResult)) {
+        for (const item of rawResult) {
+          const patternStr = String(item?.pattern ?? '');
+          const supportNum = parseInt(String(item?.support ?? '0'), 10) || 0;
 
-      while ((match = supportRegex.exec(resultStr)) !== null) {
-        const fullMatch = match[0];
-        const support = parseInt(match[1]);
-        
-        // Extract properties and values
-        const propertyRegex = /\((\w+)\s+\$V\d+\s+"([^"]+)"\)/g;
-        const properties = [];
-        let propMatch;
-        
-        while ((propMatch = propertyRegex.exec(fullMatch)) !== null) {
-          properties.push({
-            property: propMatch[1],
-            value: propMatch[2]
-          });
+          // Extract properties from the pattern string
+          const properties: { property: string; value: string }[] = [];
+          const propertyRegex = /\((\w+)\s+\$V\d+\s+"([^"]+)"\)/g;
+          let match: RegExpExecArray | null;
+          while ((match = propertyRegex.exec(patternStr)) !== null) {
+            // Keep quotes to match graph node IDs (e.g., topic-"AI")
+            properties.push({ property: match[1], value: `"${match[2]}"` });
+          }
+
+          patterns.push({ pattern: patternStr, support: supportNum, properties });
         }
-
-        if (properties.length > 0) {
-          patterns.push({
-            pattern: fullMatch,
-            support,
-            properties
-          });
+      } else {
+        // Fallback: try to parse legacy string-like outputs
+        const resultStr = JSON.stringify(rawResult);
+        const supportRegex = /supportOf\s*\([^)]+\)\s*(\d+)/g;
+        let m: RegExpExecArray | null;
+        while ((m = supportRegex.exec(resultStr)) !== null) {
+          const fullMatch = m[0];
+          const supportNum = parseInt(m[1], 10) || 0;
+          const properties: { property: string; value: string }[] = [];
+          const propertyRegex = /\((\w+)\s+\$V\d+\s+"([^"]+)"\)/g;
+          let pm: RegExpExecArray | null;
+          while ((pm = propertyRegex.exec(fullMatch)) !== null) {
+            properties.push({ property: pm[1], value: `"${pm[2]}"` });
+          }
+          patterns.push({ pattern: fullMatch, support: supportNum, properties });
         }
       }
     } catch (err) {
@@ -205,7 +208,7 @@ const MiningPanel: Component<MiningPanelProps> = (props) => {
         </div>
       </Show>
 
-      <Show when={miningResult() && miningResult()!.support.length > 0}>
+      <Show when={miningResult()}>
         <div class={styles.resultsCard}>
           <div 
             class={styles.resultsHeader}
@@ -219,7 +222,8 @@ const MiningPanel: Component<MiningPanelProps> = (props) => {
           
           <Show when={!isResultCollapsed()}>
             <div class={styles.resultsContent}>
-              <For each={miningResult()!.support}>
+              <Show when={miningResult()!.support.length > 0} fallback={<div>No patterns found.</div>}>
+                <For each={miningResult()!.support}>
                 {(pattern, index) => (
                   <div class={styles.patternCard}>
                     <div class={styles.patternHeader}>
@@ -244,7 +248,8 @@ const MiningPanel: Component<MiningPanelProps> = (props) => {
                     </button>
                   </div>
                 )}
-              </For>
+                </For>
+              </Show>
               <button onClick={clearResults} class={styles.clearButton}>
                 Clear Results
               </button>
