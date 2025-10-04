@@ -1,57 +1,64 @@
 # Frequent Pattern Miner
 
-The `frequent-pattern-miner` is a modular pipeline for mining **frequent patterns** from a given atomspace. It extracts abstract patterns, specializes them, filters them by support, and constructs conjunctive patterns, returning only the ones that meet the support threshold.
+The frequent-pattern-miner is a MeTTa-based pipeline that mines frequent patterns (including conjunctions) from a database space. It abstracts, specializes, filters by support, and then forms conjunctions of a chosen size using a star-join generator to avoid spurious multi-variable joins.
 
 ---
 
-
-## 🔧 Purpose
-
-To find patterns that **frequently occur** in the atomspace, using a multi-step symbolic mining approach that includes abstraction, specialization, support evaluation, and conjunction generation.
+## What’s new in this version
+- Conjunctions are generated with unique_combinations_star (Python grounded op) that enforces a single hub variable shared by all clauses and prevents secondary shared variables. This yields clean “star-like” patterns.
+- Sorting and formatting: conjunctions are sorted deterministically via sort_conj and emitted as supportOf (, ... ) support.
+- Simpler API: frequency-pattern-miner returns the final list of annotated patterns directly (no external spaces required by the caller).
 
 ---
 
 ## Parameters
 
-| Parameter      | Description                                                                 |
-|----------------|-----------------------------------------------------------------------------|
-| `$dbspace`     | The atomspace to mine from.                                          |
-| `$specspace`   | Space to store specialized patterns.                                        |
-| `$cndpspace`   | Space to store candidate patterns.                                          |
-| `$aptrnspace`  | Space to store abstract patterns.                                           |
-| `$conjspace`   | Space to store pattern conjunctions.                                        |
-| `$minsup`      | Minimum support threshold for a pattern to be considered frequent.         |
-| `$depth`       | Conjunction size (number of clauses per conjunction). For example: 2 → pairs, 3 → triples. |
+- $dbspace: database space to mine from
+- $minsup: minimum support (integer)
+- $depth: conjunction size (number of clauses per conjunction). 2 → pairs, 3 → triples, etc.
 
 ---
 
-## How It Works (Pipeline Overview)
+## Pipeline overview
 
-### Step 1 — Abstract Pattern Mining (`abstract-pattern`)
-- Extract **unique link patterns** from the database.
-- Turn them into **abstract patterns** using variables.
-- Compute **support** for each, and store only those meeting `$minsup` in `$aptrnspace`.
+1) abstract-pattern: extract unique link shapes from $dbspace and keep only those with support ≥ $minsup
+2) build-specialization: generate specialized forms from abstract patterns
+3) candidatePatternMaker: keep specialized patterns with support ≥ $minsup
+4) unique combinations: unique_combinations_star builds size-$depth conjunctions with a single shared variable (hub)
+5) formatter: compute support for each conjunction; if support ≥ $minsup, emit supportOf with sorted clauses
 
-### Step 2 — Specialization (`build-specialization`)
-- Take each abstract pattern and **generate specialized versions** based on how they match in the atomspace.
-- Store them in `$specspace`.
+The top-level entry in this module is frequency-pattern-miner:
 
-### Step 3 — Candidate Generation
-- Evaluate the **support of specialized patterns**.
-- If the support ≥ `$minsup`, store them in `$cndpspace` as **candidates**.
-
-### Step 4 — Conjunction Generation (`do-conjunct`)
-- Build unique combinations of size `$depth` from candidate patterns.
-- Evaluate support for each conjunction and keep only those meeting `$minsup`, storing them in `$conjspace`.
-
-### Step 5 — Finalization
-- Format and return the valid patterns with support annotations.
+(= (frequency-pattern-miner $dbspace $minsup $depth)
+	... returns a list like: ( (supportOf (, A B) 3) (supportOf (, B C) 2) ... ) ...)
 
 ---
 
-## Output
+## Example
 
-- A structured set of **frequent patterns** (including conjunctions) stored in your result space, each annotated with its computed support value.
-- These patterns are useful for reasoning, classification, or higher-level symbolic analysis.
+Minimal dataset:
+
+(topic 0 "AI")
+(length 0 "low")
+(topic 1 "AI")
+(length 1 "low")
+(topic 2 "AI")
+(length 2 "high")
+(topic 3 "Gardening")
+(length 3 "low")
+
+With minsup=2 and depth=2, the frequent conjunction is:
+
+(supportOf (, (length $V0 "low") (topic $V0 "AI")) 2)
+
+See tests/frequent-pattern-miner-test.metta for a runnable check.
+
+---
+
+## Notes
+- unique_combinations_star lives in experiments/frequent-pattern-miner/conj-exp and is imported via conj-exp module.
+- sort_conj is provided by experiments/frequent-pattern-miner/freq-pat; it canonicalizes variables and sorts flat clauses,
+	so the order within (, ...) is stable.
+- Support is computed with sup-num from experiments/utils/common-utils.metta.
 
 

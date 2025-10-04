@@ -15,17 +15,17 @@
 ;; mine frequent patterns without surprissingness 
 ---------------------------------------------------
 ;; minimum support 3 -3rd arg
-;; number of conjucts 2 -4th arg
+;; number of conjuncts 3 -4th arg
 
 !(pattern-miner &res1 purifiedDbSpace 3 4) 
 !(println! "============ end ================")
 ;; demo result structure
-          ; ((supportOf (, (Inheritance $y human) (Inheritance $y man)) 3) 
-          ; (supportOf (, (Inheritance $j human) (Inheritance $j ugly)) 3) 
-          ; (supportOf (, (Inheritance $p human) (Inheritance $p sodaDrinker)) 3) 
-          ; (supportOf (, (Inheritance $r man) (Inheritance $r ugly)) 3) 
-          ; (supportOf (, (Inheritance $x man) (Inheritance $x sodaDrinker)) 3) 
-          ; (supportOf (, (Inheritance $x sodaDrinker) (Inheritance $x ugly)) 3) 
-          ; (supportOf (, (Inheritance Abe $r) (Inheritance Cason $r)) 4) (
-          ;   supportOf (, (Inheritance Abe $l) (Inheritance Allen $l)) 4) 
-          ;   (supportOf (, (Inheritance Allen $g) (Inheritance Cason $g)) 4))
+    ; ((supportOf (, (Inheritance $y human) (Inheritance $y man)) 3) 
+    ; (supportOf (, (Inheritance $j human) (Inheritance $j ugly)) 3) 
+    ; (supportOf (, (Inheritance $p human) (Inheritance $p sodaDrinker)) 3) 
+    ; (supportOf (, (Inheritance $r man) (Inheritance $r ugly)) 3) 
+    ; (supportOf (, (Inheritance $x man) (Inheritance $x sodaDrinker)) 3) 
+    ; (supportOf (, (Inheritance $x sodaDrinker) (Inheritance $x ugly)) 3) 
+    ; (supportOf (, (Inheritance Abe $r) (Inheritance Cason $r)) 4)
+    ; (supportOf (, (Inheritance Abe $l) (Inheritance Allen $l)) 4) 
+    ; (supportOf (, (Inheritance Allen $g) (Inheritance Cason $g)) 4))

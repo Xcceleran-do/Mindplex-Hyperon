@@ -2,6 +2,7 @@
 ! (import! &self freq-pat)
 ! (import! &self conj-exp)
 
+
 ---------------------------------------------
 ;; abstract-pattern
 ---------------------------------------------
@@ -16,7 +17,6 @@
                 ( if (sup-eval $dbspace ($linkUnique $z $t) $minsup) ($linkUnique $x $y) Empty ) 
         )
 )
-
 
 
 ;; candidatePatternMaker
@@ -57,7 +57,6 @@
 )
 
 
-
 -------------------------------------------------------------------------------
 ; build-specialization
 -------------------------------------------------------------------------------
@@ -77,9 +76,6 @@
         (createSpecials $shabPair)
     )
 )
-
-
-
 
 
 --------------------------------------------
@@ -107,6 +103,22 @@
 
 
 --------------------------------------------------------
+;; absSpeCan --stand for abstract-specialized-candidate
+---------------------------------------------------------
+;; function to get the candidate patterns from the abstract patterns
+;; 1: get all abstract patterns with their support and store them in a variable in d/t threads
+;; 2: specialize the abstract patterns and store them in a variable
+;; 3: get and return all candidate patterns from the specialized patterns
+( = (absSpeCan $dbspace $minsup)
+        (let* (
+           ($aptrn (abstract-pattern $dbspace $minsup))
+           ($specializedPattern (unique (build-specialization $aptrn $dbspace)))
+        ) (candidatePatternMaker $dbspace $specializedPattern $minsup)
+        )
+)
+
+
+--------------------------------------------------------
 ;; frequency-pattern-miner
 ---------------------------------------------------------
 ;; function to mine the frequent patterns from the atomspace.
@@ -125,13 +137,4 @@
            (() (println! (" conjucts ended and got" $conjuncts)))
            ($temp4 (collapse (formatter $conjuncts $dbspace $minsup)))      
         )  $temp4)
-)
-
-
-( = (absSpeCan $dbspace $minsup)
-        (let* (
-           ($aptrn (abstract-pattern $dbspace $minsup))
-           ($specializedPattern (unique (build-specialization $aptrn $dbspace)))
-        ) (candidatePatternMaker $dbspace $specializedPattern $minsup)
-        )
 )

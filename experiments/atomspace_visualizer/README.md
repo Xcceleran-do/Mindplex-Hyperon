@@ -167,7 +167,7 @@ The columnar view includes an integrated pattern mining interface:
 4. View results in the collapsible results card
 5. Click **Visualize** on any pattern to highlight it
 
-Mining API endpoint: `http://localhost:5000/api/mine`
+Mining API endpoint: `http://localhost:8000/api/mine`
 
 ## 🛠️ Development
 
