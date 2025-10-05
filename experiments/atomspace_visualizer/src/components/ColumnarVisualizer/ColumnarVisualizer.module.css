@@ -1,0 +1,9 @@
+.canvas {
+  transition: opacity 0.2s ease-in-out;
+  min-width: 150%;
+  min-height: 150%;
+}
+
+.canvas:active {
+  cursor: grabbing !important;
+}
