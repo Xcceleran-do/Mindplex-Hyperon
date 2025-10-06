@@ -19,32 +19,24 @@ from hyperon import MeTTa
 metta4Miner = MeTTa()
 
 metta4Miner.run("""
-    ! (register-module! ../experiments)
+    ! (register-module! experiments)
 
     ! (import! &self experiments:pattern-miner:pattern-miner)
     ! (import! &self experiments:utils:common-utils)
     ! (import! &self experiments:frequent-pattern-miner:frequent-pattern-miner)
     ! (import! &tempo experiments:data:small-ugly)
-
-    !(bind! &db (new-space)) ;; create the database
-                
-    !(add-reduct &db (get-atoms &tempo)) ;; add the data to the database
-                
-    !(bind! &dbb (new-space)) ;; create the database
                 
     !(bind! &res1 (new-space)) ;; space to hold the miner result
+                
+    ! (bind! purifiedDbSpace (new-space)) ; space to hold the database atoms
+    ! (add-reduct purifiedDbSpace (get-atoms &tempo))
 """)
 
 def mine_pattern(numberOfConjunction):
     """this function will mine patterns with the given number of conjunction"""
-    answer = metta4Miner.run(f" !(pattern-miner &res1 &db 3 {numberOfConjunction})")
+    answer = metta4Miner.run(f" !(pattern-miner purifiedDbSpace 3 {numberOfConjunction})")
     return answer
 
-# def mine_pattern_demo(numberOfConjunction):
-#     """this function will mine patterns with the given number of conjunction"""
-#     answer = "((supportOf (some pattern $x) 4) (supportOf (some pattern $y) 3))"
-
-#     return answer
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all domains on all routes
@@ -120,6 +112,7 @@ def start_mining():
         # )
         # thread.start()
         run_mining_task(job_id, conjunction_count)
+        print(mining_jobs[job_id].result)
         listOfRowPatterns = mining_jobs[job_id].result.get_children()
         rules = []
         for pattern in listOfRowPatterns:
@@ -229,7 +222,7 @@ if __name__ == '__main__':
     # Run the Flask app
     app.run(
         host='0.0.0.0',
-        port=8000,
+        port=5000,
         debug=True,
         threaded=True
     )

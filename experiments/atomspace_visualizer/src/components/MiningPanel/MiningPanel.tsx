@@ -58,7 +58,7 @@ const MiningPanel: Component<MiningPanelProps> = (props) => {
     startLoadingAnimation();
 
     try {
-      const response = await fetch('http://localhost:8000/api/mine', {
+      const response = await fetch('http://localhost:5000/api/mine', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
