@@ -415,3 +415,75 @@
 (= (multiCartesian $list-of-tuples)
    (foldl-atom $list-of-tuples (()) $acc $x (cartesianAppend $acc $x))
 )
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; ; Helper functions for frequent pattern miner
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; ; ----------------------------------------------
+; ;; memberChecker
+; ; ----------------------------------------------
+; ;; Checks if an atom $x is a member of a list $list using alpha-equivalence
+; ;; Parameters:
+; ;;  - $x: The atom to check for membership.
+; ;;  - $list: The list of atoms to check against.
+; ;; Returns:
+; ;;  - True if $x is found in $list, otherwise Empty.
+; ;; method: add $x to the front of $list and check if $x is alpha-equivalent to any atom in the new list in superpose of the list.
+( = (memberCheckerHelper $x $list)
+    (function 
+        (chain (eval (superpose $list)) $curr
+                (chain (eval (=alpha $x $curr)) $bool
+                    (chain (eval (if-equal $bool True
+                        $bool
+                        Empty)) $res
+                        (return $res))
+                )
+            )
+    )
+)
+; ; ----------------------------------------------
+; ;; memberChecker
+; ; ----------------------------------------------
+; ;; Checks if an atom $x is a member of a list $list using alpha-equivalence
+; ;; Parameters:
+; ;;  - $x: The atom to check for membership.
+; ;;  - $list: The list of atoms to check against.
+; ;; Returns:
+; ;;  - True if $x is found in $list, otherwise Empty.
+
+( = (demoFunction $db $x $minSup $list $isCandid) 
+    (function (chain (eval (if-equal $isCandid True 
+        (chain (eval (cons-atom $x $list)) $updated $updated)
+            $list
+        )) $res (return $res)))
+)
+
+( = (memberChecker $x $list $db $minSup)
+    (function 
+        (chain (eval (collapse (memberCheckerHelper $x $list))) $ans
+            (chain (eval (size-atom $ans)) $size
+                (chain (eval (== $size 0)) $bool
+                    (chain (eval 
+                        (if $bool 
+                            (chain (eval (sup-eval $db $x $minSup)) $isCandid 
+                            (demoFunction $db $x $minSup $list $isCandid) )
+                                $list)) 
+                            $result
+                    (return $result)
+                ))
+        ))
+    )
+)
+
+
+(: customUnique (-> Atom Atom Number Atom))
+(= (customUnique $list $db $minSup)
+    (function
+        (chain (eval (collapse $list)) $collapsed
+                (chain (eval (foldl-atom $collapsed () $acc $x (memberChecker $x $acc $db $minSup))) $unique
+                    (return $unique)
+                )
+        )
+    )
+)

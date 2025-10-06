@@ -10,6 +10,10 @@
 
 ;; space to hold the miner result
 !(bind! &res1 (new-space))
+; ! (memberChecker (engagement_level $x "high") () purifiedDbSpace 3)
+; !(sup-eval purifiedDbSpace (engagement_level $x "high") 3)
+; ! (memberChecker (engagement_level $x "low") ( (engagement_level $x "low") (engagement_level $x "med")) purifiedDbSpace 3)
+; ! (let $ana (customUnique (match purifiedDbSpace ($link $x $y) (createSpecials ($link $x $y))) purifiedDbSpace 3) (--- :- --- (unique_combinations_star $ana)))
 
 ---------------------------------------------------
 ;; mine frequent patterns without surprissingness 
@@ -17,7 +21,7 @@
 ;; minimum support 3 -3rd arg
 ;; number of conjuncts 3 -4th arg
 
-!(pattern-miner &res1 purifiedDbSpace 3 4) 
+!(pattern-miner &res1 purifiedDbSpace 3 3) 
 !(println! "============ end ================")
 ;; demo result structure
     ; ((supportOf (, (Inheritance $y human) (Inheritance $y man)) 3) 
