@@ -416,6 +416,11 @@
    (foldl-atom $list-of-tuples (()) $acc $x (cartesianAppend $acc $x))
 )
 
+;; Define cast functions between Nat and Number
+(: fromNumber Number Expression)
+(= (fromNumber $n)
+     (let $pop (range 1 $n) (foldl-atom $pop Z $acc $num (union-atom (S) ($acc))))
+)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; ; Helper functions for frequent pattern miner

@@ -14,6 +14,7 @@ export interface MiningResult {
 export interface MiningInterfaceProps {
   onMiningStart?: () => void;
   onMiningComplete?: (result: MiningResult) => void;
+  onPatternsFound?: (patterns: Array<{ pattern: string; support: string }>, conjunctSize?: number) => void;
 }
 
 const MiningInterface = (props: MiningInterfaceProps) => {
@@ -30,7 +31,7 @@ const MiningInterface = (props: MiningInterfaceProps) => {
 
     try {
       // Start mining job
-      const response = await fetch('http://localhost:8000/api/mine', {
+      const response = await fetch('http://localhost:5000/api/mine', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -43,41 +44,25 @@ const MiningInterface = (props: MiningInterfaceProps) => {
       }
 
       const jobData = await response.json();
-      const jobId = jobData.jobId;
-
-      // Poll for results
-      const pollForResults = async () => {
-        try {
-          const statusResponse = await fetch(`http://localhost:5000/api/mine/${jobId}`);
-          if (!statusResponse.ok) {
-            throw new Error(`HTTP error! status: ${statusResponse.status}`);
-          }
-
-          const statusData = await statusResponse.json();
-          
-          if (statusData.status === 'completed' || statusData.status === 'error') {
-            setIsMining(false);
-            setMiningResult(statusData);
-            setShowResult(true);
-            props.onMiningComplete?.(statusData);
-          } else {
-            // Continue polling
-            setTimeout(pollForResults, 1000);
-          }
-        } catch (error) {
-          console.error('Error polling for results:', error);
-          setIsMining(false);
-          setMiningResult({
-            jobId: jobId,
-            status: 'error',
-            error: `Polling error: ${error instanceof Error ? error.message : 'Unknown error'}`
-          });
-          setShowResult(true);
-        }
+      
+      // Mining now completes immediately with results
+      setIsMining(false);
+      
+      const miningResult: MiningResult = {
+        jobId: jobData.jobId,
+        status: 'completed',
+        result: jobData.result,
+        duration: 0
       };
-
-      // Start polling
-      setTimeout(pollForResults, 1000);
+      
+      setMiningResult(miningResult);
+      setShowResult(false); // Don't show the old result card
+      props.onMiningComplete?.(miningResult);
+      
+      // Send patterns to chat interface with conjunct size
+      if (jobData.result && Array.isArray(jobData.result)) {
+        props.onPatternsFound?.(jobData.result, conjunctionCount());
+      }
 
     } catch (error) {
       console.error('Error starting mining:', error);

@@ -1,5 +1,5 @@
-!(import! &rules Rules)
-!(import! &facts Facts)
+!(import! &rules rules)
+!(import! &facts facts)
 
 
 (= (removeAnyMetricsAtom $superset $subsets)

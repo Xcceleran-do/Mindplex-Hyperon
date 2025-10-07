@@ -1,5 +1,5 @@
 import type { Component } from 'solid-js';
-import { createSignal, createEffect, Show, createResource, onMount } from 'solid-js';
+import { createSignal, createEffect, Show, onMount } from 'solid-js';
 
 // Remove MettaEditor import
 import GraphVisualizer from './components/GraphVisualizer/GraphVisualizer';
@@ -7,6 +7,7 @@ import Legend from './components/Legend/Legend';
 import ContextMenu from './components/ContextMenu/ContextMenu';
 import UIControls from './components/UIControls/UIControls';
 import MiningInterface from './components/MiningInterface/MiningInterface';
+import ChatInterface from './components/ChatInterface/ChatInterface';
 import { GraphData, GraphNode, ParseError, LayoutAlgorithm, LayoutOptions, LayoutState } from './types';
 import { MettaParserImpl } from './services/parser/MettaParser';
 import { GraphEngineImpl } from './services/graph/GraphEngine';
@@ -15,54 +16,8 @@ import './styles/variables.css';
 import './styles/components.css';
 
 const App: Component = () => {
-  // Load initial text from small-ugly.metta file
-  const [initialTextResource] = createResource(async () => {
-    try {
-      const response = await fetch('/small-ugly.metta');
-      if (!response.ok) {
-        throw new Error('Failed to load file');
-      }
-      const text = await response.text();
-      return text;
-    } catch (error) {
-      console.error('Error loading initial text:', error);
-      // Fallback to the actual content from small-ugly.metta file
-      return `(Inheritance Allen sodaDrinker)
-(Inheritance Abe sodaDrinker)
-(Inheritance Lily sodaDrinker)
-(Inheritance Cason sodaDrinker)
-
-(Inheritance Lily ugly)
-(Inheritance Allen ugly)
-(Inheritance Abe ugly)
-(Inheritance Cason ugly)
-
-(Inheritance  woman)
-(Inheritance Emily woman)
-(Inheritance Lucy woman)
-
-; (Inheritance Allen man)
-; (Inheritance Abe man)
-; (Inheritance Cason man)
-
-; (Inheritance Allen human)
-; (Inheritance Abe human)
-; (Inheritance Cason human)
-
-`;
-    }
-  });
-
-  // Core application state
+  // Core application state - mettaText is populated by mining results only
   const [mettaText, setMettaText] = createSignal('');
-
-  // Set initial text when resource loads
-  createEffect(() => {
-    const loadedText = initialTextResource();
-    if (loadedText) {
-      setMettaText(loadedText);
-    }
-  });
   const [graphData, setGraphData] = createSignal<GraphData>({
     nodes: [],
     edges: [],
@@ -94,6 +49,11 @@ const App: Component = () => {
     startTime: 0,
     duration: 0
   });
+
+  // Chat and mining results state
+  const [miningResults, setMiningResults] = createSignal<Array<{ pattern: string; support: string }>>([]);
+  const [filteredPattern, setFilteredPattern] = createSignal<string | null>(null);
+  const [currentConjunctSize, setCurrentConjunctSize] = createSignal<number | undefined>(undefined);
 
   // Initialize parser and graph engine
   const parser = new MettaParserImpl();
@@ -340,6 +300,160 @@ const App: Component = () => {
     setContextMenuPosition(null);
   };
 
+  const handlePatternsFound = (patterns: Array<{ pattern: string; support: string }>, conjunctSize?: number) => {
+    setMiningResults(patterns);
+    if (conjunctSize) {
+      setCurrentConjunctSize(conjunctSize);
+    }
+  };
+
+  const handleVisualize = (patternStr: string) => {
+    setFilteredPattern(patternStr);
+    
+    // Parse the pattern to extract property-value pairs
+    // Pattern format: ((property1 $x "value1") (property2 $x "value2") ...)
+    const properties = parsePattern(patternStr);
+    
+    console.log('Visualizing pattern:', patternStr);
+    console.log('Extracted properties:', properties);
+    
+    // Get the current graph data (assume we're re-parsing from mettaText to get fresh data)
+    const text = mettaText();
+    if (!text) return;
+    
+    // Re-parse to get complete data
+    const parser = new MettaParserImpl();
+    const result = parser.parse(text);
+    const fullData = result.data;
+    
+    // Build a map: article_id -> { property -> value }
+    const articleProperties = new Map<string, Map<string, string>>();
+    
+    // Parse the graph data to extract article properties
+    // Format in graph: edges from property node to article_id node, then to value node
+    // But in MeTTa: (property article_id "value")
+    
+    // Let's extract from edges directly
+    fullData.edges.forEach(edge => {
+      // Edge structure: source -> target with label
+      // We're looking for patterns like: property_node -> article_id_node -> value_node
+      const sourceNode = fullData.nodes.find(n => n.id === edge.source);
+      const targetNode = fullData.nodes.find(n => n.id === edge.target);
+      
+      if (sourceNode && targetNode) {
+        // Check if source is a property name (like "length", "tone", etc)
+        // and target is a number (article ID)
+        const propertyName = sourceNode.label;
+        const articleId = targetNode.label;
+        
+        // Now find the value for this property-article combination
+        // Look for edges from the article ID node
+        fullData.edges.forEach(valueEdge => {
+          if (valueEdge.source === edge.target) {
+            const valueNode = fullData.nodes.find(n => n.id === valueEdge.target);
+            if (valueNode) {
+              if (!articleProperties.has(articleId)) {
+                articleProperties.set(articleId, new Map());
+              }
+              articleProperties.get(articleId)!.set(propertyName, valueNode.label);
+            }
+          }
+        });
+      }
+    });
+    
+    console.log('Article properties map:', articleProperties);
+    
+    // Find article IDs that match ALL conditions
+    const matchingArticleIds = new Set<string>();
+    
+    articleProperties.forEach((props, articleId) => {
+      let matchesAll = true;
+      
+      for (const [propName, propValue] of Object.entries(properties)) {
+        const articleValue = props.get(propName);
+        if (articleValue !== propValue) {
+          matchesAll = false;
+          break;
+        }
+      }
+      
+      if (matchesAll && Object.keys(properties).length > 0) {
+        matchingArticleIds.add(articleId);
+      }
+    });
+    
+    console.log('Matching article IDs:', matchingArticleIds);
+    
+    // Now filter the graph to show only matching articles and their properties
+    const matchingNodeIds = new Set<string>();
+    
+    if (matchingArticleIds.size > 0) {
+      // Add all nodes that are part of the matching articles
+      fullData.nodes.forEach(node => {
+        if (matchingArticleIds.has(node.label)) {
+          matchingNodeIds.add(node.id);
+        }
+      });
+      
+      // Add property and value nodes connected to matching articles
+      fullData.edges.forEach(edge => {
+        const sourceNode = fullData.nodes.find(n => n.id === edge.source);
+        const targetNode = fullData.nodes.find(n => n.id === edge.target);
+        
+        if (targetNode && matchingArticleIds.has(targetNode.label)) {
+          // Add property node and article node
+          matchingNodeIds.add(edge.source);
+          matchingNodeIds.add(edge.target);
+          
+          // Add value nodes
+          fullData.edges.forEach(valueEdge => {
+            if (valueEdge.source === edge.target) {
+              matchingNodeIds.add(valueEdge.target);
+            }
+          });
+        }
+      });
+      
+      // Create filtered graph data
+      const filteredNodes = fullData.nodes.filter(n => matchingNodeIds.has(n.id));
+      const filteredEdges = fullData.edges.filter(e => 
+        matchingNodeIds.has(e.source) && matchingNodeIds.has(e.target)
+      );
+      
+      console.log(`Filtered to ${filteredNodes.length} nodes and ${filteredEdges.length} edges`);
+      
+      setGraphData({
+        ...fullData,
+        nodes: filteredNodes,
+        edges: filteredEdges,
+        metadata: {
+          ...fullData.metadata,
+          nodeCount: filteredNodes.length,
+          edgeCount: filteredEdges.length
+        }
+      });
+      
+      // Re-apply layout to the filtered graph
+      setTimeout(() => handleApplyLayout('force'), 100);
+    } else {
+      alert('No articles match all the specified conditions.');
+    }
+  };
+
+  const parsePattern = (pattern: string): Record<string, string> => {
+    // Parse pattern like: ((tone $x "Analytical") (length $x "low") (engagement_level $x "high"))
+    const properties: Record<string, string> = {};
+    const regex = /\((\w+)\s+\$\w+\s+"([^"]+)"\)/g;
+    let match;
+    
+    while ((match = regex.exec(pattern)) !== null) {
+      properties[match[1]] = match[2];
+    }
+    
+    return properties;
+  };
+
   return (
     <div class="app">
       {/* Full-screen canvas container - matches template.html structure */}
@@ -370,8 +484,15 @@ const App: Component = () => {
 
       {/* Mining Interface */}
       <div class="ui-card bottom-center-mining">
-        <MiningInterface />
+        <MiningInterface onPatternsFound={handlePatternsFound} />
       </div>
+
+      {/* Chat Interface */}
+      <ChatInterface 
+        onVisualize={handleVisualize}
+        miningResults={miningResults()}
+        conjunctSize={currentConjunctSize()}
+      />
 
       {/* Minimize/Maximize controls in top-right corner */}
       <div id="minimize-controls" class="ui-card top-right-secondary">
