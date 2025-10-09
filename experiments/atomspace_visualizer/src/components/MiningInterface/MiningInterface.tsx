@@ -31,7 +31,7 @@ const MiningInterface = (props: MiningInterfaceProps) => {
 
     try {
       // Start mining job
-      const response = await fetch('http://localhost:5000/api/mine', {
+      const response = await fetch('https://urban-potato-v6gr5vqg6559fpqrg-5000.app.github.dev/api/mine', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -55,12 +55,13 @@ const MiningInterface = (props: MiningInterfaceProps) => {
         duration: 0
       };
       
-      setMiningResult(miningResult);
-      setShowResult(false); // Don't show the old result card
-      props.onMiningComplete?.(miningResult);
+      // setMiningResult(miningResult);
+      // setShowResult(false); // Don't show the old result card
+      // props.onMiningComplete?.(miningResult);
       
       // Send patterns to chat interface with conjunct size
       if (jobData.result && Array.isArray(jobData.result)) {
+        console.log('MiningInterface: Calling onPatternsFound with conjunctSize:', conjunctionCount());
         props.onPatternsFound?.(jobData.result, conjunctionCount());
       }
 
@@ -114,8 +115,7 @@ const MiningInterface = (props: MiningInterfaceProps) => {
       {/* Mining Control Panel */}
       <div class="mining-controls">
         <div class="conjunction-input">
-          <span class="drag-indicator">⋮⋮</span>
-          <label for="conjunction-count">Conjunction Count:</label>
+          <label for="conjunction-count">Pattern Count</label>
           <input
             id="conjunction-count"
             type="number"
@@ -156,33 +156,7 @@ const MiningInterface = (props: MiningInterfaceProps) => {
         </div>
       </div>
 
-      {/* Mining HUD (only visible during mining) */}
-      <Show when={isMining()}>
-        <Portal>
-          <div class="mining-hud active">
-            <div class="mining-scene">
-              <div class="cave-entrance">🕳️</div>
-              <div class="miner">
-                <div class="miner-body">👷</div>
-                <div class="pickaxe-animation">⛏️</div>
-              </div>
-              <div class="ore-particles">
-                <div class="particle">⚡</div>
-                <div class="particle">💎</div>
-                <div class="particle">🔥</div>
-                <div class="particle">✨</div>
-              </div>
-              <div class="progress-bar">
-                <div class="progress-fill"></div>
-              </div>
-              <div class="mining-status">
-                <p>Deep mining in progress...</p>
-                <p class="sub-text">Extracting precious patterns from the data ore</p>
-              </div>
-            </div>
-          </div>
-        </Portal>
-      </Show>
+
 
       {/* Result Card */}
       <Show when={showResult() && miningResult()}>

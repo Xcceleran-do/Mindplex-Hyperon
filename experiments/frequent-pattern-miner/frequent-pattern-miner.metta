@@ -102,7 +102,7 @@
            ($candidatePatterns (collapse (absSpeCan $dbspace $minsup))); get candidate patterns
            (() (println! ("candidatePatterns ended and got" $candidatePatterns)))
            ($conjuncts  (unique_combinations_star $candidatePatterns $depth))
-           (() (println! (" conjuncts ended and got" $conjuncts)))
            ($temp4 (collapse (formatter $conjuncts $dbspace $minsup)))      
+           (() (println! (" conjuncts we have got is " $temp4)))
         )  $temp4)
 )

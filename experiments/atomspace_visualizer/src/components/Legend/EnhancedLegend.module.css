@@ -1,12 +1,12 @@
 .legendContainer {
   position: fixed;
-  top: var(--legend-top, 80px);
+  top: 20px;
   right: 20px;
   background: rgba(255, 255, 255, 0.95);
   border-radius: 12px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   width: 340px;
-  max-height: calc(50vh - 60px);
+  max-height: 50vh;
   overflow-y: auto;
   backdrop-filter: blur(10px);
   border: 1px solid rgba(0, 0, 0, 0.1);

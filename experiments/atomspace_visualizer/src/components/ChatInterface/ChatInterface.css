@@ -46,36 +46,39 @@
   border: 2px solid white;
 }
 
-/* Chat Interface - positioned below mining button, full height */
+/* Chat Interface - positioned to the right, below mining button */
 .chat-interface {
   position: fixed;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 500px;
-  height: calc(100vh - 180px); /* Full height minus space for mining button area */
+  right: 20px;
+  top: var(--chat-top, calc(50vh + 120px)); /* Below the mine button */
+  width: 340px;
+  height: var(--chat-height, calc(100vh - 50vh - 160px)); /* Dynamic height based on available space */
+  min-height: 54px;
   background: white;
-  border-radius: 16px 16px 0 0;
-  box-shadow: 0 -5px 40px rgba(0, 0, 0, 0.15);
+  border-radius: 12px;
+  box-shadow: 0 4px 40px rgba(0, 0, 0, 0.15);
   display: flex;
   flex-direction: column;
-  z-index: 900;
+  z-index: 95; /* Below mining interface but above canvas */
   overflow: hidden;
-  transition: all 0.3s ease;
-  animation: slideUpChat 0.4s ease-out;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 2px solid rgba(139, 7, 89, 0.2);
+  backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.98);
 }
 
 .chat-interface.minimized {
-  height: 60px;
+  height: 54px !important;
+  min-height: 54px;
 }
 
-@keyframes slideUpChat {
+@keyframes slideInRight {
   from {
-    transform: translateX(-50%) translateY(100%);
+    transform: translateX(50px);
     opacity: 0;
   }
   to {
-    transform: translateX(-50%) translateY(0);
+    transform: translateX(0);
     opacity: 1;
   }
 }
@@ -84,11 +87,18 @@
 .chat-header {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
-  padding: 16px;
+  padding: 12px 16px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   cursor: pointer;
+  border-radius: 12px 12px 0 0;
+  transition: background 0.2s ease;
+  user-select: none;
+}
+
+.chat-header:hover {
+  background: linear-gradient(135deg, #5568d3 0%, #6a3f91 100%);
 }
 
 .chat-header-left {
@@ -98,7 +108,7 @@
 }
 
 .chat-icon {
-  font-size: 24px;
+  font-size: 20px;
 }
 
 .chat-title-info {
@@ -108,12 +118,12 @@
 
 .chat-title-info h3 {
   margin: 0;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
 }
 
 .chat-status {
-  font-size: 11px;
+  font-size: 10px;
   opacity: 0.9;
   display: flex;
   align-items: center;
@@ -136,14 +146,14 @@
 }
 
 .chat-action-btn {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.15);
   border: none;
   color: white;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border-radius: 6px;
   cursor: pointer;
-  font-size: 16px;
+  font-size: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -151,8 +161,8 @@
 }
 
 .chat-action-btn:hover {
-  background: rgba(255, 255, 255, 0.3);
-  transform: scale(1.1);
+  background: rgba(255, 255, 255, 0.25);
+  transform: scale(1.05);
 }
 
 /* Chat Container */
@@ -482,6 +492,33 @@
 .send-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Pattern Reference Styling */
+.pattern-ref {
+  display: inline-block;
+  padding: 2px 6px;
+  margin: 0 2px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+}
+
+.pattern-ref:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(102, 126, 234, 0.5);
+  background: linear-gradient(135deg, #5568d3 0%, #6a3f91 100%);
+}
+
+.pattern-ref:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
 }
 
 /* Animations */

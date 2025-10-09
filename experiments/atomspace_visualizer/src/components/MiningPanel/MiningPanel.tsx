@@ -58,7 +58,7 @@ const MiningPanel: Component<MiningPanelProps> = (props) => {
     startLoadingAnimation();
 
     try {
-      const response = await fetch('http://localhost:5000/api/mine', {
+      const response = await fetch('https://urban-potato-v6gr5vqg6559fpqrg-5000.app.github.dev/api/mine', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

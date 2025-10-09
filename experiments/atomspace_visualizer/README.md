@@ -88,8 +88,7 @@ Each article has **one continuous curved line** connecting all its properties.
 ### Key Components
 
 #### Visualization Modes
-- **AppColumnar.tsx**: Columnar property-based visualization (current default)
-- **App.tsx**: Traditional graph visualization with force-directed layouts
+- **AppColumnar.tsx**: Columnar property-based visualization with pattern filtering and chat integration
 
 #### Services
 - **ColumnarTransformer**: Transforms MeTTa data into columnar layout
@@ -149,12 +148,6 @@ Edit `src/index.tsx` to switch between modes:
 ```typescript
 import AppColumnar from './AppColumnar';
 render(() => <AppColumnar />, root!);
-```
-
-**Traditional Graph View**:
-```typescript
-import App from './App';
-render(() => <App />, root!);
 ```
 
 ## 🔬 Pattern Mining

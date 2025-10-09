@@ -17,10 +17,11 @@ from dataclasses import dataclass
 from typing import Dict, Any, Optional
 from hyperon import MeTTa
 import google.generativeai as genai
+from dotenv import load_dotenv
+load_dotenv()
 
 # Configure Gemini API
-GOOGLE_API_KEY = "AIzaSyChGxk4M-RrG4q7_Oi-sPQgGIRBx8snHcs"
-genai.configure(api_key=GOOGLE_API_KEY)
+genai.configure(api_key=os.getenv("GEMINI_API_KEY4"))
 
 metta4Miner = MeTTa()
 
@@ -30,26 +31,134 @@ metta4Miner.run("""
     ! (import! &self experiments:pattern-miner:pattern-miner)
     ! (import! &self experiments:utils:common-utils)
     ! (import! &self experiments:frequent-pattern-miner:frequent-pattern-miner)
-    ! (import! &tempo experiments:data:small-ugly)
+    ! (import! &tempo experiments:atomspace_visualizer:public:small-ugly)
+    
+(= (removeAnyMetricsAtom $superset $subsets)
+     (let ($x $subset) ((superpose $superset) (superpose $subsets))
+          (unify 
+               $subset
+               $x
+               (let $a (subtraction-atom $superset ($subset)) (union-atom $a ($subset))) 
+               (empty)
+          )
+     )
+)
+(= (convertIncomingDataHelper2 $organized)
+     (if (> (size-atom $organized) 1)
+          (let ($head $tail) (decons-atom $organized) (-> $head (convertIncomingDataHelper2 $tail)))
+          (car-atom $organized)
+     )
+)
+(= (convertIncomingDataHelper $data)
+     (convertIncomingDataHelper2 (removeAnyMetricsAtom $data ((engagement_level $j $k) (reputation $_ $__) (popularity $___ $____))))
+)
+(= (main $rules) 
+     (let (supportOf $rule $num) (superpose $rules)
+          (let $formattedRule (convertIncomingDataHelper (cdr-atom $rule)) (: (rule:- $formattedRule) (convertIncomingDataHelper (cdr-atom $rule))))
+     )
+)
+
+
+
+;; Define cast functions between Nat and Number
+(= (fromNumber $n) (if (<= $n 0) Z (S (fromNumber (- $n 1)))))
+
+;; Base case
+(= (backward-chain_ True $kb $_ (: $prf $ccln)) (match $kb (: $prf $ccln) (: $prf $ccln)))
+
+;; Recursive step
+(= (backward-chain_ True $kb (S $k) (: ($prfabs $prfarg) $ccln))
+   (let* 
+          (
+               ((: $prfabs (-> $prms $ccln)) (backward-chain_ True $kb $k (: $prfabs (-> $prms $ccln))))
+               ((: $prfarg $prms) (backward-chain_ True $kb $k (: $prfarg $prms)))
+          )
+          (: ($prfabs $prfarg) $ccln)
+     )
+)
+
+(= (backward-chain $kb $depth (: $prf $ccln)) 
+     56
+)
+
+
                 
-    !(bind! &res1 (new-space)) ;; space to hold the miner result
+    !(bind! &res1 (new-space)) ;; space to hold the formatted miner result
+    !(add-reduct &res1 (let $fact (get-atoms &tempo) (: (fact:- $fact) $fact)))
                 
     ! (bind! purifiedDbSpace (new-space)) ; space to hold the database atoms
     ! (add-reduct purifiedDbSpace (get-atoms &tempo))
 """)
 
-def mine_pattern(numberOfConjunction):
-    """this function will mine patterns with the given number of conjunction"""
-    answer = metta4Miner.run(f" !(pattern-miner purifiedDbSpace 3 {numberOfConjunction})")
-    return answer
+def mine_pattern(numberOfConjunction: int) -> dict:
+    """
+    Mines patterns with a specified number of conjunctions.
+
+    Args:
+        numberOfConjunction: The number of conjunctions to use in pattern mining.
+
+    Returns:
+        A dictionary containing the mining results with parsed patterns.
+    """
+    answer = metta4Miner.run(f"!(pattern-miner purifiedDbSpace 3 {int(numberOfConjunction)})")
+    
+    # Parse the result into JSON-serializable format
+    if not answer or len(answer) == 0:
+        return {"status": "no_results", "patterns": []}
+    
+    try:
+        # Extract the atom result
+        result_atom = answer[0][0]
+        list_of_patterns = result_atom.get_children()
+        
+        # Parse each pattern
+        patterns = []
+        for pattern_atom in list_of_patterns:
+            pattern_parts = pattern_atom.get_children()
+            if len(pattern_parts) >= 3:  # (supportOf <pattern> <count>)
+                pattern_str = str(pattern_parts[1])
+                support_str = str(pattern_parts[2])
+                patterns.append({
+                    "pattern": pattern_str,
+                    "support": support_str
+                })
+        
+        return {
+            "answer": f"{result_atom}",
+            "status": "success",
+            "conjunction_count": numberOfConjunction,
+            "patterns": patterns,
+            "total_count": len(patterns)
+        }
+        
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Failed to parse mining result: {str(e)}",
+            "raw_result": str(answer)
+        }
 
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all domains on all routes
+# Enable CORS for all domains on all routes with all methods
+CORS(app, resources={r"/api/*": {
+    "origins": "*",  # Allow all origins
+    "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    "allow_headers": ["Content-Type", "Authorization"],
+    "expose_headers": ["Content-Type"],
+    "supports_credentials": False,
+    "max_age": 3600
+}})
 
-# Define available functions for the AI
-def get_mining_results():
-    """Get the latest mining results"""
+# Define available functions for the AI with proper docstrings for automatic function calling
+def get_mining_results() -> dict:
+    """Retrieves the latest pattern mining results from the system.
+    
+    Use this when the user asks about mining results, patterns found, or says "Mine rules with X patterns".
+    
+    Returns:
+        A dictionary containing all patterns with their indices, support values, and properties.
+    """
     jobs = list(mining_jobs.values())
     if not jobs:
         return {"status": "no_results", "message": "No mining jobs have been run yet."}
@@ -58,13 +167,38 @@ def get_mining_results():
     if latest_job.status != 'completed':
         return {"status": "not_ready", "message": f"Latest job is {latest_job.status}"}
     
+    # Parse all patterns to extract detailed information
+    patterns_data = []
+    if latest_job.result and isinstance(latest_job.result, dict):
+        # Get patterns from the dict returned by mine_pattern()
+        patterns = latest_job.result.get('patterns', [])
+        for idx, item in enumerate(patterns, 1):
+            pattern = item.get('pattern', '')
+            support = item.get('support', '0')
+            properties = parse_pattern(pattern)
+            patterns_data.append({
+                "index": idx,
+                "pattern": pattern,
+                "support": support,
+                "properties": properties
+            })
+    
     return {
         "status": "success",
-        "patterns": latest_job.result if latest_job.result else []
+        "patterns": patterns_data,
+        "total_count": len(patterns_data),
+        "conjunction_size": latest_job.conjunction_count
     }
 
-def analyze_specific_pattern(pattern: str):
-    """Analyze a specific pattern in detail"""
+def analyze_specific_pattern(pattern: str) -> dict:
+    """Analyzes a specific pattern in detail, extracting properties and values.
+    
+    Args:
+        pattern: The pattern string to analyze, e.g., '((length $x "low") (engagement_level $x "high"))'
+        
+    Returns:
+        A dictionary with pattern analysis including properties and their values.
+    """
     properties = parse_pattern(pattern)
     return {
         "pattern": pattern,
@@ -73,8 +207,12 @@ def analyze_specific_pattern(pattern: str):
         "description": f"Pattern with {len(properties)} properties: {', '.join(properties.keys())}"
     }
 
-def get_pattern_statistics():
-    """Get statistics about all mining results"""
+def get_pattern_statistics() -> dict:
+    """Gets statistics about all mining results including total jobs and patterns.
+    
+    Returns:
+        A dictionary with statistics about all completed mining jobs.
+    """
     jobs = [j for j in mining_jobs.values() if j.status == 'completed']
     if not jobs:
         return {"status": "no_data", "message": "No completed mining jobs"}
@@ -86,111 +224,238 @@ def get_pattern_statistics():
         "average_patterns_per_job": total_patterns / len(jobs) if jobs else 0
     }
 
-def visualize_pattern_request(pattern: str):
-    """Request to visualize a specific pattern"""
+def visualize_pattern_request(pattern: str) -> dict:
+    """Requests visualization of a specific pattern on the graph canvas.
+    
+    Args:
+        pattern: The pattern string to visualize
+        
+    Returns:
+        A confirmation message that the pattern will be visualized.
+    """
     return {
         "action": "visualize",
         "pattern": pattern,
         "message": "Pattern visualization requested. The frontend will display this pattern."
     }
 
-# Define function declarations for Gemini
-function_declarations = [
-    {
-        "name": "get_mining_results",
-        "description": "Retrieves the latest pattern mining results from the system",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-            "required": []
+def run_mining_task(job_id: str, conjunction_count: int):
+    """
+    Run the mining task for a given job.
+    Args:
+        job_id (str): Unique identifier for the mining job.
+        conjunction_count (int): Number of conjunctions to use in the mining process.
+    Returns:
+        dict: A dictionary containing the job status, result, error (if any), and timestamps.
+    """
+    job = mining_jobs[job_id]
+    job.start_time = time.time()
+    try:
+        result = mine_pattern(conjunction_count)
+        job.status = 'completed'
+        job.result = result  # Store the dict directly, not result[0][0]
+        job.end_time = time.time()
+        return {
+            'jobId': job_id,
+            'status': job.status,
+            'result': job.result,
+            'start_time': job.start_time,
+            'end_time': job.end_time
         }
-    },
-    {
-        "name": "analyze_specific_pattern",
-        "description": "Analyzes a specific pattern in detail, extracting properties and values",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "pattern": {
-                    "type": "string",
-                    "description": "The pattern string to analyze, e.g., '((length $x \"low\") (engagement_level $x \"high\"))'"
-                }
-            },
-            "required": ["pattern"]
+    except Exception as e:
+        job.status = 'error'
+        job.error = str(e)
+        job.end_time = time.time()
+        return {
+            'jobId': job_id,
+            'status': job.status,
+            'error': job.error,
+            'start_time': job.start_time,
+            'end_time': job.end_time
         }
-    },
-    {
-        "name": "get_pattern_statistics",
-        "description": "Gets statistics about all mining results including total jobs and patterns",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-            "required": []
-        }
-    },
-    {
-        "name": "visualize_pattern_request",
-        "description": "Requests visualization of a specific pattern on the graph canvas",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "pattern": {
-                    "type": "string",
-                    "description": "The pattern string to visualize"
-                }
-            },
-            "required": ["pattern"]
-        }
-    }
-]
 
-# Function name to actual function mapping
+def formatter(mined_patterns):
+    mine_patterns = metta4Miner.parse_single(mined_patterns)
+    metta4Miner.run(f""" !(add-reduct &res1 (main {mined_patterns})) """)
+    print("the datas in res1 is ", metta4Miner.run("!(get-atoms &res1)"))
+    x = metta4Miner.run(f""" !(let $num (S (S Z)) (backward-chain &res1 $num (: $prf (engagement_level 0 "high")))) """)
+    print("🔍 DEBUG: Backward chaining result =", x)
+
+def backWardChainer(whatToCheck, depth=5):
+    whatToCheck = metta4Miner.parse_single(whatToCheck)
+    answer = metta4Miner.run(f""" !(backward-chain &res1 (fromNumber {2}) (: $prf {whatToCheck})) """)
+    return answer
+
+def getChainerResult(whatToCheck, depth=5):
+    """ Get the result of backward chaining for a specific query. 
+    Args:
+        whatToCheck (str): The query to check, e.g., '(reputation 0 high)'
+        depth (int): The depth limit for backward chaining. (default 5)
+    Returns:
+        The justification of the backward chaining operation.
+    """
+    chainAnswer = backWardChainer(whatToCheck, depth)
+    
+    # If no proofs found, return early
+    if not chainAnswer or len(chainAnswer) == 0:
+        return {
+            "query": whatToCheck,
+            "status": "no_proof",
+            "justification": f"No logical proof could be found for the query '{whatToCheck}' within depth {depth}. This means the query cannot be deduced from the available rules and facts in the knowledge base."
+        }
+    
+    # Simple prompt that relies on system instruction for formatting guidance
+    prompt = f"""
+        Analyze this backward chaining result and provide a clear justification:
+
+        **Query:** {whatToCheck}
+        **Backward Chaining Results:** {chainAnswer}
+
+        **Backward Chaining Example:**
+        When user asks "why is article 1 did get high engagement?", format query as "(engagement_level 1 high)" and call getChainerResult. 
+        
+        If backward chaining returns: [(: ((rule:- (, (engagement_level 1 high) (topic 1 AI))) (fact:- (topic 1 AI))) (engagement_level 1 high)), (: ((rule:- (, (engagement_level 1 high) (length 1 low))) (fact:- (length 1 low))) (engagement_level 1 high))]
+        
+        Analyze as: "I found 2 proofs for why article 1 has high engagement:
+        
+        **Proof 1:** Based on the rule that states 'if an article is about AI, then it has high engagement', and since we have the fact that 'article 1 is about AI', we can conclude that article 1 has high engagement.
+        
+        **Proof 2:** Based on the rule that states 'if an article is short (low length), then it has high engagement', and since we have the fact that 'article 1 has low length', we can also conclude that article 1 has high engagement.
+        
+        **Overall Justification:** Article 1's high engagement is well-supported by two independent logical proofs - both its AI topic and its concise length contribute to high engagement according to the rules in our knowledge base."
+
+        The backward chaining system tried to prove the query "{whatToCheck}" and found the above results. Please analyze these results and explain the logical reasoning behind the proof(s).
+        """
+
+    try:
+        # Use Gemini to analyze the results
+        response = model.generate_content(prompt)
+        justification = response.text if response.text else "Unable to generate justification analysis."
+        
+        return {
+            "query": whatToCheck,
+            "status": "success",
+            "raw_proofs": str(chainAnswer),
+            "proof_count": len(chainAnswer),
+            "justification": justification,
+            "depth_used": depth
+        }
+        
+    except Exception as e:
+        # Fallback to basic analysis if LLM fails
+        proof_count = len(chainAnswer)
+        basic_justification = f"""
+        **Query Analysis:** {whatToCheck}
+
+        **Result:** Found {proof_count} logical proof(s) supporting this query.
+
+        **Raw Evidence:** {chainAnswer}
+
+        **Basic Interpretation:** The backward chaining system discovered {proof_count} different logical path(s) that support the query "{whatToCheck}". Each proof represents a combination of rules and facts from the knowledge base that logically leads to this conclusion.
+
+        **Note:** Advanced analysis unavailable due to processing error: {str(e)}
+        """
+        
+        return {
+            "query": whatToCheck,
+            "status": "partial_success",
+            "raw_proofs": str(chainAnswer),
+            "proof_count": proof_count,
+            "justification": basic_justification,
+            "depth_used": depth,
+            "error": str(e)
+        }
+
+# Function name to actual function mapping (for execution)
 available_functions = {
+    "mine_pattern": mine_pattern,
     "get_mining_results": get_mining_results,
     "analyze_specific_pattern": analyze_specific_pattern,
     "get_pattern_statistics": get_pattern_statistics,
-    "visualize_pattern_request": visualize_pattern_request
+    "visualize_pattern_request": visualize_pattern_request,
+    "getChainerResult": getChainerResult
 }
 
-# Initialize Gemini model (basic version without function calling for now)
+# Initialize Gemini model with automatic function calling
 model = genai.GenerativeModel(
-    'gemini-1.5-flash',
-    generation_config={
-        "temperature": 0.7,
-        "top_p": 0.95,
-        "top_k": 40,
-        "max_output_tokens": 2048,
-    }
+    "gemini-2.0-flash-exp",
+    tools=[mine_pattern, analyze_specific_pattern, get_pattern_statistics, visualize_pattern_request, getChainerResult],
+    system_instruction="""You are a friendly and knowledgeable AI assistant with expertise in data mining patterns, knowledge graphs, and pattern analysis. 
+
+        **Your Primary Specialty:**
+        You excel at analyzing pattern mining results, explaining conjunctions, and providing insights about relationships in data.
+
+        **When to Use Functions:**
+        - User says "Mine rules with X patterns" | "What patterns were found?" | "Show me the patterns" |or something like this → ALWAYS call mine_pattern(job_id: str , with the given conjunct number or default 3) first
+        - "Analyze this pattern" / "Explain this pattern" → Use analyze_specific_pattern()
+        - "Statistics" / "how many patterns" → Use get_pattern_statistics()
+        - "Visualize" / "show me" a pattern → Use visualize_pattern_request()
+        - "Why is..." / "Explain why..." / "Prove that..." questions → Use getChainerResult() with the query formatted as a MeTTa expression
+
+        **CRITICAL: When User Says "Mine rules with X patterns":**
+        1. ALWAYS call mine_pattern() immediately to get all patterns
+        2. Analyze ALL patterns together to find common themes
+        3. Create ONE comprehensive summary (not individual summaries)
+        4. In your summary, reference specific patterns using [Pattern N] notation where N is the pattern index
+        5. Format: "Based on the mining results, most of high engagement level is correlated to... [Pattern 1] ... the longer the article is ... [Pattern 3]"
+        6. Focus on insights and trends across ALL patterns
+
+        **Pattern Reference Format:**
+        - Use [Pattern 1], [Pattern 2], etc. to reference patterns in your summary
+        - These will become clickable for visualization
+        - Only reference patterns that support your statements
+        - You don't need to list the patterns separately, just reference them in context
+
+        **When Analyzing Patterns:**
+        1. Explain what the pattern represents in simple terms
+        2. Interpret variables (like $x) as placeholders for entities (articles/topics)
+        3. Describe what kind of entities would match this pattern
+        4. For visualization: ALL conditions must be met (AND logic, not OR)
+        5. Provide practical examples when possible
+
+        **General Conversations:**
+        You can engage in friendly, helpful conversations on any topic. If someone asks about something outside of pattern mining:
+        - Answer naturally and helpfully based on your general knowledge
+        - Be conversational and engaging
+        - If appropriate, you can relate the topic back to data analysis, patterns, or insights
+        - Never say "that's outside my scope" - just answer the question to the best of your ability
+
+        **Backward Chaining Analysis (for getChainerResult function):**
+        When analyzing backward chaining results, you are an expert in logical reasoning and knowledge graph analysis. Provide clear, human-readable justifications that explain:
+
+        1. **Main Conclusion:** What was proven and with how many different proof paths
+        2. **Proof Analysis:** For each proof path, explain:
+           - What rule was used
+           - What facts were needed
+           - How they combine to prove the query
+        3. **Logical Reasoning:** Explain the logical flow in simple terms
+        4. **Confidence:** Based on the number of proofs and their strength
+
+        **Backward Chaining Response Format:**
+        "Based on the backward chaining analysis, we have found [X] different logical proofs for why [query explanation].
+
+        **Proof 1:** The rule states that [rule explanation], and since we have the fact that [fact explanation], we can conclude that [conclusion].
+
+        **Proof 2:** Another supporting rule indicates that [rule explanation], combined with the established fact [fact explanation], also leads to [conclusion].
+
+        **Overall Justification:** [Summary of why this conclusion is well-supported]"
+
+        **Backward Chaining Style Guidelines:**
+        - do not call the function getChainerResult() more than once, just call once.
+        - Use clear, conversational language
+        - Avoid technical jargon
+        - Focus on the logical reasoning
+        - Be concise but thorough
+        - Use bullet points or numbered lists for clarity
+
+        **Communication Style:**
+        - Be friendly, concise, and informative
+        - Use emojis occasionally to keep things engaging (but not excessively)
+        - Format responses with markdown: **bold**, *italic*, `code`
+        - Adapt your tone to match the user's style
+
+        Remember: While your expertise is in pattern mining, you're a helpful general-purpose assistant who can discuss any topic!"""
 )
-
-# System instruction for the AI
-SYSTEM_INSTRUCTION = """You are an AI assistant specialized in analyzing data mining patterns and knowledge graphs. 
-You help users understand pattern mining results, explain conjunctions, and provide insights about relationships in data.
-
-You have access to the following functions:
-- get_mining_results(): Get the latest mining results
-- analyze_specific_pattern(pattern): Analyze a pattern in detail
-- get_pattern_statistics(): Get statistics about all mining jobs
-- visualize_pattern_request(pattern): Request visualization of a pattern
-
-ALWAYS use these functions when users ask about:
-- "What patterns were found?" → Use get_mining_results()
-- "Show me the patterns" → Use get_mining_results()
-- "Analyze this pattern" → Use analyze_specific_pattern()
-- "Statistics" or "how many patterns" → Use get_pattern_statistics()
-- "Visualize" or "show me" a pattern → Use visualize_pattern_request()
-
-When analyzing a pattern/conjunct:
-1. Explain what the pattern represents in simple terms
-2. Interpret the variables (like $x) as placeholders for entities
-3. Describe what kind of entities would match this pattern
-4. Explain the significance of the support value
-5. Provide practical examples if possible
-
-Be concise but informative. Use emojis sparingly to make responses friendly.
-Format your responses with markdown-like syntax: **bold**, *italic*, `code`.
-"""
-
 # Store conversation history
 conversations = {}
 
@@ -209,27 +474,6 @@ class rule:
 # In-memory storage for mining jobs
 mining_jobs: Dict[str, MiningJob] = {}
 
-def run_mining_task(job_id: str, conjunction_count: int):
-    """Run the mining task in a background thread"""
-    job = mining_jobs[job_id]
-    job.start_time = time.time()
-    
-    try:
-        print(f"Starting mining job {job_id} with {conjunction_count} conjunctions")
-        result = mine_pattern(conjunction_count)
-        
-        job.status = 'completed'
-        job.result = result[0][0]
-        job.end_time = time.time()
-        print(f"Mining job {job_id} completed successfully")
-        
-    except Exception as e:
-        job.status = 'error'
-        job.error = str(e)
-        job.end_time = time.time()
-        print(f"Mining job {job_id} failed: {e}")
-        traceback.print_exc()
-
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
@@ -238,53 +482,63 @@ def health_check():
 @app.route('/api/mine', methods=['POST'])
 def start_mining():
     """Start a new mining job"""
-    try:
-        data = request.get_json() or {}
-        conjunction_count = data.get('conjunction_count', 2)
-        
-        # Validate conjunction count
-        if not isinstance(conjunction_count, int) or conjunction_count < 1:
-            return jsonify({'error': 'conjunctionCount must be a positive integer'}), 400
-        
-        # Generate unique job ID
-        job_id = str(uuid.uuid4())
-        
-        # Create new job
-        job = MiningJob(
-            job_id=job_id,
-            status='running',
-            conjunction_count=conjunction_count
-        )
-        mining_jobs[job_id] = job
-        
-        # Start mining in background thread
-        # thread = threading.Thread(
-        #     target=run_mining_task,
-        #     args=(job_id, conjunction_count),
-        #     daemon=True
-        # )
-        # thread.start()
-        run_mining_task(job_id, conjunction_count)
-        print(mining_jobs[job_id].result)
-        listOfRowPatterns = mining_jobs[job_id].result.get_children()
-        rules = []
-        for pattern in listOfRowPatterns:
-            pattern = pattern.get_children()
-            rules.append({
-                "pattern": f'{pattern[1]}',
-                "support": f'{pattern[2]}',
-            })
-        print(f"Mining job {job_id} finished with result: {rules}")
+    print("🔍 DEBUG: Received mining request")
+
+    data = request.get_json() or {}
+    conjunction_count = data.get('conjunction_count', 2)
+    
+    # Validate conjunction count
+    if not isinstance(conjunction_count, int) or conjunction_count < 1:
+        return jsonify({'error': 'conjunctionCount must be a positive integer'}), 400
+    
+    # Generate unique job ID
+    job_id = str(uuid.uuid4())
+    
+    # Create new job
+    job = MiningJob(
+        job_id=job_id,
+        status='running',
+        conjunction_count=conjunction_count
+    )
+    mining_jobs[job_id] = job
+    run_mining_task(job_id, conjunction_count)
+    print(f"🔍 DEBUG: Starting mining job {job_id} with conjunction count {conjunction_count}")
+    result = mining_jobs[job_id].result
+    # Start formatting in background thread
+    print("🔍 DEBUG: Starting formatting thread")
+    print("🔍 DEBUG: Result before formatting =", result)
+    thread = threading.Thread(
+        target=formatter,
+        args=(f"{result['answer']}",),
+        daemon=True
+    )
+    thread.start()
+    
+    print(f"🔍 DEBUG: result type = {type(result)}")
+    print(f"🔍 DEBUG: result = {result}")
+    
+    # Check if mining was successful
+    if isinstance(result, dict) and result.get('status') == 'success':
+        rules = result.get('patterns', [])
+        print(f"✅ Mining job {job_id} finished with {len(rules)} patterns")
         return jsonify({
             'jobId': job_id,
             'status': 'finished',
-            'conjunction count': conjunction_count,
+            'conjunction_count': conjunction_count,
             'message': 'Mining job finished successfully',
             'result': rules
         })
         
-    except Exception as e:
-        return jsonify({'error': f'Failed to start mining: {str(e)}'}), 500
+    else:
+        # Handle error case
+        error_msg = result.get('message', 'Unknown error') if isinstance(result, dict) else str(result)
+        print(f"❌ Mining error: {error_msg}")
+        return jsonify({
+            'jobId': job_id,
+            'status': 'error',
+            'message': error_msg
+        }), 500
+    
 
 @app.route('/api/mine/<job_id>', methods=['GET'])
 def get_mining_status(job_id: str):
@@ -393,18 +647,18 @@ def analyze_pattern(pattern: str, support: str) -> str:
     
     summary = f"""📊 **Pattern Analysis**
 
-**Support:** {support} occurrences
+        **Support:** {support} occurrences
 
-This pattern identifies topics that have:
-{chr(10).join(f"• {prop}: **{value}**" for prop, value in properties.items())}
+        This pattern identifies topics that have:
+        {chr(10).join(f"• {prop}: **{value}**" for prop, value in properties.items())}
 
-**Interpretation:**
-Topics matching this pattern combine {description}. 
-The support value of {support} indicates this specific combination appears {support} times in your dataset.
+        **Interpretation:**
+        Topics matching this pattern combine {description}. 
+        The support value of {support} indicates this specific combination appears {support} times in your dataset.
 
-**Example Use Case:**
-This pattern can help identify content that has this specific combination of characteristics, useful for content recommendation, categorization, or trend analysis.
-"""
+        **Example Use Case:**
+        This pattern can help identify content that has this specific combination of characteristics, useful for content recommendation, categorization, or trend analysis.
+        """
     
     return summary
 
@@ -413,9 +667,16 @@ def chat_health_check():
     """Chat health check endpoint"""
     return jsonify({'status': 'healthy', 'service': 'chat-api'})
 
-@app.route('/api/chat/analyze', methods=['POST'])
+@app.route('/api/chat/analyze', methods=['POST', 'OPTIONS'])
 def analyze_conjunct():
     """Analyze a pattern/conjunct and return a summary"""
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'ok'})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+        return response, 200
+    
     try:
         data = request.get_json()
         pattern = data.get('pattern', '')
@@ -433,9 +694,16 @@ def analyze_conjunct():
         print(f"Error in analyze_conjunct: {e}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/chat', methods=['POST'])
+@app.route('/api/chat', methods=['POST', 'OPTIONS'])
 def chat():
     """Main chat endpoint with Gemini AI and automatic function calling"""
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'ok'})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+        return response, 200
+    
     try:
         data = request.get_json()
         message = data.get('message', '')
@@ -466,7 +734,7 @@ def chat():
         chat_session = model.start_chat(history=gemini_history)
         
         # Send the user message
-        response = chat_session.send_message(SYSTEM_INSTRUCTION + "\n\n" + message)
+        response = chat_session.send_message(message)
         
         # Handle automatic function calling
         max_iterations = 5
@@ -568,9 +836,16 @@ def chat():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/chat/clear', methods=['POST'])
+@app.route('/api/chat/clear', methods=['POST', 'OPTIONS'])
 def clear_chat():
     """Clear conversation history"""
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'ok'})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+        return response, 200
+    
     try:
         data = request.get_json()
         session_id = data.get('session_id', 'default')

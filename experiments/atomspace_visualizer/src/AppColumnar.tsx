@@ -3,15 +3,15 @@ import { createSignal, createEffect, createResource } from 'solid-js';
 
 import ColumnarVisualizer from './components/ColumnarVisualizer/ColumnarVisualizer';
 import EnhancedLegend from './components/Legend/EnhancedLegend';
-import EnhancedUIControls from './components/UIControls/EnhancedUIControls';
-import MiningPanel from './components/MiningPanel/MiningPanel';
+import MiningInterface from './components/MiningInterface/MiningInterface';
+import ChatInterface from './components/ChatInterface/ChatInterface';
 import { GraphData, GraphNode, FilterState } from './types';
 import { MettaParserImpl } from './services/parser/MettaParser';
 import { ColumnarTransformer } from './services/graph/ColumnarTransformer';
 
 import './styles/variables.css';
 import './styles/components.css';
-import styles from './App.module.css';
+import styles from './AppColumnar.module.css';
 
 const App: Component = () => {
   // Load initial text from small-ugly.metta file
@@ -62,6 +62,13 @@ const App: Component = () => {
   const [controlsCollapsed, setControlsCollapsed] = createSignal(true);
   const [legendCollapsed, setLegendCollapsed] = createSignal(true);
 
+  // Mining and chat state
+  const [miningResults, setMiningResults] = createSignal<Array<{ pattern: string; support: string }>>([]);
+  const [currentConjunctSize, setCurrentConjunctSize] = createSignal<number | undefined>(undefined);
+  
+  // Animation state
+  let animationInterval: number | undefined;
+
   // Initialize parser and columnar transformer
   const parser = new MettaParserImpl();
   const columnarTransformer = new ColumnarTransformer();
@@ -69,17 +76,22 @@ const App: Component = () => {
   // Update CSS variables for dynamic positioning
   createEffect(() => {
     const updatePositions = () => {
-      const controlsEl = document.querySelector('[class*="controlsContainer"]') as HTMLElement;
       const legendEl = document.querySelector('[class*="legendContainer"]') as HTMLElement;
+      const miningEl = document.querySelector('.mining-interface') as HTMLElement;
       
-      if (controlsEl && legendEl) {
-        const controlsHeight = controlsEl.offsetHeight;
-        const legendTop = 20 + controlsHeight;
+      if (legendEl && miningEl) {
+        // Calculate positions based on actual element heights
+        const legendTop = 20;
         const legendHeight = legendEl.offsetHeight;
-        const miningTop = legendTop + legendHeight;
+        const miningTop = legendTop + legendHeight + 10; // 10px gap
+        const miningHeight = miningEl.offsetHeight;
+        const chatTop = miningTop + miningHeight + 10; // 10px gap
+        const chatHeight = window.innerHeight - chatTop - 40; // 40px bottom margin
         
         document.documentElement.style.setProperty('--legend-top', `${legendTop}px`);
         document.documentElement.style.setProperty('--mining-top', `${miningTop}px`);
+        document.documentElement.style.setProperty('--chat-top', `${chatTop}px`);
+        document.documentElement.style.setProperty('--chat-height', `${chatHeight}px`);
       }
     };
 
@@ -93,7 +105,13 @@ const App: Component = () => {
       attributeFilter: ['class', 'style'] 
     });
 
-    return () => observer.disconnect();
+    // Also update on window resize
+    window.addEventListener('resize', updatePositions);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updatePositions);
+    };
   });
 
   // Parse and transform data to columnar format
@@ -160,11 +178,118 @@ const App: Component = () => {
     }
   };
 
+  const handleMiningStart = () => {
+    console.log('AppColumnar.tsx: Mining started, starting animation');
+    startMiningAnimation();
+  };
+
+  const handlePatternsFound = (patterns: Array<{ pattern: string; support: string }>, conjunctSize?: number) => {
+    console.log('AppColumnar.tsx handlePatternsFound called with:', { patterns, conjunctSize });
+    
+    // Stop animation when mining completes
+    stopMiningAnimation();
+    
+    setMiningResults(patterns);
+    if (conjunctSize) {
+      console.log('AppColumnar.tsx setting currentConjunctSize to:', conjunctSize);
+      setCurrentConjunctSize(conjunctSize);
+    }
+  };
+
+  const startMiningAnimation = () => {
+    // Stop any existing animation
+    if (animationInterval) {
+      clearInterval(animationInterval);
+    }
+    
+    // Get all article nodes from graph data
+    const articles: string[] = [];
+    for (const node of graphData().nodes) {
+      if (node.metadata.columnType === 'article') {
+        articles.push(node.metadata.originalExpression || node.label);
+      }
+    }
+    
+    if (articles.length === 0) return;
+    
+    // Cycle through articles with time gap
+    let currentIndex = 0;
+    const intervalTime = 1000; // 1000ms between highlights
+    
+    animationInterval = setInterval(() => {
+      // Loop back to start when reaching the end
+      currentIndex = currentIndex % articles.length;
+      
+      // Highlight current article
+      const currentArticle = articles[currentIndex];
+      handleFilterChange({
+        active: true,
+        articleIds: [currentArticle],
+        propertyFilters: []
+      });
+      
+      currentIndex++;
+    }, intervalTime) as unknown as number;
+  };
+
+  const stopMiningAnimation = () => {
+    console.log('AppColumnar.tsx: Stopping mining animation');
+    if (animationInterval) {
+      clearInterval(animationInterval);
+      animationInterval = undefined;
+    }
+    
+    // Reset filter state
+    handleFilterChange({
+      active: false,
+      articleIds: [],
+      propertyFilters: []
+    });
+  };
+
+  const handleVisualize = (filterState: FilterState | string) => {
+    if (typeof filterState === 'string') {
+      // Parse the pattern to extract property filters
+      const propertyFilters: Array<{ property: string; value: string }> = [];
+      const regex = /\((\w+)\s+\$\w+\s+"([^"]+)"\)/g;
+      let match;
+      while ((match = regex.exec(filterState)) !== null) {
+        propertyFilters.push({
+          property: match[1],
+          value: match[2]
+        });
+      }
+      if (propertyFilters.length > 0) {
+        handleFilterChange({
+          active: true,
+          articleIds: [],
+          propertyFilters
+        });
+      }
+    } else {
+      // Already a FilterState object
+      handleFilterChange(filterState);
+    }
+  };
+
   return (
     <div class={styles.app}>
       {/* Scrollable graph container */}
       <div class={styles.graphContainer}>
         <div class={styles.graphCard}>
+          {/* Canvas Control Buttons - Top of Canvas */}
+          <div class={styles.canvasControls}>
+            <button class={styles.controlBtn} onClick={handleZoomIn} title="Zoom In">
+              🔍+
+            </button>
+            <button class={styles.controlBtn} onClick={handleZoomOut} title="Zoom Out">
+              🔍-
+            </button>
+            <button class={styles.controlBtn} onClick={handleReset} title="Reset View">
+              🔄
+            </button>
+          </div>
+
           <ColumnarVisualizer
             graphData={graphData()}
             onNodeSelect={handleNodeSelect}
@@ -174,23 +299,24 @@ const App: Component = () => {
         </div>
       </div>
 
-      {/* Enhanced UI Controls - Top Right */}
-      <EnhancedUIControls
-        onZoomIn={handleZoomIn}
-        onZoomOut={handleZoomOut}
-        onReset={handleReset}
-      />
-
-      {/* Enhanced Legend - Below Controls */}
+      {/* Enhanced Legend - Top Right */}
       <EnhancedLegend
         graphData={graphData()}
         onFilterChange={handleFilterChange}
         filterState={filterState()}
       />
 
-      {/* Mining Panel - Below Legend */}
-      <MiningPanel
-        onFilterChange={handleFilterChange}
+      {/* Mining Interface - Below Legend (with chat integration) */}
+      <MiningInterface
+        onPatternsFound={handlePatternsFound}
+        onMiningStart={handleMiningStart}
+      />
+
+      {/* Chat Interface - Opens automatically when mining completes */}
+      <ChatInterface
+        conjunctSize={currentConjunctSize()}
+        onVisualize={handleVisualize}
+        miningResults={miningResults()}
       />
     </div>
   );

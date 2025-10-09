@@ -15,7 +15,7 @@ export interface Message {
 }
 
 export interface ChatInterfaceProps {
-  onVisualize: (conjunct: string) => void;
+  onVisualize: (filter: import('../../types').FilterState) => void;
   miningResults?: Array<{ pattern: string; support: string }>;
   conjunctSize?: number;
   onMiningStart?: (conjunctSize: number) => void;
@@ -26,20 +26,20 @@ const ChatInterface = (props: ChatInterfaceProps) => {
   const [inputText, setInputText] = createSignal('');
   const [isLoading, setIsLoading] = createSignal(false);
   const [isMinimized, setIsMinimized] = createSignal(false);
-  const [isChatOpen, setIsChatOpen] = createSignal(false);
   const [lastConjunctSize, setLastConjunctSize] = createSignal<number | null>(null);
 
   let chatContainerRef: HTMLDivElement | undefined;
   let inputRef: HTMLTextAreaElement | undefined;
   
+  console.log('ChatInterface rendered, props:', { conjunctSize: props.conjunctSize });
+  
   // Auto-send mining message when conjunct size changes
   createEffect(() => {
     const conjunctSize = props.conjunctSize;
     console.log('ChatInterface: conjunctSize changed to:', conjunctSize, 'last:', lastConjunctSize());
-    if (conjunctSize && conjunctSize !== lastConjunctSize()) {
-      console.log('ChatInterface: Opening chat and sending message');
+    if (conjunctSize && conjunctSize !== lastConjunctSize() && conjunctSize > 0) {
+      console.log('ChatInterface: Sending message for conjunct size:', conjunctSize);
       setLastConjunctSize(conjunctSize);
-      setIsChatOpen(true);
       
       // Auto-send user message
       const userMessage = `Mine rules with ${conjunctSize} patterns`;
@@ -74,8 +74,6 @@ const ChatInterface = (props: ChatInterfaceProps) => {
   createEffect(() => {
     const results = props.miningResults;
     if (results && results.length > 0) {
-      setIsChatOpen(true);
-      
       // Add system message about mining completion
       const systemMsg: Message = {
         id: `sys-${Date.now()}`,
@@ -99,7 +97,7 @@ const ChatInterface = (props: ChatInterfaceProps) => {
 
   const analyzeConjunct = async (pattern: string, support: string) => {
     try {
-      const response = await fetch('http://localhost:5000/api/chat/analyze', {
+      const response = await fetch('https://urban-potato-v6gr5vqg6559fpqrg-5000.app.github.dev/api/chat/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pattern, support })
@@ -152,7 +150,7 @@ const ChatInterface = (props: ChatInterfaceProps) => {
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://localhost:5000/api/chat', {
+      const response = await fetch('https://urban-potato-v6gr5vqg6559fpqrg-5000.app.github.dev/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -221,7 +219,58 @@ const ChatInterface = (props: ChatInterfaceProps) => {
   };
 
   const handleVisualize = (pattern: string) => {
-    props.onVisualize(pattern);
+    // If pattern is a string, parse it to FilterState
+    if (typeof pattern === 'string') {
+      const regex = /(\w+) \$\w+ "([^"]+)"/g;
+      const propertyFilters = [];
+      let match;
+      while ((match = regex.exec(pattern)) !== null) {
+        propertyFilters.push({ property: match[1], value: match[2] });
+      }
+      props.onVisualize({
+        active: true,
+        propertyFilters,
+        articleIds: [],
+      });
+    } else {
+      // If already a FilterState, just pass through
+      props.onVisualize(pattern);
+    }
+  };
+
+  const handlePatternClick = (e: MouseEvent, message: Message) => {
+    const target = e.target as HTMLElement;
+
+    // Check if clicked element is a pattern reference
+    if (target.classList.contains('pattern-ref')) {
+      const patternIndex = parseInt(target.getAttribute('data-pattern') || '0');
+
+      // Get the pattern from mining results
+      if (props.miningResults && props.miningResults.length >= patternIndex) {
+        const patternObj = props.miningResults[patternIndex - 1];
+        if (patternObj) {
+          // Parse pattern string to extract property-value pairs
+          // Example pattern: (length $x "low") (tone $x "Analytical")
+          const regex = /\((\w+) \$\w+ "([^"]+)"\)/g;
+          const propertyFilters = [];
+          let match;
+          while ((match = regex.exec(patternObj.pattern)) !== null) {
+            propertyFilters.push({ property: match[1], value: `"${match[2]}"` });
+          }
+          console.log('Pattern:', patternObj.pattern);
+          console.log('Extracted propertyFilters:', propertyFilters);
+          // Set filter state to visualize this pattern
+          if (propertyFilters.length > 0 && props.onVisualize) {
+            console.log('Pattern clicked, extracted filters:', propertyFilters);
+            props.onVisualize({
+              active: true,
+              propertyFilters,
+              articleIds: [],
+            });
+          }
+        }
+      }
+    }
   };
 
   const handleKeyPress = (e: KeyboardEvent) => {
@@ -231,30 +280,15 @@ const ChatInterface = (props: ChatInterfaceProps) => {
     }
   };
 
-  const toggleChat = () => {
-    setIsChatOpen(!isChatOpen());
-  };
-
   const clearChat = () => {
     setMessages([]);
   };
 
   return (
     <>
-      {/* Floating Chat Button */}
-      <Show when={!isChatOpen()}>
-        <button class="chat-toggle-btn" onClick={toggleChat}>
-          💬
-          <Show when={messages().length > 0}>
-            <span class="chat-badge">{messages().length}</span>
-          </Show>
-        </button>
-      </Show>
-
-      {/* Chat Interface */}
-      <Show when={isChatOpen()}>
-        <div class={`chat-interface ${isMinimized() ? 'minimized' : ''}`}>
-          <div class="chat-header">
+      {/* Chat Interface - Always Visible */}
+      <div class={`chat-interface ${isMinimized() ? 'minimized' : ''}`}>
+          <div class="chat-header" onClick={() => setIsMinimized(!isMinimized())} style={{ cursor: 'pointer' }}>
             <div class="chat-header-left">
               <span class="chat-icon">🤖</span>
               <div class="chat-title-info">
@@ -262,15 +296,12 @@ const ChatInterface = (props: ChatInterfaceProps) => {
                 <span class="chat-status">Online</span>
               </div>
             </div>
-            <div class="chat-header-actions">
+            <div class="chat-header-actions" onClick={(e) => e.stopPropagation()}>
               <button class="chat-action-btn" onClick={clearChat} title="Clear Chat">
                 🗑️
               </button>
-              <button class="chat-action-btn" onClick={() => setIsMinimized(!isMinimized())} title="Minimize">
-                {isMinimized() ? '□' : '−'}
-              </button>
-              <button class="chat-action-btn" onClick={toggleChat} title="Close">
-                ×
+              <button class="chat-action-btn" onClick={() => setIsMinimized(!isMinimized())} title={isMinimized() ? 'Expand' : 'Collapse'}>
+                {isMinimized() ? '▼' : '▲'}
               </button>
             </div>
           </div>
@@ -301,48 +332,38 @@ const ChatInterface = (props: ChatInterfaceProps) => {
 
               <For each={messages()}>
                 {(message) => (
-                  <div class={`message ${message.role}`}>
-                    <Show when={message.role === 'assistant' && !message.isTyping}>
-                      <div class="message-avatar">🤖</div>
-                    </Show>
-                    <Show when={message.role === 'user'}>
+                  message.role === 'user' ? (
+                    <div class={`message user`}>
                       <div class="message-avatar">👤</div>
-                    </Show>
-                    
-                    <div class="message-content">
-                      <Show when={message.isTyping}>
+                      <div class="message-content">
+                        <div class="message-text" innerHTML={formatMessage(message.content)} />
+                        <div class="message-time">
+                          {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                    </div>
+                  ) : message.role === 'assistant' && message.isTyping ? (
+                    <div class="message assistant">
+                      <div class="message-avatar">🤖</div>
+                      <div class="message-content">
                         <div class="typing-indicator">
                           <span></span>
                           <span></span>
                           <span></span>
                         </div>
-                      </Show>
-                      
-                      <Show when={!message.isTyping}>
-                        <div class="message-text" innerHTML={formatMessage(message.content)} />
-                        
-                        <Show when={message.conjunct}>
-                          <div class="conjunct-card">
-                            <div class="conjunct-header">
-                              <span class="conjunct-label">Pattern</span>
-                              <span class="conjunct-support">Support: {message.conjunct!.support}</span>
-                            </div>
-                            <pre class="conjunct-pattern">{message.conjunct!.pattern}</pre>
-                            <button 
-                              class="visualize-btn"
-                              onClick={() => handleVisualize(message.conjunct!.pattern)}
-                            >
-                              👁️ Visualize
-                            </button>
-                          </div>
-                        </Show>
-                        
+                      </div>
+                    </div>
+                  ) : message.role === 'assistant' && !message.conjunct ? (
+                    <div class="message assistant">
+                      <div class="message-avatar">🤖</div>
+                      <div class="message-content">
+                        <div class="message-text" innerHTML={formatMessage(message.content)} onClick={(e) => handlePatternClick(e, message)} />
                         <div class="message-time">
                           {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </div>
-                      </Show>
+                      </div>
                     </div>
-                  </div>
+                  ) : null
                 )}
               </For>
             </div>
@@ -368,19 +389,24 @@ const ChatInterface = (props: ChatInterfaceProps) => {
             </div>
           </Show>
         </div>
-      </Show>
     </>
   );
 };
 
-// Helper function to format message content with markdown-like syntax
+// Helper function to format message content with markdown-like syntax and pattern references
 const formatMessage = (content: string): string => {
-  return content
+  let formatted = content
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
     .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/```([^```]+)```/g, '<pre><code>$1</code></pre>')
-    .replace(/\n/g, '<br/>');
+    .replace(/```([^```]+)```/g, '<pre><code>$1</code></pre>');
+  
+  // Convert [Pattern N] to clickable references
+  formatted = formatted.replace(/\[Pattern (\d+)\]/g, '<span class="pattern-ref" data-pattern="$1" title="Click to visualize this pattern">[Pattern $1]</span>');
+  
+  formatted = formatted.replace(/\n/g, '<br/>');
+  
+  return formatted;
 };
 
 export default ChatInterface;
