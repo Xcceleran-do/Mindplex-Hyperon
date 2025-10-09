@@ -682,8 +682,8 @@
  ;; Count the number of instances of a given pattern
 ;;(: counter (-> hyperon::space::DynSpace Atom Number))
 (= (counter $db $ptrn)
-    (let $result (collapse (match $db $ptrn 1))
-         (tuple-count $result)
+    (function 
+        (chain (eval (collapse (match $db $ptrn 1))) $got (return (size-atom $got))) 
     )
 )
 
@@ -698,7 +698,9 @@
 ; (: sup-eval (-> hyperon::space::DynSpace Atom Number Boolean))
 
 (= (sup-eval $db $pattern $ms)
-    ( let $sup (counter $db $pattern) (if (>= $sup $ms) True False) )
+    (function 
+        (chain (eval (counter $db $pattern)) $sup
+            (return (>= $sup $ms))))
 )
 
 ;; returns the number of support of a pattern

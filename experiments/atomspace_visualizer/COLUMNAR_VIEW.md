@@ -107,16 +107,9 @@ Performance & compatibility
 
 ## Switching between views
 
-Columnar (default):
 ```typescript
 import AppColumnar from './AppColumnar';
 render(() => <AppColumnar />, root!);
-```
-
-Original graph view:
-```typescript
-import App from './App';
-render(() => <App />, root!);
 ```
 
 ## Future enhancements

@@ -1,90 +1,75 @@
-
 ! (import! &self freq-pat)
 ! (import! &self conj-exp)
 
 
----------------------------------------------
-;; abstract-pattern
----------------------------------------------
-;; Gets Abstract Patterns with Minimum Support so that we can use them for the specialization.
-;; 1: Query the database to retrieve all link nodes (nodes that connect other nodes)
-;; 2: Take only the unique links from the queried links
-;; 3: Create an Abstract pattern using the links and variables
-;; 4: Calculate the support for the Abstract patterns and store the ones satisfy the minimum support in a space
-;(: abstract-pattern (-> SpaceType Number SpaceType Atoms))
-(= (abstract-pattern $dbspace $minsup)        
-        (let $linkUnique (unique (match $dbspace ($link $x $y) $link))
-                ( if (sup-eval $dbspace ($linkUnique $z $t) $minsup) ($linkUnique $x $y) Empty ) 
-        )
-)
-
-
 ;; candidatePatternMaker
 ;; ---------------------------------
-;; Builds the list of candidate patterns by checking the support of a
-;; Specialized pattern and adding it to the accumulator if it meets the
-;; minimum support threshold.
-;; Steps:
-;;  1. Evaluate support with `sup-eval` against `$dbspace` and `$minsup`.
-;;  2. If support passes, cons the `$pattern` onto `$acc`; otherwise keep `$acc`.
-;; Parameters:
-;;  - $dbspace: Space containing the database facts/patterns.
-;;  - (Specialized $pattern): The pattern under test, wrapped as Specialized.
-;;  - $minsup: Minimum support threshold (Number).
-;;  - $acc: Accumulator (Expression) of accepted candidate patterns.
-;; Returns:
-;;  - Updated accumulator Expression with `$pattern` added iff `sup-eval` returns True.
+;; Filters specialized link templates using minimum support.
+;; Specialized templates are created with placeholders `left` / `right`
+;; to indicate the fixed side of a link; the other side becomes a variable.
+;;
+;; Overloads:
+;;  - (candidatePatternMaker $dbspace ($link left  $rValue) $minsup)
+;;      checks (sup-eval $dbspace ($link $x $rValue) $minsup) → if True, returns ($link $x $rValue), else Empty
+;;  - (candidatePatternMaker $dbspace ($link $lValue right) $minsup)
+;;      checks (sup-eval $dbspace ($link $lValue $y) $minsup) → if True, returns ($link $lValue $y), else Empty
+;;
+;; Inputs:
+;;  - $dbspace: database space
+;;  - $minsup: minimum support threshold
+;;  - specialized pattern with `left`/`right` placeholder
+;; Output: the instantiated pattern with a variable on the open side, or Empty
 ; (:candidatePatternMaker (-> SpaceType (Specialized Pattern) Number Expression Expression))
-( = (candidatePatternMaker $dbspace $pattern $minsup)
+( = (candidatePatternMaker $dbspace ($link left $rValue) $minsup)
     (
-        let $result (sup-eval $dbspace $pattern $minsup)
-            (if $result $pattern Empty )
+        let $result (sup-eval $dbspace ($link $x $rValue) $minsup)
+            (if $result ($link $x $rValue) Empty )
+    )
+)
+
+( = (candidatePatternMaker $dbspace ($link $lValue right) $minsup)
+    (
+        let $result (sup-eval $dbspace ($link $lValue $y) $minsup)
+            (if $result ($link $lValue $y) Empty )
     )
 )
 
 
 ;---------------------------------------
 ;; createSpecials
-;---------------------------------------
-;; Function to create specialized patterns from a list of substitution pairs.
-;; For each pair in $shabPairs, generates two specialized atoms by substituting
-;; the elements into the pattern, checks if they already exist in the accumulator,
-;; and adds them if they do not exist. Returns the updated accumulator containing
-;; all unique specialized atoms.
+;;---------------------------------------
+;; Build specialization templates (with placeholders) from a matched link.
+;; For each ($link $shabx $shaby) produce two templates that mark which side is
+;; fixed via `left` / `right`. The open side will later be turned into a variable
+;; by candidatePatternMaker.
+
 
 ( = (createSpecials ($link $shabx $shaby))
-    ( superpose (($link $x $shaby) ($link $shabx $y)) )
+    ( superpose (($link left $shaby) ($link $shabx right)) )
 )
 
 
--------------------------------------------------------------------------------
-; build-specialization
--------------------------------------------------------------------------------
-; function to build the specialization of a pattern and add it to the specialization space
-; - get the valuation of the pattern by destructuring the pattern
-; - abstract the pattern and handle patterns with depth
-; - build the specialization
-; - add the specialization to the specialization space
-;(: build-specialization (-> Pattern SpaceType SpaceType Atom))
-; (: build-specialization (-> Pattern SpaceType SpaceType Any))
-(= (build-specialization ($link $x $y) $dbspace) 
-    (let*
-        (  
-            (() (println! "==== Build specialization started ====="))
-            ($shabPair (match $dbspace ($link $x $y) ($link $x $y)))
-        )
-        (createSpecials $shabPair)
-    )
+;;---------------------------------
+;; absSpeCan
+;;---------------------------------
+;; Create specialization templates directly from DB links and filter to candidates.
+;; Steps:
+;;  1:- Match all ($link $x $y) from $dbspace and create placeholders via createSpecials
+;;  2:- Deduplicate the resulting templates with unique
+;;  3:- Use candidatePatternMaker to instantiate open sides and keep only those
+;;     meeting $minsup
+( = (absSpeCan $dbspace $minsup)
+    (let $specializedPattern (unique (createSpecials (match $dbspace ($link $x $y) ($link $x $y))))
+        (candidatePatternMaker $dbspace $specializedPattern $minsup))
 )
-
 
 --------------------------------------------
 ;;  formatter
 --------------------------------------------
-;; Formats conjunctions with their support annotation.
-;; 1: get the conjunctions from `$conjspace` and sort them using `sort_conj`
-;; 2: build a flattened conjunction using `cons-atom` with `,`
-;; 3: annotate with support using `supportOf` and `sup-num`
+;; Formats conjunctions with deterministic ordering and support annotation.
+;; 1:- Iterate over (conjunct ...) items
+;; 2:- Compute support with sup-num; skip if < $minSup
+;; 3:- Sort clauses with sort_conj and emit (supportOf (, $sorted) $support)
 ;(: formatter (-> SpaceType SpaceType Number Atom ))
 (= (formatter $conjuncts $dbspace $minSup) 
    (    
@@ -103,30 +88,13 @@
 
 
 --------------------------------------------------------
-;; absSpeCan --stand for abstract-specialized-candidate
----------------------------------------------------------
-;; function to get the candidate patterns from the abstract patterns
-;; 1: get all abstract patterns with their support and store them in a variable in d/t threads
-;; 2: specialize the abstract patterns and store them in a variable
-;; 3: get and return all candidate patterns from the specialized patterns
-( = (absSpeCan $dbspace $minsup)
-        (let* (
-           ($aptrn (abstract-pattern $dbspace $minsup))
-           ($specializedPattern (unique (build-specialization $aptrn $dbspace)))
-        ) (candidatePatternMaker $dbspace $specializedPattern $minsup)
-        )
-)
-
-
---------------------------------------------------------
 ;; frequency-pattern-miner
 ---------------------------------------------------------
-;; function to mine the frequent patterns from the atomspace.
-;; 1: get all abstract patterns with their support and store them in a space
-;; 2: specialize the abstract patterns and store them in a space
-;; 3: get all candidate patterns from the specialized patterns and store them in a space
-;; 4: expand the conjunctions of the candidate patterns and store them in a space with their support
-;; 5: format the patterns and add them to the knowledge base with their support
+;; End-to-end frequent pattern mining pipeline.
+;; Steps:
+;;  1:- Build specialization templates from DB and filter to candidates (absSpeCan)
+;;  2:- Generate size-$depth conjunctions with unique_combinations_star (single hub var)
+;;  3:- Format passing conjunctions as (supportOf (, ...) n) with sorted clauses
 ;(: frequency-pattern-miner (-> SpaceType SpaceType SpaceType SpaceType SpaceType Number Number Atoms))
 (= (frequency-pattern-miner $dbspace $minsup $depth)
    (let*(
@@ -134,7 +102,7 @@
            ($candidatePatterns (collapse (absSpeCan $dbspace $minsup))); get candidate patterns
            (() (println! ("candidatePatterns ended and got" $candidatePatterns)))
            ($conjuncts  (unique_combinations_star $candidatePatterns $depth))
-           (() (println! (" conjucts ended and got" $conjuncts)))
            ($temp4 (collapse (formatter $conjuncts $dbspace $minsup)))      
+           (() (println! (" conjuncts we have got is " $temp4)))
         )  $temp4)
 )

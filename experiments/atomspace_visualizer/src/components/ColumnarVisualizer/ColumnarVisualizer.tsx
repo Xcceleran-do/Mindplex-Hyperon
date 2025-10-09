@@ -84,76 +84,96 @@ const ColumnarVisualizer: Component<ColumnarVisualizerProps> = (props) => {
     const dimmedEdges = new Set<string>();
 
     if (props.filterState.active) {
-      // Highlight selected article (legacy single selection)
-      if (props.filterState.articleId) {
-        const articleNodeId = `article-${props.filterState.articleId}`;
-        highlighted.add(articleNodeId);
+      // AND logic for property filters and articles
+      let filteredNodeIds = new Set(props.graphData.nodes.map(n => n.id));
+      let filteredEdgeIds = new Set(props.graphData.edges.map(e => e.id));
 
-        for (const edge of props.graphData.edges) {
-          if (edge.source === articleNodeId) {
-            highlightedEdges.add(edge.id);
-            highlighted.add(edge.target);
-          }
-        }
-      }
-
-      // Highlight selected articles (multi-select)
+      // Multi-article selection (AND): only nodes/edges connected to ALL selected articles
       if (props.filterState.articleIds && props.filterState.articleIds.length > 0) {
         for (const articleId of props.filterState.articleIds) {
           const articleNodeId = `article-${articleId}`;
-          highlighted.add(articleNodeId);
-
-          // Find all edges from this article
+          // Only keep nodes/edges connected to this article
+          const connectedNodeIds = new Set<string>();
+          const connectedEdgeIds = new Set<string>();
           for (const edge of props.graphData.edges) {
             if (edge.source === articleNodeId) {
-              highlightedEdges.add(edge.id);
-              highlighted.add(edge.target);
+              connectedEdgeIds.add(edge.id);
+              connectedNodeIds.add(edge.target);
             }
           }
+          filteredNodeIds = new Set([...filteredNodeIds].filter(id => connectedNodeIds.has(id) || id === articleNodeId));
+          filteredEdgeIds = new Set([...filteredEdgeIds].filter(id => connectedEdgeIds.has(id)));
         }
       }
 
-      // Highlight selected property values and connected articles
+      // Property filters: OR within property, AND across properties
       if (props.filterState.propertyFilters && props.filterState.propertyFilters.length > 0) {
+        // Group filters by property
+        const propertyGroups: Record<string, string[]> = {};
         for (const filter of props.filterState.propertyFilters) {
-          const propertyNodeId = `${filter.property}-${filter.value}`;
-          highlighted.add(propertyNodeId);
-
-          // Find all articles connected to this property value
-          for (const edge of props.graphData.edges) {
-            if (edge.target === propertyNodeId) {
-              highlightedEdges.add(edge.id);
-              highlighted.add(edge.source);
+          if (!propertyGroups[filter.property]) propertyGroups[filter.property] = [];
+          propertyGroups[filter.property].push(filter.value);
+        }
+        // For each property, get all nodes/edges matching any value (OR)
+        let propertyNodeSets: Array<Set<string>> = [];
+        let propertyEdgeSets: Array<Set<string>> = [];
+        for (const property in propertyGroups) {
+          const values = propertyGroups[property];
+          const nodeSet = new Set<string>();
+          const edgeSet = new Set<string>();
+          for (const value of values) {
+            const propertyNodeId = `${property}-${value}`;
+            for (const edge of props.graphData.edges) {
+              if (edge.target === propertyNodeId) {
+                edgeSet.add(edge.id);
+                nodeSet.add(edge.source);
+              }
             }
+            nodeSet.add(propertyNodeId);
           }
+          propertyNodeSets.push(nodeSet);
+          propertyEdgeSets.push(edgeSet);
+        }
+        // AND across properties: intersection of all property sets
+        if (propertyNodeSets.length > 0) {
+          let intersectionNodes = propertyNodeSets[0];
+          for (let i = 1; i < propertyNodeSets.length; i++) {
+            intersectionNodes = new Set([...intersectionNodes].filter(x => propertyNodeSets[i].has(x)));
+          }
+          filteredNodeIds = new Set([...filteredNodeIds].filter(id => intersectionNodes.has(id)));
+        }
+        if (propertyEdgeSets.length > 0) {
+          let intersectionEdges = propertyEdgeSets[0];
+          for (let i = 1; i < propertyEdgeSets.length; i++) {
+            intersectionEdges = new Set([...intersectionEdges].filter(x => propertyEdgeSets[i].has(x)));
+          }
+          filteredEdgeIds = new Set([...filteredEdgeIds].filter(id => intersectionEdges.has(id)));
         }
       }
 
-      // Legacy single property filter
+      // Legacy single property filter (AND)
       if (props.filterState.property && props.filterState.value) {
         const propertyNodeId = `${props.filterState.property}-${props.filterState.value}`;
-        highlighted.add(propertyNodeId);
-
+        const connectedNodeIds = new Set<string>();
+        const connectedEdgeIds = new Set<string>();
         for (const edge of props.graphData.edges) {
           if (edge.target === propertyNodeId) {
-            highlightedEdges.add(edge.id);
-            highlighted.add(edge.source);
+            connectedEdgeIds.add(edge.id);
+            connectedNodeIds.add(edge.source);
           }
         }
+        filteredNodeIds = new Set([...filteredNodeIds].filter(id => connectedNodeIds.has(id) || id === propertyNodeId));
+        filteredEdgeIds = new Set([...filteredEdgeIds].filter(id => connectedEdgeIds.has(id)));
       }
 
-      // Dim all other nodes and edges if we have filters
-      if (highlighted.size > 0) {
-        for (const node of props.graphData.nodes) {
-          if (!highlighted.has(node.id)) {
-            dimmed.add(node.id);
-          }
-        }
-        for (const edge of props.graphData.edges) {
-          if (!highlightedEdges.has(edge.id)) {
-            dimmedEdges.add(edge.id);
-          }
-        }
+      // Highlight and dim
+      for (const id of filteredNodeIds) highlighted.add(id);
+      for (const id of filteredEdgeIds) highlightedEdges.add(id);
+      for (const node of props.graphData.nodes) {
+        if (!highlighted.has(node.id)) dimmed.add(node.id);
+      }
+      for (const edge of props.graphData.edges) {
+        if (!highlightedEdges.has(edge.id)) dimmedEdges.add(edge.id);
       }
     }
 

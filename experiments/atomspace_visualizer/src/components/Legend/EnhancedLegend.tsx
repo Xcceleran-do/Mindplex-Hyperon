@@ -1,5 +1,5 @@
 // Enhanced Legend component with collapsible and clickable items
-import { Component, createSignal, For } from 'solid-js';
+import { Component, createSignal, For, createEffect } from 'solid-js';
 import { GraphData, FilterState } from '../../types';
 import styles from './EnhancedLegend.module.css';
 
@@ -11,6 +11,12 @@ export interface EnhancedLegendProps {
 
 const EnhancedLegend: Component<EnhancedLegendProps> = (props) => {
   const [isCollapsed, setIsCollapsed] = createSignal(true);
+  
+  // Debug: Log filter state changes
+  createEffect(() => {
+    console.log('Legend: filterState updated:', props.filterState);
+    console.log('Legend: Available property columns:', getPropertyColumns());
+  });
 
   // Extract unique property columns and values
   const getPropertyColumns = () => {
@@ -73,28 +79,29 @@ const EnhancedLegend: Component<EnhancedLegendProps> = (props) => {
     const isMultiSelect = e.ctrlKey || e.metaKey;
     const propertyFilter = { property, value };
     let currentFilters = [...(props.filterState.propertyFilters || [])];
-    
+
+    const index = currentFilters.findIndex(
+      f => f.property === property && f.value === value
+    );
     if (isMultiSelect) {
       // Toggle property filter
-      const index = currentFilters.findIndex(
-        f => f.property === property && f.value === value
-      );
       if (index >= 0) {
         currentFilters.splice(index, 1);
       } else {
         currentFilters.push(propertyFilter);
       }
     } else {
-      // Single select - if clicking same property, clear; otherwise select only this one
-      if (currentFilters.length === 1 && 
-          currentFilters[0].property === property && 
-          currentFilters[0].value === value) {
-        currentFilters = [];
+      // Single select: if already selected, deselect; else select only this value for this property
+      if (index >= 0) {
+        // Deselect this value for this property
+        currentFilters.splice(index, 1);
       } else {
-        currentFilters = [propertyFilter];
+        // Remove all filters for this property, then add the new one
+        currentFilters = currentFilters.filter(f => f.property !== property);
+        currentFilters.push(propertyFilter);
       }
     }
-    
+
     props.onFilterChange({
       active: (props.filterState.articleIds?.length || 0) > 0 || currentFilters.length > 0,
       articleIds: props.filterState.articleIds || [],

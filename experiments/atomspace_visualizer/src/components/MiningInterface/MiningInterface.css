@@ -1,49 +1,86 @@
 .mining-interface {
+  position: fixed;
+  right: 20px;
+  top: var(--mining-top, calc(50vh + 30px));
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  width: 100%;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  padding: 10px 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  border: 2px solid rgba(139, 7, 89, 0.2);
+  z-index: 100;
+  width: 340px;
+  box-sizing: border-box;
 }
 
 .mining-controls {
   display: flex;
-  flex-direction: column;
-  gap: 12px;
+  flex-direction: row;
+  gap: 8px;
   align-items: center;
-  padding: 12px;
+  justify-content: center;
+  width: 100%;
 }
 
 .conjunction-input {
   display: flex;
+  flex-direction: row;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 6px;
 }
 
 .conjunction-input label {
-  font-size: 13px;
-  color: #1f2937;
+  font-size: 10px;
+  font-weight: 600;
+  color: #3a0647;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.conjunction-input label::before {
+  content: '⚡ ';
+  font-size: 11px;
 }
 
 .conjunction-input input {
-  width: 50px;
-  padding: 4px;
-  border: 1px solid var(--border-light);
-  border-radius: 4px;
+  width: 40px;
+  padding: 4px 8px;
+  border: 2px solid #8b0759;
+  border-radius: 6px;
   text-align: center;
+  font-size: 12px;
+  font-weight: bold;
+  color: #3a0647;
+  background: linear-gradient(135deg, #fff 0%, #fef3f8 100%);
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(139, 7, 89, 0.15);
+}
+
+.conjunction-input input:focus {
+  outline: none;
+  border-color: #3a0647;
+  box-shadow: 0 0 0 3px rgba(139, 7, 89, 0.2);
+  transform: scale(1.05);
+}
+
+.conjunction-input input:hover {
+  border-color: #6b1847;
+  transform: translateY(-1px);
 }
 
 .drag-indicator {
-  color: #6b7280;
-  cursor: move;
-  user-select: none;
+  display: none;
 }
 
 /* Fancy Mine Button Styles */
 .mine-button {
   position: relative;
-  padding: 14px 24px;
-  font-size: 16px;
+  padding: 6px 12px;
+  font-size: 11px;
   font-weight: 600;
   color: #fff;
   background: linear-gradient(135deg, #3a0647 0%, #8b0759 100%);
@@ -52,12 +89,15 @@
   cursor: pointer;
   overflow: hidden;
   transition: all 0.3s ease;
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2), 
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2), 
               0 0 0 2px rgba(255, 255, 255, 0.1) inset,
-              0 0 30px rgba(139, 7, 89, 0.5);
+              0 0 20px rgba(139, 7, 89, 0.4);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
   transform-style: preserve-3d;
   transform: perspective(800px);
+  white-space: nowrap;
+  flex: 1;
+  max-width: 180px;
 }
 
 .mine-button::before {
@@ -99,20 +139,21 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 4px;
   z-index: 1;
 }
 
 .mine-button .pickaxe-icon, 
 .mine-button .gems-icon {
   display: inline-block;
-  font-size: 18px;
+  font-size: 12px;
   filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.7));
 }
 
 .mine-button .button-text {
   position: relative;
   overflow: hidden;
+  font-size: 11px;
 }
 
 .mine-button .button-text::after {
@@ -182,124 +223,7 @@
 }
 
 /* Mining HUD */
-.mining-hud {
-  position: fixed;
-  bottom: 50%;
-  left: 50%;
-  transform: translate(-50%, 50%);
-  width: 350px;
-  padding: 16px;
-  background: rgba(15, 23, 42, 0.85);
-  backdrop-filter: blur(8px);
-  border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-  z-index: 100;
-  transition: all 0.5s ease;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  opacity: 0;
-  pointer-events: none;
-}
-
-.mining-hud.active {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.mining-scene {
-  position: relative;
-  text-align: center;
-}
-
-.cave-entrance {
-  font-size: 24px;
-  margin-bottom: 8px;
-}
-
-.miner {
-  position: relative;
-  display: inline-block;
-  margin-bottom: 20px;
-}
-
-.miner-body {
-  font-size: 28px;
-  animation: bob 1s infinite alternate ease-in-out;
-}
-
-.pickaxe-animation {
-  position: absolute;
-  right: -15px;
-  top: 5px;
-  font-size: 18px;
-  animation: mine 0.5s infinite alternate ease-in-out;
-  transform-origin: bottom left;
-}
-
-.ore-particles {
-  position: relative;
-  height: 40px;
-  margin-bottom: 10px;
-}
-
-.particle {
-  position: absolute;
-  animation: particle-float 2s infinite ease-out;
-  opacity: 0;
-}
-
-.particle:nth-child(1) {
-  left: 30%;
-  animation-delay: 0s;
-}
-
-.particle:nth-child(2) {
-  left: 50%;
-  animation-delay: 0.5s;
-}
-
-.particle:nth-child(3) {
-  left: 70%;
-  animation-delay: 1s;
-}
-
-.particle:nth-child(4) {
-  left: 40%;
-  top: 15px;
-  animation-delay: 1.5s;
-}
-
-.progress-bar {
-  height: 6px;
-  width: 80%;
-  margin: 0 auto 16px;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.progress-fill {
-  height: 100%;
-  width: 0;
-  background: linear-gradient(90deg, #ff9500, #ff00cc);
-  border-radius: 3px;
-  animation: fill 5s infinite alternate ease-in-out;
-}
-
-.mining-status {
-  color: white;
-  text-align: center;
-}
-
-.mining-status p {
-  margin: 4px 0;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.sub-text {
-  font-size: 11px !important;
-  opacity: 0.8;
-}
+/* Mining HUD removed - chat interface replaces it */
 
 /* Result Card */
 .result-overlay {
@@ -454,28 +378,7 @@
                     0 0 30px rgba(139, 7, 89, 0.5); }
 }
 
-@keyframes bob {
-  0% { transform: translateY(0); }
-  100% { transform: translateY(-3px); }
-}
-
-@keyframes mine {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(-30deg); }
-}
-
-@keyframes particle-float {
-  0% { transform: translateY(20px); opacity: 0; }
-  20% { opacity: 1; }
-  80% { opacity: 0.7; }
-  100% { transform: translateY(-20px); opacity: 0; }
-}
-
-@keyframes fill {
-  0% { width: 0; }
-  50% { width: 70%; }
-  100% { width: 100%; }
-}
+/* Removed unused HUD animations */
 
 /* Advanced button effects */
 .mine-button.mining {
