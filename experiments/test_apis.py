@@ -6,6 +6,7 @@ Test script to verify all APIs are working correctly
 import requests
 import json
 import time
+from config import HEALTH_URL, MINE_URL
 
 def test_health_checks():
     """Test health endpoints for both APIs"""
@@ -13,7 +14,7 @@ def test_health_checks():
     
     # Test Mining API
     try:
-        response = requests.get('http://localhost:5000/api/health', timeout=5)
+        response = requests.get(HEALTH_URL, timeout=5)
         if response.status_code == 200:
             print("✅ Mining API (port 5000) is healthy")
         else:
@@ -23,7 +24,8 @@ def test_health_checks():
     
     # Test Chat API
     try:
-        response = requests.get('http://localhost:5001/api/chat/health', timeout=5)
+        from config import get_api_url
+        response = requests.get(get_api_url('/api/chat/health'), timeout=5)
         if response.status_code == 200:
             print("✅ Chat API (port 5001) is healthy")
         else:
@@ -39,7 +41,7 @@ def test_mining():
     
     try:
         response = requests.post(
-            'http://localhost:5000/api/mine',
+            MINE_URL,
             json={'conjunction_count': 2},
             timeout=30
         )
@@ -71,8 +73,9 @@ def test_chat_analyze(pattern, support):
     print("🤖 Testing Chat Analyze Endpoint...")
     
     try:
+        from config import get_api_url
         response = requests.post(
-            'http://localhost:5001/api/chat/analyze',
+            get_api_url('/api/chat/analyze'),
             json={
                 'pattern': pattern,
                 'support': support
@@ -103,8 +106,9 @@ def test_chat():
     print("💬 Testing Chat Endpoint...")
     
     try:
+        from config import get_api_url
         response = requests.post(
-            'http://localhost:5001/api/chat',
+            get_api_url('/api/chat'),
             json={
                 'message': 'Hello! Can you help me understand pattern mining?',
                 'history': []
@@ -156,7 +160,8 @@ def main():
     print("=" * 60)
     print()
     print("Next steps:")
-    print("1. Open http://localhost:3000 in your browser")
+    from config import FRONTEND_URL
+    print(f"1. Open {FRONTEND_URL} in your browser")
     print("2. Click 'Mine Neural Gold' button")
     print("3. Watch the chat interface automatically open")
     print("4. Click 'Visualize' on any pattern to see exact matches")

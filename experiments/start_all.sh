@@ -11,4 +11,7 @@ cd atomspace_visualizer
 npm run dev > frontend.log 2>&1 &
 echo "Frontend started on port 3000"
 sleep 2
-echo "✅ Done! Backend: http://localhost:5000, Frontend: http://localhost:3000"
+# Load URLs from config
+API_URL=$(python3 -c "from config import API_BASE_URL; print(API_BASE_URL)" 2>/dev/null || echo "http://localhost:5000")
+FRONTEND_URL=$(python3 -c "from config import FRONTEND_URL; print(FRONTEND_URL)" 2>/dev/null || echo "http://localhost:3000")
+echo "✅ Done! Backend: $API_URL, Frontend: $FRONTEND_URL"

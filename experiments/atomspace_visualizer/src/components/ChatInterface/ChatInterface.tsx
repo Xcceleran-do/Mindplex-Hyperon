@@ -96,8 +96,10 @@ const ChatInterface = (props: ChatInterfaceProps) => {
   });
 
   const analyzeConjunct = async (pattern: string, support: string) => {
+    const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+    
     try {
-      const response = await fetch('https://urban-potato-v6gr5vqg6559fpqrg-5000.app.github.dev/api/chat/analyze', {
+      const response = await fetch(`${API_BASE}/api/chat/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pattern, support })
@@ -138,6 +140,8 @@ const ChatInterface = (props: ChatInterfaceProps) => {
 
   // Send AI message (internal function)
   const sendAIMessage = async (text: string) => {
+    const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+    
     // Show typing indicator
     const typingMsg: Message = {
       id: `typing-${Date.now()}`,
@@ -150,7 +154,7 @@ const ChatInterface = (props: ChatInterfaceProps) => {
     setIsLoading(true);
 
     try {
-      const response = await fetch('https://urban-potato-v6gr5vqg6559fpqrg-5000.app.github.dev/api/chat', {
+      const response = await fetch(`${API_BASE}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

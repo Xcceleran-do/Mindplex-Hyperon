@@ -7,8 +7,9 @@ This test verifies that the AI can automatically call functions
 import requests
 import json
 import time
+from config import API_BASE_URL
 
-BASE_URL = "http://localhost:5000"
+BASE_URL = API_BASE_URL
 
 def wait_for_backend():
     """Wait for backend to be ready"""

@@ -39,6 +39,8 @@
 ;; Define cast functions between Nat and Number
 (= (fromNumber $n) (if (<= $n 0) Z (S (fromNumber (- $n 1)))))
 
+(= (fromNumberInterface $n) (trace! (--> (fromNumber (- $n 1)) is what i've get) (fromNumber (- $n 1))))
+
 ;; Base case
 (= (backward-chain_ True $kb $_ (: $prf $ccln)) (match $kb (: $prf $ccln) (: $prf $ccln)))
 
@@ -54,7 +56,7 @@
 )
 
 (= (backward-chain $kb $depth (: $prf $ccln)) 
-     (trace! (back is called -- depth -> $depth $ccln) (backward-chain_ True $kb $depth (: $prf $ccln)) )
+     45356
 )
 
 

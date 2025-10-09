@@ -57,8 +57,10 @@ const MiningPanel: Component<MiningPanelProps> = (props) => {
     setError(null);
     startLoadingAnimation();
 
+    const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+
     try {
-      const response = await fetch('https://urban-potato-v6gr5vqg6559fpqrg-5000.app.github.dev/api/mine', {
+      const response = await fetch(`${API_BASE}/api/mine`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

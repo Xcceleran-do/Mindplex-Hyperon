@@ -7,8 +7,9 @@ Tests mining, chat, and pattern analysis endpoints
 import requests
 import json
 import time
+from config import API_BASE_URL
 
-BASE_URL = "http://localhost:5000"
+BASE_URL = API_BASE_URL
 
 def test_health():
     """Test basic health endpoint"""
@@ -154,7 +155,8 @@ def main():
         print("✅ ALL TESTS PASSED!")
         print("=" * 60)
         print("\nNext steps:")
-        print("1. Open http://localhost:3000 in your browser")
+        from config import FRONTEND_URL
+        print(f"1. Open {FRONTEND_URL} in your browser")
         print("2. Load the small-ugly.metta data")
         print("3. Click 'Mine' with conjunct size 2")
         print("4. Chat should open with pattern summaries")

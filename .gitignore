@@ -33,9 +33,12 @@ dist/
 # Node.js (if applicable)
 node_modules/
 
-# Misc
-*.swp
-*.bak
+# Environment files
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
+# Misc
 *.swp
 *.bak
