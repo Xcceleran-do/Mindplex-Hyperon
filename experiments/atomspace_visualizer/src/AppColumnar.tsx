@@ -183,6 +183,38 @@ const App: Component = () => {
     startMiningAnimation();
   };
 
+  // Unified mining flow: called by either the mining button or the chat trigger
+  const startMiningUnified = async (conjunctSize: number) => {
+    console.log('AppColumnar.tsx: startMiningUnified called with', conjunctSize);
+    const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+
+    try {
+      // Start the animation and visual indicator
+      startMiningAnimation();
+
+      const resp = await fetch(`${API_BASE}/api/mine`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conjunction_count: conjunctSize })
+      });
+
+      if (!resp.ok) {
+        throw new Error(`Mining API error ${resp.status}`);
+      }
+
+      const job = await resp.json();
+
+      // Stop animation and set results so ChatInterface will analyze and render summaries
+      stopMiningAnimation();
+      setMiningResults(job.result || []);
+      setCurrentConjunctSize(conjunctSize);
+
+    } catch (err) {
+      console.error('startMiningUnified error', err);
+      stopMiningAnimation();
+    }
+  };
+
   const handlePatternsFound = (patterns: Array<{ pattern: string; support: string }>, conjunctSize?: number) => {
     console.log('AppColumnar.tsx handlePatternsFound called with:', { patterns, conjunctSize });
     
@@ -309,7 +341,7 @@ const App: Component = () => {
       {/* Mining Interface - Below Legend (with chat integration) */}
       <MiningInterface
         onPatternsFound={handlePatternsFound}
-        onMiningStart={handleMiningStart}
+        onMiningStart={startMiningUnified}
       />
 
       {/* Chat Interface - Opens automatically when mining completes */}
@@ -317,6 +349,7 @@ const App: Component = () => {
         conjunctSize={currentConjunctSize()}
         onVisualize={handleVisualize}
         miningResults={miningResults()}
+        onMiningStart={startMiningUnified}
       />
     </div>
   );

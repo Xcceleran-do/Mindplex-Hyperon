@@ -33,30 +33,12 @@ const ChatInterface = (props: ChatInterfaceProps) => {
   
   console.log('ChatInterface rendered, props:', { conjunctSize: props.conjunctSize });
   
-  // Auto-send mining message when conjunct size changes
-  createEffect(() => {
-    const conjunctSize = props.conjunctSize;
-    console.log('ChatInterface: conjunctSize changed to:', conjunctSize, 'last:', lastConjunctSize());
-    if (conjunctSize && conjunctSize !== lastConjunctSize() && conjunctSize > 0) {
-      console.log('ChatInterface: Sending message for conjunct size:', conjunctSize);
-      setLastConjunctSize(conjunctSize);
-      
-      // Auto-send user message
-      const userMessage = `Mine rules with ${conjunctSize} patterns`;
-      const userMsg: Message = {
-        id: `msg-${Date.now()}-${Math.random()}`,
-        role: 'user',
-        content: userMessage,
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, userMsg]);
-      
-      // Get AI response
-      setTimeout(() => {
-        sendAIMessage(userMessage);
-      }, 300);
-    }
-  });
+  // NOTE: We intentionally do NOT auto-trigger mining when `props.conjunctSize`
+  // changes because that value is also set by the parent when a mining job
+  // completes. Doing so could cause a feedback loop where the parent starts
+  // mining and the chat re-requests mining again. Instead, user-initiated
+  // chat commands are handled inside sendMessage() where we can differentiate
+  // direct user intent from parent-driven state updates.
 
   // Scroll to bottom when new messages arrive
   const scrollToBottom = () => {
@@ -84,14 +66,42 @@ const ChatInterface = (props: ChatInterfaceProps) => {
       
       setMessages(prev => [...prev, systemMsg]);
       
-      // Process each result with AI
-      setTimeout(() => {
-        results.forEach((result, index) => {
-          setTimeout(() => {
-            analyzeConjunct(result.pattern, result.support);
-          }, index * 1000);
-        });
-      }, 500);
+      // Request a single summary for all patterns and display it
+      (async () => {
+        const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+        try {
+          const resp = await fetch(`${API_BASE}/api/chat/summarize`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ patterns: results })
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            const assistantMsg: Message = {
+              id: `msg-${Date.now()}-${Math.random()}`,
+              role: 'assistant',
+              content: data.summary,
+              timestamp: new Date()
+            };
+            setMessages(prev => [...prev, assistantMsg]);
+          } else {
+            // Fallback: analyze each conjunct individually
+            results.forEach((result, index) => {
+              setTimeout(() => {
+                analyzeConjunct(result.pattern, result.support);
+              }, index * 500);
+            });
+          }
+        } catch (e) {
+          console.error('Error fetching summary:', e);
+          // Fallback behavior
+          results.forEach((result, index) => {
+            setTimeout(() => {
+              analyzeConjunct(result.pattern, result.support);
+            }, index * 500);
+          });
+        }
+      })();
     }
   });
 
@@ -213,6 +223,32 @@ const ChatInterface = (props: ChatInterfaceProps) => {
     setMessages(prev => [...prev, userMsg]);
     setInputText('');
     
+    // Intercept explicit mining commands and delegate to parent unified miner
+    const mineRegex = /mine(?: rules)?(?: with)?\s*(?:the )?(?:next )?(?:top )?\s*(\d+)\s*(?:patterns?|conjunctions?)/i;
+    const m = text.match(mineRegex);
+    if (m) {
+      const n = parseInt(m[1], 10) || 3;
+      // If parent provides the unified mining handler, use it and avoid
+      // sending the message to the AI (which may also call the mining
+      // function and duplicate work).
+      if (props.onMiningStart) {
+        const sys: Message = {
+          id: `sys-start-${Date.now()}`,
+          role: 'system',
+          content: `Starting mining with ${n} patterns...`,
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, sys]);
+        try {
+          props.onMiningStart(n);
+        } catch (err) {
+          console.error('Error delegating mining to parent from chat:', err);
+        }
+        return;
+      }
+      // fallback: no parent handler -> ask AI to perform mining intent
+    }
+
     // Get AI response
     await sendAIMessage(text);
   };

@@ -12,7 +12,7 @@ export interface MiningResult {
 }
 
 export interface MiningInterfaceProps {
-  onMiningStart?: () => void;
+  onMiningStart?: (conjunctSize: number) => void;
   onMiningComplete?: (result: MiningResult) => void;
   onPatternsFound?: (patterns: Array<{ pattern: string; support: string }>, conjunctSize?: number) => void;
 }
@@ -24,10 +24,20 @@ const MiningInterface = (props: MiningInterfaceProps) => {
   const [showResult, setShowResult] = createSignal(false);
 
   const startMining = async () => {
+    // Delegate to parent unified flow when available
     setIsMining(true);
     setMiningResult(null);
     setShowResult(false);
-    props.onMiningStart?.();
+    if (props.onMiningStart) {
+      try {
+        props.onMiningStart(conjunctionCount());
+      } finally {
+        setIsMining(false);
+      }
+      return;
+    }
+
+  // Fallback: if parent handler not provided, call API directly (legacy)
 
     const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
@@ -57,13 +67,8 @@ const MiningInterface = (props: MiningInterfaceProps) => {
         duration: 0
       };
       
-      // setMiningResult(miningResult);
-      // setShowResult(false); // Don't show the old result card
-      // props.onMiningComplete?.(miningResult);
-      
-      // Send patterns to chat interface with conjunct size
       if (jobData.result && Array.isArray(jobData.result)) {
-        console.log('MiningInterface: Calling onPatternsFound with conjunctSize:', conjunctionCount());
+        console.log('MiningInterface (fallback): Calling onPatternsFound with conjunctSize:', conjunctionCount());
         props.onPatternsFound?.(jobData.result, conjunctionCount());
       }
 

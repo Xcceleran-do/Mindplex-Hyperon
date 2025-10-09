@@ -56,10 +56,10 @@
 )
 
 (= (backward-chain $kb $depth (: $prf $ccln)) 
-     45356
+     (backward-chain_ True $kb (S (S (S (Z)))) (: $prf $ccln))
 )
 
-
+; !(fromNumber 5)
 
 ;! (bind! &kb (new-space))
 ;! (add-reduct &kb (get-atoms &facts))

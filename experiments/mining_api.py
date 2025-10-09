@@ -32,57 +32,8 @@ metta4Miner.run("""
     ! (import! &self experiments:utils:common-utils)
     ! (import! &self experiments:frequent-pattern-miner:frequent-pattern-miner)
     ! (import! &tempo experiments:atomspace_visualizer:public:small-ugly)
-    
-(= (removeAnyMetricsAtom $superset $subsets)
-     (let ($x $subset) ((superpose $superset) (superpose $subsets))
-          (unify 
-               $subset
-               $x
-               (let $a (subtraction-atom $superset ($subset)) (union-atom $a ($subset))) 
-               (empty)
-          )
-     )
-)
-(= (convertIncomingDataHelper2 $organized)
-     (if (> (size-atom $organized) 1)
-          (let ($head $tail) (decons-atom $organized) (-> $head (convertIncomingDataHelper2 $tail)))
-          (car-atom $organized)
-     )
-)
-(= (convertIncomingDataHelper $data)
-     (convertIncomingDataHelper2 (removeAnyMetricsAtom $data ((engagement_level $j $k) (reputation $_ $__) (popularity $___ $____))))
-)
-(= (main $rules) 
-     (let (supportOf $rule $num) (superpose $rules)
-          (let $formattedRule (convertIncomingDataHelper (cdr-atom $rule)) (: (rule:- $formattedRule) (convertIncomingDataHelper (cdr-atom $rule))))
-     )
-)
-
-
-
-;; Define cast functions between Nat and Number
-(= (fromNumber $n) (if (<= $n 0) Z (S (fromNumber (- $n 1)))))
-
-;; Base case
-(= (backward-chain_ True $kb $_ (: $prf $ccln)) (match $kb (: $prf $ccln) (: $prf $ccln)))
-
-;; Recursive step
-(= (backward-chain_ True $kb (S $k) (: ($prfabs $prfarg) $ccln))
-   (let* 
-          (
-               ((: $prfabs (-> $prms $ccln)) (backward-chain_ True $kb $k (: $prfabs (-> $prms $ccln))))
-               ((: $prfarg $prms) (backward-chain_ True $kb $k (: $prfarg $prms)))
-          )
-          (: ($prfabs $prfarg) $ccln)
-     )
-)
-
-(= (backward-chain $kb $depth (: $prf $ccln)) 
-     56
-)
-
-
-                
+    ! (import! &self experiments:chainer:main)
+                            
     !(bind! &res1 (new-space)) ;; space to hold the formatted miner result
     !(add-reduct &res1 (let $fact (get-atoms &tempo) (: (fact:- $fact) $fact)))
                 
@@ -149,6 +100,11 @@ CORS(app, resources={r"/api/*": {
     "supports_credentials": False,
     "max_age": 3600
 }})
+
+def getAllFactsAndRules():
+    """" """"
+    facts = metta4Miner.run("!(collapse (get-atoms &res1))")
+    return facts
 
 # Define available functions for the AI with proper docstrings for automatic function calling
 def get_mining_results() -> dict:
@@ -217,7 +173,13 @@ def get_pattern_statistics() -> dict:
     if not jobs:
         return {"status": "no_data", "message": "No completed mining jobs"}
     
-    total_patterns = sum(len(j.result) if j.result else 0 for j in jobs)
+    # Each job.result is expected to be the dict returned by mine_pattern().
+    # Count how many patterns are stored under the 'patterns' key for each job.
+    total_patterns = sum(
+        (len(j.result.get('patterns', [])) if isinstance(j.result, dict) else 0)
+        for j in jobs
+    )
+
     return {
         "total_jobs": len(jobs),
         "total_patterns": total_patterns,
@@ -274,12 +236,51 @@ def run_mining_task(job_id: str, conjunction_count: int):
             'end_time': job.end_time
         }
 
+def start_mining_job(conjunction_count: int):
+    """
+    Wrapper that creates a MiningJob and runs the mining task synchronously
+    so that function-calls from the LLM go through the same code path as the
+    HTTP `/api/mine` endpoint.
+    Returns a dict similar to the `/api/mine` response (jobId, status, result).
+    """
+    try:
+        if not isinstance(conjunction_count, int):
+            conjunction_count = int(conjunction_count)
+    except Exception:
+        return { 'error': 'conjunction_count must be an integer' }
+
+    job_id = str(uuid.uuid4())
+    job = MiningJob(job_id=job_id, status='running', conjunction_count=conjunction_count)
+    mining_jobs[job_id] = job
+
+    # Run synchronously (this will call mine_pattern internally)
+    result = run_mining_task(job_id, conjunction_count)
+
+    # Kick off formatter thread as the HTTP endpoint does, but only if we have an answer
+    try:
+        if isinstance(mining_jobs[job_id].result, dict) and mining_jobs[job_id].result.get('answer'):
+            thread = threading.Thread(
+                target=formatter,
+                args=(f"{mining_jobs[job_id].result['answer']}",),
+                daemon=True
+            )
+            thread.start()
+    except Exception as e:
+        print('start_mining_job: formatter thread failed to start', e)
+
+    # Return a normalized result
+    return {
+        'jobId': job_id,
+        'status': mining_jobs[job_id].status,
+        'conjunction_count': conjunction_count,
+        'result': mining_jobs[job_id].result
+    }
+
 def formatter(mined_patterns):
-    mine_patterns = metta4Miner.parse_single(mined_patterns)
+    print("formatter started :--:")
+    mined_patterns = metta4Miner.parse_single(mined_patterns)
     metta4Miner.run(f""" !(add-reduct &res1 (main {mined_patterns})) """)
-    print("the datas in res1 is ", metta4Miner.run("!(get-atoms &res1)"))
-    x = metta4Miner.run(f""" !(let $num (S (S Z)) (backward-chain &res1 $num (: $prf (engagement_level 0 "high")))) """)
-    print("🔍 DEBUG: Backward chaining result =", x)
+    print("formatter ended :-_-:")
 
 def backWardChainer(whatToCheck, depth=5):
     whatToCheck = metta4Miner.parse_single(whatToCheck)
@@ -366,9 +367,52 @@ def getChainerResult(whatToCheck, depth=5):
             "error": str(e)
         }
 
+
+def summarize_patterns(patterns: list) -> str:
+    """Use the Gemini model to create a single comprehensive summary of the
+    supplied mined patterns. The summary will reference patterns as [Pattern N]
+    so the frontend can make them clickable for visualization.
+    """
+    if not patterns:
+        return "No patterns to summarize."
+
+    # Build a compact prompt that lists the patterns and asks for a concise
+    # analytic summary that includes references like [Pattern 1], [Pattern 2]
+    prompt_parts = ["Please analyze the following mined patterns and produce a single concise summary that references specific patterns using [Pattern N] notation. Explain trends and actionable insights."]
+    for i, p in enumerate(patterns, 1):
+        patt = p.get('pattern') if isinstance(p, dict) else str(p)
+        supp = p.get('support', '') if isinstance(p, dict) else ''
+        prompt_parts.append(f"[Pattern {i}] Pattern: {patt} -- Support: {supp}")
+
+    prompt = "\n\n".join(prompt_parts)
+
+    try:
+        resp = model.generate_content(prompt)
+        text = resp.text if hasattr(resp, 'text') and resp.text else None
+        if not text:
+            # Try extracting from candidates-like structure
+            try:
+                parts = resp.candidates[0].content.parts
+                acc = ""
+                for part in parts:
+                    if hasattr(part, 'text'):
+                        acc += part.text
+                text = acc
+            except Exception:
+                text = None
+
+        return text or "The model could not produce a summary."
+    except Exception as e:
+        print('summarize_patterns error:', e)
+        return f"Summary generation failed: {e}"
+
 # Function name to actual function mapping (for execution)
 available_functions = {
-    "mine_pattern": mine_pattern,
+    "mine_pattern": start_mining_job,
+    # Aliases so the model can call either the wrapper or the original-style name
+    "start_mining_job": start_mining_job,
+    "startMiningJob": start_mining_job,
+    "minePattern": start_mining_job,
     "get_mining_results": get_mining_results,
     "analyze_specific_pattern": analyze_specific_pattern,
     "get_pattern_statistics": get_pattern_statistics,
@@ -379,7 +423,7 @@ available_functions = {
 # Initialize Gemini model with automatic function calling
 model = genai.GenerativeModel(
     "gemini-2.0-flash-exp",
-    tools=[mine_pattern, analyze_specific_pattern, get_pattern_statistics, visualize_pattern_request, getChainerResult],
+    tools=[start_mining_job, mine_pattern, analyze_specific_pattern, get_pattern_statistics, visualize_pattern_request, getChainerResult],
     system_instruction="""You are a friendly and knowledgeable AI assistant with expertise in data mining patterns, knowledge graphs, and pattern analysis. 
 
         **Your Primary Specialty:**
@@ -694,6 +738,26 @@ def analyze_conjunct():
         print(f"Error in analyze_conjunct: {e}")
         return jsonify({'error': str(e)}), 500
 
+
+@app.route('/api/chat/summarize', methods=['POST', 'OPTIONS'])
+def summarize_patterns_endpoint():
+    """Summarize a list of patterns into one comprehensive analysis string."""
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'ok'})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+        return response, 200
+
+    try:
+        data = request.get_json() or {}
+        patterns = data.get('patterns', [])
+        summary = summarize_patterns(patterns)
+        return jsonify({'summary': summary})
+    except Exception as e:
+        print('Error in summarize_patterns_endpoint:', e)
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/chat', methods=['POST', 'OPTIONS'])
 def chat():
     """Main chat endpoint with Gemini AI and automatic function calling"""
@@ -759,10 +823,25 @@ def chat():
                     # Execute the function
                     if function_name in available_functions:
                         try:
-                            function_result = available_functions[function_name](**function_args)
+                            # Normalize args: map common alias names and convert numeric strings to ints
+                            norm_args = {}
+                            for k, v in function_args.items():
+                                key = k
+                                if k in ('conjunction_count', 'conjunctions', 'conjunctionCount', 'numberOfConjunction', 'n'):
+                                    key = 'conjunction_count'
+
+                                # Normalize numeric-looking strings and floats
+                                if isinstance(v, str) and re.fullmatch(r"\d+", v):
+                                    norm_args[key] = int(v)
+                                elif isinstance(v, float) and v.is_integer():
+                                    norm_args[key] = int(v)
+                                else:
+                                    norm_args[key] = v
+
+                            function_result = available_functions[function_name](**norm_args)
                             function_results.append({
                                 'name': function_name,
-                                'args': function_args,
+                                'args': norm_args,
                                 'result': function_result
                             })
                             
@@ -811,7 +890,36 @@ def chat():
             for part in response.candidates[0].content.parts:
                 if hasattr(part, 'text'):
                     response_text += part.text
-        
+
+        # If the model produced no textual response but it executed a mining
+        # function, synthesize a summary from the mining result so the chat
+        # endpoint returns a useful assistant message instead of an apology.
+        if not response_text:
+            # Look for a mining function call result in function_results
+            mining_fr = None
+            for fr in function_results:
+                if fr.get('name') == 'mine_pattern' and isinstance(fr.get('result'), dict):
+                    mining_fr = fr
+                    break
+
+            if mining_fr:
+                # mining_fr['result'] is the dict returned by start_mining_job
+                mining_payload = mining_fr['result']
+                patterns = []
+                try:
+                    # mining_payload['result'] should be the mine_pattern dict
+                    candidate = mining_payload.get('result') if isinstance(mining_payload, dict) else None
+                    if isinstance(candidate, dict):
+                        patterns = candidate.get('patterns', [])
+                except Exception:
+                    patterns = []
+
+                if patterns:
+                    try:
+                        response_text = summarize_patterns(patterns)
+                    except Exception as e:
+                        print('Error generating summary after function call:', e)
+
         if not response_text:
             response_text = "I apologize, but I couldn't generate a proper response. Please try again."
         
