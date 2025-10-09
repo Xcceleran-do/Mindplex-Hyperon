@@ -21,7 +21,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Configure Gemini API
-genai.configure(api_key=os.getenv("GEMINI_API_KEY4"))
+genai.configure(api_key=os.getenv("GEMINI_API_KEY3"))
 
 metta4Miner = MeTTa()
 
@@ -90,6 +90,60 @@ def mine_pattern(numberOfConjunction: int) -> dict:
         }
 
 
+def make_json_safe(o):
+    """Recursively convert common non-JSON-serializable objects into JSON-safe types.
+
+    - Keeps primitives as-is
+    - Converts mappings/lists/tuples/sets recursively
+    - For objects, tries common serialization helpers (__dict__, to_dict, as_dict) then falls back to str()
+    This version is defensive: it will not call .items() on lists.
+    """
+    from collections.abc import Mapping
+
+    # primitives
+    if o is None or isinstance(o, (str, int, float, bool)):
+        return o
+
+    # Mapping types (dict-like)
+    if isinstance(o, Mapping):
+        safe = {}
+        for k, v in o.items():
+            # keys must be JSON-serializable (convert non-str keys to str)
+            if not isinstance(k, (str, int, float, bool)):
+                key = str(k)
+            else:
+                key = k
+            safe[key] = make_json_safe(v)
+        return safe
+
+    # list/tuple/set
+    if isinstance(o, (list, tuple, set)):
+        return [make_json_safe(x) for x in o]
+
+    # Objects that expose a dict-like __dict__
+    try:
+        d = getattr(o, '__dict__', None)
+        if isinstance(d, Mapping):
+            return {str(k): make_json_safe(v) for k, v in d.items()}
+    except Exception:
+        pass
+
+    # If the object provides a to_dict/as_dict helper, use it
+    try:
+        if hasattr(o, 'to_dict') and callable(getattr(o, 'to_dict')):
+            return make_json_safe(o.to_dict())
+        if hasattr(o, 'as_dict') and callable(getattr(o, 'as_dict')):
+            return make_json_safe(o.as_dict())
+    except Exception:
+        pass
+
+    # Fallback: convert to string
+    try:
+        return str(o)
+    except Exception:
+        return repr(o)
+
+
 app = Flask(__name__)
 # Enable CORS for all domains on all routes with all methods
 CORS(app, resources={r"/api/*": {
@@ -102,9 +156,157 @@ CORS(app, resources={r"/api/*": {
 }})
 
 def getAllFactsAndRules():
-    """" """"
-    facts = metta4Miner.run("!(collapse (get-atoms &res1))")
-    return facts
+    """Return current facts and rules from the MeTTa knowledge base.
+
+    The assistant should call this before attempting backward chaining so it
+    can rewrite a user's natural-language question into a canonical MeTTa
+    query that matches predicates/constants present in the KB. Example:
+    user: "What is article 1's engagement level?"
+    assistant: call getAllFactsAndRules(), notice atoms like `(engagement_level 1 high)`,
+    rewrite as `(engagement_level 1 $whatIsIt)`, then call getChainerResult.
+    """
+    try:
+        facts = metta4Miner.run("!(collapse (get-atoms &res1))")
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+    # Normalize the returned structure into a flat list of string atoms
+    normalized = []
+    try:
+        # If facts is nested (e.g., [[atom1, atom2]]), flatten one level
+        if isinstance(facts, (list, tuple)) and len(facts) == 1 and isinstance(facts[0], (list, tuple)):
+            iterable = facts[0]
+        else:
+            iterable = facts
+
+        if isinstance(iterable, (list, tuple)):
+            for item in iterable:
+                try:
+                    normalized.append(str(item))
+                except Exception:
+                    normalized.append(repr(item))
+        else:
+            normalized.append(str(iterable))
+
+    except Exception:
+        # Fallback: stringify the whole object
+        try:
+            return {"status": "success", "facts": [str(facts)]}
+        except Exception:
+            return {"status": "success", "facts": [repr(facts)]}
+
+    return {"status": "success", "facts": normalized}
+
+
+def handle_backward_chain_for_message(message: str):
+    """Detect simple 'why' questions about an article and run the
+    required automatic workflow: fetch facts, rewrite query to canonical
+    form, then call the chainer. Returns (response_text, function_calls) or
+    (None, None) if not applicable.
+    """
+    # Quick heuristic: look for 'why' and an article id
+    if not re.search(r'\bwhy\b|explain why|prove that', message, re.I):
+        return None, None
+
+    m = re.search(r'article\s+(\d+)', message, re.I)
+    if not m:
+        return None, None
+
+    article_id = m.group(1)
+
+    # Call getAllFactsAndRules to obtain canonical atoms
+    print("DEBUG: handle_backward_chain_for_message - calling getAllFactsAndRules()")
+    facts_res = getAllFactsAndRules()
+    print("DEBUG: facts_res type:", type(facts_res))
+    print("DEBUG: facts_res preview:", (facts_res.get('facts')[:5] if isinstance(facts_res, dict) else str(facts_res)[:200]))
+    function_calls = [{'name': 'getAllFactsAndRules', 'args': {}, 'result': facts_res}]
+
+    if not isinstance(facts_res, dict) or facts_res.get('status') != 'success':
+        return None, None
+
+    facts = facts_res.get('facts', []) or []
+
+    # Ask the LLM to rewrite the user's question into a canonical MeTTa query
+    # using the facts we retrieved. The model must output only a single MeTTa
+    # expression (e.g. (engagement_level 1 $what)).
+    try:
+        facts_text = "\n".join(facts[:200]) if isinstance(facts, list) else str(facts)
+        rewrite_prompt = f"""
+            You are given the following KB atoms (facts/rules), one per line:
+            {facts_text}
+
+            User question: "{message}"
+
+            Task (STRICT):
+            - Do NOT narrate or describe any internal steps.
+            - Do NOT output anything except a SINGLE canonical MeTTa expression that uses predicate and constant names from the KB above.
+            - If mapping is ambiguous, pick the most semantically likely predicate present in the KB.
+            - If you cannot produce a valid MeTTa expression, output the single token NO_QUERY and NOTHING ELSE.
+
+            Example mapping (for clarity only, do not output this): facts contain (engagement_level 1 high) -> question "Why is article 1 high?" -> output: (engagement_level 1 $what)
+
+            OUTPUT ONLY the MeTTa expression or NO_QUERY.
+            """
+        print("DEBUG: sending rewrite prompt to LLM (first 300 chars):", rewrite_prompt[:300])
+        rewrite_resp = model.generate_content(rewrite_prompt)
+        candidate_query = None
+        # Prefer structured text, fall back to parsing candidates
+        if hasattr(rewrite_resp, 'text') and rewrite_resp.text:
+            candidate_query = rewrite_resp.text.strip()
+        else:
+            try:
+                parts = rewrite_resp.candidates[0].content.parts
+                acc = ""
+                for part in parts:
+                    if hasattr(part, 'text'):
+                        acc += part.text
+                candidate_query = acc.strip()
+            except Exception:
+                candidate_query = None
+
+        print("DEBUG: rewrite result:", candidate_query)
+        function_calls.append({'name': 'rewrite_query', 'args': {'message': message}, 'result': candidate_query})
+    except Exception as e:
+        print('DEBUG: rewrite error:', e)
+        return None, None
+
+    if not candidate_query or candidate_query.upper() == 'NO_QUERY':
+        print('DEBUG: no candidate query produced by LLM')
+        return None, None
+
+    # Ensure the candidate looks like a MeTTa expression; if it contains extra text,
+    # try to extract the first parenthesized expression.
+    mexpr = re.search(r"\([^\)]*\)", candidate_query)
+    if mexpr:
+        candidate_query = mexpr.group(0).strip()
+
+    print('DEBUG: final candidate_query to send to chainer:', candidate_query)
+
+    # Call the chainer with the rewritten query and include debug output
+    try:
+        print('DEBUG: calling getChainerResult with', candidate_query)
+        chainer_result = getChainerResult(candidate_query)
+        print('DEBUG: chainer_result type:', chainer_result)
+    except Exception as e:
+        print('DEBUG: chainer call error:', e)
+        chainer_result = {'status': 'error', 'error': str(e)}
+
+    function_calls.append({'name': 'getChainerResult', 'args': {'whatToCheck': candidate_query}, 'result': chainer_result})
+
+    # Use the chainer's justification as the assistant response text (don't reveal internal steps)
+    resp_text = ''
+    if isinstance(chainer_result, dict):
+        raw_just = chainer_result.get('justification') or chainer_result.get('error') or ''
+    else:
+        raw_just = str(chainer_result)
+
+    if not raw_just:
+        resp_text = "No proof was found."
+    else:
+        # Apply a friendly/jokey wrapper without revealing internal steps
+        resp_text = f"Alright, here's the scoop —\n\n{raw_just}\n\n(That's the reasoning I found.)"
+
+    return resp_text, function_calls
 
 # Define available functions for the AI with proper docstrings for automatic function calling
 def get_mining_results() -> dict:
@@ -413,6 +615,8 @@ available_functions = {
     "start_mining_job": start_mining_job,
     "startMiningJob": start_mining_job,
     "minePattern": start_mining_job,
+    "getAllFactsAndRules": getAllFactsAndRules,
+    "get_all_facts_and_rules": getAllFactsAndRules,
     "get_mining_results": get_mining_results,
     "analyze_specific_pattern": analyze_specific_pattern,
     "get_pattern_statistics": get_pattern_statistics,
@@ -423,7 +627,7 @@ available_functions = {
 # Initialize Gemini model with automatic function calling
 model = genai.GenerativeModel(
     "gemini-2.0-flash-exp",
-    tools=[start_mining_job, mine_pattern, analyze_specific_pattern, get_pattern_statistics, visualize_pattern_request, getChainerResult],
+    tools=[start_mining_job, mine_pattern, analyze_specific_pattern, get_pattern_statistics, visualize_pattern_request, getAllFactsAndRules, getChainerResult],
     system_instruction="""You are a friendly and knowledgeable AI assistant with expertise in data mining patterns, knowledge graphs, and pattern analysis. 
 
         **Your Primary Specialty:**
@@ -434,7 +638,23 @@ model = genai.GenerativeModel(
         - "Analyze this pattern" / "Explain this pattern" → Use analyze_specific_pattern()
         - "Statistics" / "how many patterns" → Use get_pattern_statistics()
         - "Visualize" / "show me" a pattern → Use visualize_pattern_request()
-        - "Why is..." / "Explain why..." / "Prove that..." questions → Use getChainerResult() with the query formatted as a MeTTa expression
+    - "Why is..." / "Explain why..." / "Prove that..." questions → Use getChainerResult() with the query formatted as a MeTTa expression
+
+    **CRITICAL BACKWARD-CHAINING WORKFLOW (MUST FOLLOW):**
+    Before calling getChainerResult(), ALWAYS call getAllFactsAndRules() to fetch current facts and rules from the knowledge base. Use the returned atoms to identify canonical predicate and constant names, then rewrite the user's natural-language question into a MeTTa expression that matches those atoms. Only after rewriting the query to use the KB's canonical atoms should you call getChainerResult().
+
+    Example:
+    - User: "What is article 1's engagement level?"
+    - Assistant: call getAllFactsAndRules(), observe atoms like `(engagement_level 1 high)`, rewrite as `(engagement_level 1 $whatIsIt)`, then call getChainerResult("(engagement_level 1 $whatIsIt)").
+    - This ensures the chainer is invoked with a query that matches KB atoms and returns useful proofs.
+
+                IMPORTANT: FOR ANY "WHY" / "EXPLAIN" / "PROVE" QUESTIONS (MANDATORY):
+                - The assistant MUST enforce this internal workflow, but MUST NOT mention it to the user.
+                    * Internally: fetch KB atoms, rewrite the NL question to a canonical MeTTa query, then call the chainer to obtain proofs.
+                    * Externally (user-facing): do NOT narrate or reveal any of these internal steps, function calls, or that you fetched facts/rules. Never say "I called...", "I fetched...", or similar.
+                - For such questions, the assistant MUST present only the final justification derived from the chainer or the concise statement "No proof was found." if no proof exists.
+                - Style: final answers should be friendly, concise, and slightly jokey. No MeTTa expressions, no code blocks, and no internal diagnostic text in the user-facing reply unless the user explicitly requests the raw proof or the MeTTa query.
+                - If the assistant cannot map the user's question to a MeTTa query or cannot produce a proof, respond with a short user-facing explanation (e.g. "I couldn't find a logical proof for that.") and offer to show the raw proof only if the user asks for it.
 
         **CRITICAL: When User Says "Mine rules with X patterns":**
         1. ALWAYS call mine_pattern() immediately to get all patterns
@@ -605,31 +825,9 @@ def get_mining_status(job_id: str):
     
     if job.status == 'completed' and job.result is not None:
         # Ensure the result is JSON serializable (Hyperon / MeTTa atoms are not
-        # directly serializable by Flask's JSON encoder). Convert common
-        # containers recursively and fall back to string for unknown objects.
-        def make_json_serializable(o):
-            # primitive types
-            if o is None or isinstance(o, (str, int, float, bool)):
-                return o
-            # dict-like
-            if isinstance(o, dict):
-                return {k: make_json_serializable(v) for k, v in o.items()}
-            # list/tuple/set
-            if isinstance(o, (list, tuple, set)):
-                return [make_json_serializable(x) for x in o]
-            # dataclasses and objects: try to extract __dict__
-            if hasattr(o, '__dict__'):
-                try:
-                    return {k: make_json_serializable(v) for k, v in o.__dict__.items()}
-                except Exception:
-                    pass
-            # Fallback: convert to string (works for Hyperon atoms)
-            try:
-                return str(o)
-            except Exception:
-                return repr(o)
-
-        response['result'] = make_json_serializable(job.result)
+        # directly serializable by Flask's JSON encoder). Reuse the top-level
+        # sanitizer which is defensive about types.
+        response['result'] = make_json_safe(job.result)
     elif job.status == 'error' and job.error:
         response['error'] = job.error
     
@@ -760,154 +958,145 @@ def summarize_patterns_endpoint():
 
 @app.route('/api/chat', methods=['POST', 'OPTIONS'])
 def chat():
-    """Main chat endpoint with Gemini AI and automatic function calling"""
+    """Main chat endpoint with Gemini AI and automatic function calling
+
+    This cleaned implementation centralizes error handling and ensures the
+    returned payload is JSON-serializable by sanitizing function call results.
+    """
     if request.method == 'OPTIONS':
         response = jsonify({'status': 'ok'})
         response.headers.add('Access-Control-Allow-Origin', '*')
         response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
         response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
         return response, 200
-    
+
     try:
-        data = request.get_json()
+        data = request.get_json() or {}
         message = data.get('message', '')
         history = data.get('history', [])
         session_id = data.get('session_id', 'default')
-        
+
         if not message:
             return jsonify({'error': 'Message is required'}), 400
-        
-        if session_id not in conversations:
-            conversations[session_id] = []
-        
+
+        # Special-case: 'why' questions about articles should run the
+        # getAllFactsAndRules -> rewrite -> getChainerResult workflow and
+        # return the chainer's justification directly.
+        try:
+            bc_text, bc_calls = handle_backward_chain_for_message(message)
+            if bc_text is not None:
+                # store in history
+                conversations[session_id].append({'role': 'user', 'content': message})
+                conversations[session_id].append({'role': 'assistant', 'content': bc_text})
+                try:
+                    safe_calls = make_json_safe(bc_calls)
+                except Exception:
+                    safe_calls = str(bc_calls)
+                return jsonify({'response': bc_text, 'functionCalls': safe_calls, 'session_id': session_id})
+        except Exception as e:
+            print('Error handling backward chain shortcut:', e)
+            # fall through to normal chat flow
+
+        conversations.setdefault(session_id, [])
+
         # Build conversation history for Gemini
         gemini_history = []
         for msg in history[-10:]:
-            if msg['role'] == 'user':
-                gemini_history.append({
-                    'role': 'user',
-                    'parts': [msg['content']]
-                })
-            elif msg['role'] == 'assistant':
-                gemini_history.append({
-                    'role': 'model',
-                    'parts': [msg['content']]
-                })
-        
-        # Start chat with history
+            if msg.get('role') == 'user':
+                gemini_history.append({'role': 'user', 'parts': [msg.get('content', '')]})
+            elif msg.get('role') == 'assistant':
+                gemini_history.append({'role': 'model', 'parts': [msg.get('content', '')]})
+
+        # Start chat with history and send the user message
         chat_session = model.start_chat(history=gemini_history)
-        
-        # Send the user message
         response = chat_session.send_message(message)
-        
-        # Handle automatic function calling
+
+        # Handle automatic function calling loop
         max_iterations = 5
         iteration = 0
         function_results = []
-        
+
         while iteration < max_iterations:
             iteration += 1
-            
-            # Check if the model wants to call a function
-            if response.candidates[0].content.parts:
-                part = response.candidates[0].content.parts[0]
-                
-                # Check for function call
-                if hasattr(part, 'function_call') and part.function_call:
-                    function_call = part.function_call
-                    function_name = function_call.name
-                    function_args = dict(function_call.args)
-                    
-                    print(f"🔧 Function call: {function_name}({function_args})")
-                    
-                    # Execute the function
-                    if function_name in available_functions:
-                        try:
-                            # Normalize args: map common alias names and convert numeric strings to ints
-                            norm_args = {}
-                            for k, v in function_args.items():
-                                key = k
-                                if k in ('conjunction_count', 'conjunctions', 'conjunctionCount', 'numberOfConjunction', 'n'):
-                                    key = 'conjunction_count'
 
-                                # Normalize numeric-looking strings and floats
-                                if isinstance(v, str) and re.fullmatch(r"\d+", v):
-                                    norm_args[key] = int(v)
-                                elif isinstance(v, float) and v.is_integer():
-                                    norm_args[key] = int(v)
-                                else:
-                                    norm_args[key] = v
-
-                            function_result = available_functions[function_name](**norm_args)
-                            function_results.append({
-                                'name': function_name,
-                                'args': norm_args,
-                                'result': function_result
-                            })
-                            
-                            print(f"✓ Function result: {function_result}")
-                            
-                            # Send function result back to the model
-                            response = chat_session.send_message(
-                                genai.types.content_types.to_content({
-                                    'role': 'function',
-                                    'parts': [{
-                                        'function_response': {
-                                            'name': function_name,
-                                            'response': function_result
-                                        }
-                                    }]
-                                })
-                            )
-                            
-                        except Exception as func_error:
-                            print(f"✗ Function error: {func_error}")
-                            error_result = {'error': str(func_error)}
-                            
-                            response = chat_session.send_message(
-                                genai.types.content_types.to_content({
-                                    'role': 'function',
-                                    'parts': [{
-                                        'function_response': {
-                                            'name': function_name,
-                                            'response': error_result
-                                        }
-                                    }]
-                                })
-                            )
-                    else:
-                        print(f"✗ Unknown function: {function_name}")
-                        break
-                else:
-                    # No more function calls, we have the final response
-                    break
-            else:
+            parts = getattr(response.candidates[0].content, 'parts', []) if response and response.candidates else []
+            if not parts:
                 break
-        
+
+            part = parts[0]
+            if not (hasattr(part, 'function_call') and part.function_call):
+                break
+
+            function_call = part.function_call
+            function_name = getattr(function_call, 'name', None)
+            function_args = dict(getattr(function_call, 'args', {}) or {})
+
+            print(f"🔧 Function call: {function_name}({function_args})")
+
+            if function_name not in available_functions:
+                print(f"✗ Unknown function: {function_name}")
+                break
+
+            try:
+                # Normalize args (alias mapping and numeric normalization)
+                norm_args = {}
+                for k, v in function_args.items():
+                    key = k
+                    if k in ('conjunction_count', 'conjunctions', 'conjunctionCount', 'numberOfConjunction', 'n'):
+                        key = 'conjunction_count'
+
+                    if isinstance(v, str) and re.fullmatch(r"\d+", v):
+                        norm_args[key] = int(v)
+                    elif isinstance(v, float) and v.is_integer():
+                        norm_args[key] = int(v)
+                    else:
+                        norm_args[key] = v
+
+                function_result = available_functions[function_name](**norm_args)
+                function_results.append({'name': function_name, 'args': norm_args, 'result': function_result})
+
+                # Send the function result back to the model
+                response = chat_session.send_message(
+                    genai.types.content_types.to_content({
+                        'role': 'function',
+                        'parts': [{
+                            'function_response': {
+                                'name': function_name,
+                                'response': function_result
+                            }
+                        }]
+                    })
+                )
+
+            except Exception as func_error:
+                print(f"✗ Function error: {func_error}")
+                # Return an error response from the function back to the model
+                response = chat_session.send_message(
+                    genai.types.content_types.to_content({
+                        'role': 'function',
+                        'parts': [{
+                            'function_response': {
+                                'name': function_name,
+                                'response': {'error': str(func_error)}
+                            }
+                        }]
+                    })
+                )
+
         # Extract final text response
-        response_text = ""
-        if response.candidates[0].content.parts:
-            for part in response.candidates[0].content.parts:
+        response_text = ''
+        if response and response.candidates:
+            for part in getattr(response.candidates[0].content, 'parts', []):
                 if hasattr(part, 'text'):
                     response_text += part.text
 
-        # If the model produced no textual response but it executed a mining
-        # function, synthesize a summary from the mining result so the chat
-        # endpoint returns a useful assistant message instead of an apology.
+        # If the model didn't generate text but mining results exist, synthesize a summary
         if not response_text:
-            # Look for a mining function call result in function_results
-            mining_fr = None
-            for fr in function_results:
-                if fr.get('name') == 'mine_pattern' and isinstance(fr.get('result'), dict):
-                    mining_fr = fr
-                    break
-
+            mining_fr = next((fr for fr in function_results if fr.get('name') == 'mine_pattern' and isinstance(fr.get('result'), dict)), None)
             if mining_fr:
-                # mining_fr['result'] is the dict returned by start_mining_job
                 mining_payload = mining_fr['result']
                 patterns = []
                 try:
-                    # mining_payload['result'] should be the mine_pattern dict
                     candidate = mining_payload.get('result') if isinstance(mining_payload, dict) else None
                     if isinstance(candidate, dict):
                         patterns = candidate.get('patterns', [])
@@ -922,28 +1111,24 @@ def chat():
 
         if not response_text:
             response_text = "I apologize, but I couldn't generate a proper response. Please try again."
-        
-        # Store in conversation history
-        conversations[session_id].append({
-            'role': 'user',
-            'content': message
-        })
-        conversations[session_id].append({
-            'role': 'assistant',
-            'content': response_text
-        })
-        
-        return jsonify({
-            'response': response_text,
-            'functionCalls': function_results,
-            'session_id': session_id
-        })
-        
+
+        # Store conversation
+        conversations[session_id].append({'role': 'user', 'content': message})
+        conversations[session_id].append({'role': 'assistant', 'content': response_text})
+
+        # Sanitize function results and return
+        try:
+            safe_function_results = make_json_safe(function_results)
+        except Exception as e:
+            print('Failed to sanitize function_results:', e)
+            safe_function_results = str(function_results)
+
+        return jsonify({'response': response_text, 'functionCalls': safe_function_results, 'session_id': session_id})
+
     except Exception as e:
         print(f"Error in chat endpoint: {e}")
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
-
 @app.route('/api/chat/clear', methods=['POST', 'OPTIONS'])
 def clear_chat():
     """Clear conversation history"""
