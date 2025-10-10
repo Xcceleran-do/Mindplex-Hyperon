@@ -58,10 +58,6 @@ const App: Component = () => {
     propertyFilters: []
   });
 
-  // Track collapsed states for dynamic positioning
-  const [controlsCollapsed, setControlsCollapsed] = createSignal(true);
-  const [legendCollapsed, setLegendCollapsed] = createSignal(true);
-
   // Mining and chat state
   const [miningResults, setMiningResults] = createSignal<Array<{ pattern: string; support: string }>>([]);
   const [currentConjunctSize, setCurrentConjunctSize] = createSignal<number | undefined>(undefined);
@@ -72,47 +68,6 @@ const App: Component = () => {
   // Initialize parser and columnar transformer
   const parser = new MettaParserImpl();
   const columnarTransformer = new ColumnarTransformer();
-
-  // Update CSS variables for dynamic positioning
-  createEffect(() => {
-    const updatePositions = () => {
-      const legendEl = document.querySelector('[class*="legendContainer"]') as HTMLElement;
-      const miningEl = document.querySelector('.mining-interface') as HTMLElement;
-      
-      if (legendEl && miningEl) {
-        // Calculate positions based on actual element heights
-        const legendTop = 20;
-        const legendHeight = legendEl.offsetHeight;
-        const miningTop = legendTop + legendHeight + 10; // 10px gap
-        const miningHeight = miningEl.offsetHeight;
-        const chatTop = miningTop + miningHeight + 10; // 10px gap
-        const chatHeight = window.innerHeight - chatTop - 40; // 40px bottom margin
-        
-        document.documentElement.style.setProperty('--legend-top', `${legendTop}px`);
-        document.documentElement.style.setProperty('--mining-top', `${miningTop}px`);
-        document.documentElement.style.setProperty('--chat-top', `${chatTop}px`);
-        document.documentElement.style.setProperty('--chat-height', `${chatHeight}px`);
-      }
-    };
-
-    // Update on mount and when layout changes
-    setTimeout(updatePositions, 100);
-    const observer = new MutationObserver(updatePositions);
-    observer.observe(document.body, { 
-      childList: true, 
-      subtree: true, 
-      attributes: true, 
-      attributeFilter: ['class', 'style'] 
-    });
-
-    // Also update on window resize
-    window.addEventListener('resize', updatePositions);
-
-    return () => {
-      observer.disconnect();
-      window.removeEventListener('resize', updatePositions);
-    };
-  });
 
   // Parse and transform data to columnar format
   createEffect(() => {

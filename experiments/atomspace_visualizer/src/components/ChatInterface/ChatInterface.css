@@ -50,9 +50,10 @@
 .chat-interface {
   position: fixed;
   right: 20px;
-  top: var(--chat-top, calc(50vh + 120px)); /* Below the mine button */
+  bottom: 20px; /* Position from bottom for consistent placement */
   width: 340px;
-  height: var(--chat-height, calc(100vh - 50vh - 160px)); /* Dynamic height based on available space */
+  height: calc(100vh - 200px); /* Leave room for legend and mining interface at top */
+  max-height: 600px; /* Maximum height to prevent overflow */
   min-height: 54px;
   background: white;
   border-radius: 12px;
