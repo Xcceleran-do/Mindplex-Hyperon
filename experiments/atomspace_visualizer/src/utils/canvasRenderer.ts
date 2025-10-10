@@ -48,9 +48,19 @@ export const renderNode = (
   const isHighlighted = highlightState.highlightedNodes.has(node.id);
   const isDimmed = highlightState.dimmedNodes.has(node.id);
 
+  // Get CSS variables for theming
+  const computedStyle = getComputedStyle(document.documentElement);
+  const nodeFill = computedStyle.getPropertyValue('--node-fill').trim() || '#6b7280';
+  const nodeStroke = computedStyle.getPropertyValue('--node-stroke').trim() || 'rgba(0, 0, 0, 0.2)';
+  const textPrimary = computedStyle.getPropertyValue('--text-primary').trim() || '#374151';
+  const textDimmed = computedStyle.getPropertyValue('--text-dimmed').trim() || 'rgba(55, 65, 81, 0.3)';
+  const nodeHighlight = computedStyle.getPropertyValue('--node-highlight').trim() || '#f59e0b';
+  const nodeHover = computedStyle.getPropertyValue('--node-hover').trim() || '#3b82f6';
+  const nodeSelected = computedStyle.getPropertyValue('--node-selected').trim() || '#10b981';
+
   // Determine colors based on state
-  let fillColor = node.color || '#6b7280';
-  let strokeColor = 'rgba(0, 0, 0, 0.2)';
+  let fillColor = node.color || nodeFill;
+  let strokeColor = nodeStroke;
   let strokeWidth = 2;
   let currentRadius = radius;
 
@@ -66,22 +76,22 @@ export const renderNode = (
   } else if (isHighlighted) {
     // Highlight the node
     currentRadius *= 1.2;
-    strokeColor = '#f59e0b';
+    strokeColor = nodeHighlight;
     strokeWidth = 4;
     
     // Add glow effect
-    ctx.shadowColor = '#f59e0b';
+    ctx.shadowColor = nodeHighlight;
     ctx.shadowBlur = 20;
   }
 
   if (node === hoveredNode) {
     currentRadius *= 1.1;
     strokeWidth = 3;
-    strokeColor = '#3b82f6';
+    strokeColor = nodeHover;
   }
 
   if (node === selectedNode) {
-    strokeColor = '#10b981';
+    strokeColor = nodeSelected;
     strokeWidth = 4;
   }
 
@@ -120,7 +130,7 @@ export const renderNode = (
 
   // Draw node label
   if (transform.scale > 0.4 && node.label) {
-    ctx.fillStyle = isDimmed ? 'rgba(55, 65, 81, 0.3)' : '#374151';
+    ctx.fillStyle = isDimmed ? textDimmed : textPrimary;
     const fontSize = node.metadata.columnType === 'header' ? 14 : 12;
     ctx.font = `${Math.max(fontSize, fontSize * transform.scale)}px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`;
     ctx.textAlign = 'center';
@@ -257,7 +267,11 @@ export const drawColumnSeparators = (
     }
   }
 
-  ctx.strokeStyle = 'rgba(0, 0, 0, 0.05)';
+  // Get separator color from CSS variable
+  const computedStyle = getComputedStyle(document.documentElement);
+  const separatorColor = computedStyle.getPropertyValue('--separator-color').trim() || 'rgba(0, 0, 0, 0.05)';
+
+  ctx.strokeStyle = separatorColor;
   ctx.lineWidth = 1;
   ctx.setLineDash([5, 5]);
 

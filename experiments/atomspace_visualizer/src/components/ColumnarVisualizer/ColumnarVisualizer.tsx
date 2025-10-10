@@ -265,7 +265,7 @@ const ColumnarVisualizer: Component<ColumnarVisualizerProps> = (props) => {
         width: '100%',
         height: '100%',
         cursor: 'grab',
-        'background-color': '#fafafa'
+        'background-color': 'var(--bg-primary)'
       }}
     >
       Your browser does not support the HTML5 canvas element.

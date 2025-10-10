@@ -11,6 +11,7 @@ import { ColumnarTransformer } from './services/graph/ColumnarTransformer';
 
 import './styles/variables.css';
 import './styles/components.css';
+import './styles/themes.css';
 import styles from './AppColumnar.module.css';
 
 const App: Component = () => {
