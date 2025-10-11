@@ -45,25 +45,56 @@
 
 .graphContainer {
   position: absolute;
-  top: 20px;
-  left: 20px;
-  width: calc(100% - 420px);
-  height: calc(100vh - 40px);
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: stretch;
 }
+
+/* Side panel overlays the graph; no graph shifting is applied. */
 
 .graphCard {
   position: relative;
   width: 100%;
   height: 100%;
-  background: rgba(255, 255, 255, 0.98);
+  background: linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(245,247,251,0.8) 100%);
   border-radius: 16px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
   border: 1px solid rgba(0, 0, 0, 0.08);
-  overflow-y: scroll;
-  overflow-x: scroll;
+  overflow: hidden; /* hide native scrollbars, canvas handles panning */
+}
+
+/* Make the graph canvas full-bleed within the card */
+#graph-canvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}
+
+/* Remove scrollbars for the graph card across browsers */
+.graphCard {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+.graphCard::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
+/* Animated background for the canvas: subtle slow movement */
+@keyframes bg-pan {
+  0% { background-position: 0% 0%, 0% 50%; }
+  50% { background-position: 100% 100%, 50% 0%; }
+  100% { background-position: 0% 0%, 0% 50%; }
+}
+
+#graph-canvas {
+  animation: bg-pan 40s linear infinite;
+  will-change: background-position;
 }
 
 /* Custom fancy scrollbar for graph card */
@@ -119,6 +150,10 @@
   border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
+.panelOpen .canvasControls {
+  z-index: 1400; /* ensure controls remain above the right panel */
+}
+
 .controlBtn {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
@@ -140,4 +175,197 @@
 .controlBtn:active {
   transform: translateY(0);
   box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+}
+
+.chatToggle {
+  position: fixed;
+  right: 28px;
+  bottom: 28px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  font-size: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 30px rgba(102, 126, 234, 0.25);
+  z-index: 1200;
+  border: none;
+  cursor: pointer;
+}
+
+/* Left-side stacked panel for legend + mining controls */
+.leftPanel {
+  position: fixed;
+  left: 20px;
+  top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 1100;
+  max-width: 360px;
+  pointer-events: auto;
+  background: transparent; /* content cards provide their own backgrounds */
+  /* overlay mode: do not affect graph layout; visually float above it */
+}
+
+/* Make the panel a bounded, floating card so it doesn't appear as a full-bleed white slab */
+.leftPanel {
+  background: rgba(255,255,255,0.75);
+  backdrop-filter: blur(6px);
+  border-radius: 12px;
+  padding: 8px;
+  box-sizing: border-box;
+  max-height: calc(100vh - 40px);
+  overflow: visible; /* allow toggle button to sit outside panel bounds */
+}
+
+/* Theme-aware backgrounds: respect data-theme attribute on documentElement */
+:root[data-theme='dark'] .leftPanel {
+  background: rgba(20,24,30,0.6);
+  color: #e6eef8;
+  box-shadow: 8px 0 24px rgba(0,0,0,0.6);
+  border: 1px solid rgba(255,255,255,0.03);
+}
+
+:root[data-theme='light'] .leftPanel {
+  background: rgba(255,255,255,0.95);
+  color: #0b1220;
+  box-shadow: 8px 0 24px rgba(0,0,0,0.06);
+  border: 1px solid rgba(0,0,0,0.04);
+}
+
+.leftPanel .panelToggleBtn {
+  position: absolute;
+  right: -28px; /* toggle sits on the right edge of the left panel */
+  top: 12px;
+  width: 28px;
+  height: 36px;
+  border-radius: 0 8px 8px 0;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.15);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  z-index: 1400; /* ensure toggle sits above panel and other UI */
+}
+
+.dragHandle {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 6px;
+  height: 10px;
+  border-radius: 6px;
+  background: rgba(0,0,0,0.08);
+  cursor: grab;
+  z-index: 1500;
+}
+.dragHandle:active { cursor: grabbing; }
+
+.leftPanel.collapsed {
+  max-width: 56px;
+  left: 16px;
+  pointer-events: auto;
+}
+
+.leftPanel.collapsed .panelContent {
+  display: none;
+}
+
+.leftPanel.open {
+  max-width: 360px;
+}
+
+.panelContent {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: all 220ms ease-in-out;
+  /* keep panel content from stretching to full viewport height */
+  max-height: calc(100vh - 120px);
+  overflow: auto;
+  padding: 8px;
+  box-sizing: border-box;
+  border-radius: 12px;
+}
+
+/* ensure child cards don't stretch full height and remain visually separated */
+.panelContent > * {
+  width: 100%;
+  margin: 0;
+}
+
+.leftPanel { /* subtle panel shadow to separate from graph */
+  box-shadow: 8px 0 24px rgba(0,0,0,0.06);
+}
+
+@media (max-width: 900px) {
+  .leftPanel {
+    left: 86px; /* avoid overlapping chat toggle on small screens */
+  }
+}
+
+@media (max-width: 900px) {
+  .leftPanel {
+    left: 90px; /* make room for chat toggle */
+    max-width: 320px;
+  }
+}
+
+@media (max-width: 480px) {
+  .leftPanel {
+    left: 80px;
+    top: 80px;
+    max-width: 300px;
+  }
+}
+
+/* Make sure the chat toggle sits above the side panel */
+.chatToggle {
+  z-index: 1200;
+}
+
+.themeToggle {
+  position: fixed;
+  right: 24px;
+  top: 20px;
+  z-index: 1300;
+}
+
+/* Floating Mining Button - bottom center */
+.floatingMine {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 28px;
+  z-index: 1150; /* above graph but below chat toggle (chatToggle z-index:1200) */
+  background: linear-gradient(135deg, #ff8a00 0%, #ff3d00 100%); /* orange-red */
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 14px;
+  box-shadow: 0 8px 30px rgba(255, 90, 0, 0.25);
+  cursor: pointer;
+}
+
+.floatingMine:hover {
+  transform: translateX(-50%) translateY(-2px);
+  box-shadow: 0 12px 40px rgba(255, 90, 0, 0.35);
+}
+
+.themeToggle button {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  padding: 6px 8px;
+  cursor: pointer;
 }

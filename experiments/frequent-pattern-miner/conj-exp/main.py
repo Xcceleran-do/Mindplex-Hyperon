@@ -316,11 +316,17 @@ def unique_combinations_star_metta_op(metta, list_expr_atom, size_atom):
 
     if k <= 0 or k > len(items):
         return metta.parse_all("()")
-
+    
+    print("combination making started in python")
     combos = _generate_star_join_combos(items, k)
+    print("combination making ended in python")
     conj_items = ["(conjunct (, {}) )".format(" ".join(combo)) for combo in combos]
+    print("formatting making ended in python")
     combined = "(" + " ".join(conj_items) + ")"
-    return metta.parse_all(combined)
+    print("join , making ended in python")
+    x = metta.parse_all(combined)
+    print("parsing making ended in python")
+    return x
 
 @register_atoms(pass_metta=True)
 def cnj_exp(metta):

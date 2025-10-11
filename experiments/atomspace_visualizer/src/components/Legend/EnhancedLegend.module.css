@@ -1,7 +1,5 @@
 .legendContainer {
-  position: fixed;
-  top: 20px;
-  right: 20px;
+  position: relative;
   background: rgba(255, 255, 255, 0.95);
   border-radius: 12px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
@@ -11,7 +9,21 @@
   backdrop-filter: blur(10px);
   border: 1px solid rgba(0, 0, 0, 0.1);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  z-index: 998;
+}
+
+/* Theme overrides: respect document data-theme attribute */
+:root[data-theme='dark'] .legendContainer {
+  background: rgba(24, 28, 34, 0.7);
+  border: 1px solid rgba(255,255,255,0.04);
+  box-shadow: 0 6px 28px rgba(0,0,0,0.6);
+  color: #e6eef8;
+}
+
+:root[data-theme='light'] .legendContainer {
+  background: rgba(255,255,255,0.98);
+  border: 1px solid rgba(0,0,0,0.06);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+  color: #0b1220;
 }
 
 .legendHeader {
@@ -25,6 +37,16 @@
   color: white;
   border-radius: 12px 12px 0 0;
   transition: background 0.2s ease;
+}
+
+:root[data-theme='dark'] .legendHeader {
+  background: linear-gradient(135deg, #2b2f3a 0%, #1a1d24 100%);
+  color: #e6eef8;
+}
+
+:root[data-theme='light'] .legendHeader {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
 }
 
 .legendHeader:hover {
@@ -46,6 +68,14 @@
   padding: 4px 8px;
   border-radius: 4px;
   transition: background 0.2s ease;
+}
+
+:root[data-theme='dark'] .collapseButton {
+  color: #dbe9ff;
+}
+
+:root[data-theme='light'] .collapseButton {
+  color: white;
 }
 
 .collapseButton:hover {
@@ -80,6 +110,12 @@
   font-size: 13px;
   color: #92400e;
   animation: slideIn 0.3s ease-in-out;
+}
+
+:root[data-theme='dark'] .filterStatus {
+  background: rgba(60,48,24,0.18);
+  border: 1px solid rgba(245, 158, 11, 0.12);
+  color: #ffd8a8;
 }
 
 @keyframes slideIn {
@@ -122,6 +158,14 @@
   text-transform: capitalize;
 }
 
+:root[data-theme='dark'] .legendSection h4 {
+  color: #dbe9ff;
+}
+
+:root[data-theme='light'] .legendSection h4 {
+  color: #374151;
+}
+
 .legendItem {
   display: flex;
   align-items: center;
@@ -129,6 +173,14 @@
   font-size: 13px;
   color: #4b5563;
   transition: all 0.2s ease;
+}
+
+:root[data-theme='dark'] .legendItem {
+  color: #cfe6ff;
+}
+
+:root[data-theme='light'] .legendItem {
+  color: #4b5563;
 }
 
 .legendItem:hover {
@@ -161,6 +213,12 @@
   color: #374151;
   transition: all 0.2s ease;
   white-space: nowrap;
+}
+
+:root[data-theme='dark'] .filterButton {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.04);
+  color: #dbe9ff;
 }
 
 .filterButton:hover {

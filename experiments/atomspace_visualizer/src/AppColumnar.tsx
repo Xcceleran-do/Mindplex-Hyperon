@@ -3,7 +3,6 @@ import { createSignal, createEffect, createResource } from 'solid-js';
 
 import ColumnarVisualizer from './components/ColumnarVisualizer/ColumnarVisualizer';
 import EnhancedLegend from './components/Legend/EnhancedLegend';
-import MiningInterface from './components/MiningInterface/MiningInterface';
 import ChatInterface from './components/ChatInterface/ChatInterface';
 import { GraphData, GraphNode, FilterState } from './types';
 import { MettaParserImpl } from './services/parser/MettaParser';
@@ -88,6 +87,36 @@ const App: Component = () => {
   const handleNodeSelect = (node: GraphNode) => {
     console.log('Selected node:', node.label);
   };
+
+  // Chat visibility & theme
+  const [isChatOpen, setIsChatOpen] = createSignal(false);
+  const [theme, setTheme] = createSignal<string>(localStorage.getItem('theme') || 'auto');
+
+  const applyTheme = (t: string) => {
+    if (t === 'dark') {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    } else if (t === 'light') {
+      document.documentElement.removeAttribute('data-theme');
+      document.documentElement.setAttribute('data-theme', 'light');
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+    }
+    localStorage.setItem('theme', t);
+    setTheme(t);
+  };
+
+  // Initialize theme on mount
+  createEffect(() => {
+    applyTheme(theme());
+  });
+
+  // Open chat automatically when mining results arrive
+  createEffect(() => {
+    const results = miningResults();
+    if (results && results.length > 0) {
+      setIsChatOpen(true);
+    }
+  });
 
   const handleFilterChange = (filter: FilterState) => {
     setFilterState(filter);
@@ -260,8 +289,71 @@ const App: Component = () => {
     }
   };
 
+  // Default to collapsed (closed) as requested
+  const [isRightPanelOpen, setIsRightPanelOpen] = createSignal(false);
+
+  // Draggable left panel position (persisted)
+  const getInitialPanelPos = (): { x: number; y: number } => {
+    try {
+      const raw = localStorage.getItem('leftPanelPos');
+      if (raw) return JSON.parse(raw);
+    } catch (e) {
+      // ignore parse errors
+    }
+    return { x: 20, y: 20 };
+  };
+  const [panelPos, setPanelPos] = createSignal<{ x: number; y: number }>(getInitialPanelPos());
+
+  // Drag state kept in closure
+  const dragState: {
+    dragging: boolean;
+    offsetX: number;
+    offsetY: number;
+  } = { dragging: false, offsetX: 0, offsetY: 0 };
+
+  const startPanelDrag = (e: PointerEvent) => {
+    // Only start drag for primary button
+    if ((e as any).button && (e as any).button !== 0) return;
+    e.preventDefault();
+    dragState.dragging = true;
+    const el = (e.currentTarget as HTMLElement) || null;
+    const rect = el?.getBoundingClientRect();
+    if (rect) {
+      dragState.offsetX = e.clientX - rect.left;
+      dragState.offsetY = e.clientY - rect.top;
+    } else {
+      dragState.offsetX = 0;
+      dragState.offsetY = 0;
+    }
+    window.addEventListener('pointermove', onPanelPointerMove);
+    window.addEventListener('pointerup', endPanelDrag);
+  };
+
+  const onPanelPointerMove = (e: PointerEvent) => {
+    if (!dragState.dragging) return;
+    let nx = e.clientX - dragState.offsetX;
+    let ny = e.clientY - dragState.offsetY;
+    // keep panel within viewport bounds (small margin)
+    const margin = 8;
+    nx = Math.max(margin, Math.min(nx, window.innerWidth - 120));
+    ny = Math.max(margin, Math.min(ny, window.innerHeight - 80));
+    setPanelPos({ x: nx, y: ny });
+  };
+
+  const endPanelDrag = () => {
+    if (!dragState.dragging) return;
+    dragState.dragging = false;
+    window.removeEventListener('pointermove', onPanelPointerMove);
+    window.removeEventListener('pointerup', endPanelDrag);
+    try {
+      localStorage.setItem('leftPanelPos', JSON.stringify(panelPos()));
+    } catch (e) {
+      // ignore
+    }
+  };
+
   return (
-    <div class={styles.app}>
+    <div class={`${styles.app} ${isRightPanelOpen() ? styles.panelOpen : ''}`}>
       {/* Scrollable graph container */}
       <div class={styles.graphContainer}>
         <div class={styles.graphCard}>
@@ -287,21 +379,65 @@ const App: Component = () => {
         </div>
       </div>
 
-      {/* Enhanced Legend - Top Right */}
-      <EnhancedLegend
-        graphData={graphData()}
-        onFilterChange={handleFilterChange}
-        filterState={filterState()}
-      />
+      {/* Left-side panel containing Legend, Filters and Mining controls */}
+      <div
+        class={`${styles.leftPanel} ${isRightPanelOpen() ? styles.open : styles.collapsed}`}
+        style={{ left: `${panelPos().x}px`, top: `${panelPos().y}px`, position: 'fixed' }}
+      >
+        {/* Drag handle - user can drag the panel by this bar */}
+        <div
+          class={styles.dragHandle}
+          onPointerDown={(e) => startPanelDrag(e as unknown as PointerEvent)}
+          title="Drag to reposition"
+        />
+        <button
+          class={styles.panelToggleBtn}
+          onClick={() => setIsRightPanelOpen(p => !p)}
+          onPointerDown={(e) => startPanelDrag(e as unknown as PointerEvent)}
+          aria-label={isRightPanelOpen() ? 'Close side panel' : 'Open side panel'}
+          title={isRightPanelOpen() ? 'Hide panel' : 'Show panel'}
+        >
+          {/* Flip chevron direction for left-side panel */}
+          {isRightPanelOpen() ? '❮' : '❯'}
+        </button>
 
-      {/* Mining Interface - Below Legend (with chat integration) */}
-      <MiningInterface
-        onPatternsFound={handlePatternsFound}
-        onMiningStart={startMiningUnified}
-      />
+        <div class={styles.panelContent}>
+          <EnhancedLegend
+            graphData={graphData()}
+            onFilterChange={handleFilterChange}
+            filterState={filterState()}
+          />
+        </div>
+      </div>
 
-      {/* Chat Interface - Opens automatically when mining completes */}
+      {/* Floating bottom-center mining button (ungrouped from legend/filter) */}
+      <button
+        class={styles.floatingMine}
+        onClick={() => startMiningUnified(3)}
+        aria-label="Start Mining"
+        title="Mine Neural Gold"
+      >
+        ⛏️ Mine
+      </button>
+
+      {/* Floating Chat Toggle Button */}
+      <button
+        class={styles.chatToggle}
+        onClick={() => setIsChatOpen(prev => !prev)}
+        aria-label="Toggle AI Assistant"
+      >
+        🤖
+      </button>
+
+      {/* Theme Toggle */}
+      <div class={styles.themeToggle}>
+        <button onClick={() => applyTheme(theme() === 'dark' ? 'light' : 'dark')}>🌓</button>
+      </div>
+
+      {/* Chat Interface - Opens when mining completes or user clicks the button */}
       <ChatInterface
+        isOpen={isChatOpen()}
+        onClose={() => setIsChatOpen(false)}
         conjunctSize={currentConjunctSize()}
         onVisualize={handleVisualize}
         miningResults={miningResults()}

@@ -19,6 +19,8 @@ export interface ChatInterfaceProps {
   miningResults?: Array<{ pattern: string; support: string }>;
   conjunctSize?: number;
   onMiningStart?: (conjunctSize: number) => void;
+  isOpen?: boolean;
+  onClose?: () => void;
 }
 
 const ChatInterface = (props: ChatInterfaceProps) => {
@@ -56,6 +58,11 @@ const ChatInterface = (props: ChatInterfaceProps) => {
   createEffect(() => {
     const results = props.miningResults;
     if (results && results.length > 0) {
+      // Auto-open chat UI when mining completes if parent provided control
+      if (props.isOpen === undefined || props.isOpen === false) {
+        // If onClose/onOpen handlers exist on parent, prefer that
+        // We open by calling onMiningStart? Instead expose onOpen via adding message
+      }
       // Add system message about mining completion
       const systemMsg: Message = {
         id: `sys-${Date.now()}`,
@@ -324,10 +331,14 @@ const ChatInterface = (props: ChatInterfaceProps) => {
     setMessages([]);
   };
 
+  // If parent controls visibility, honor it
+  const visible = () => props.isOpen === undefined ? true : props.isOpen;
+
   return (
     <>
-      {/* Chat Interface - Always Visible */}
-      <div class={`chat-interface ${isMinimized() ? 'minimized' : ''}`}>
+      {/* Chat Interface - Controlled visibility */}
+      <Show when={visible()}>
+        <div class={`chat-interface ${isMinimized() ? 'minimized' : ''}`}>
           <div class="chat-header" onClick={() => setIsMinimized(!isMinimized())} style={{ cursor: 'pointer' }}>
             <div class="chat-header-left">
               <span class="chat-icon">🤖</span>
@@ -429,6 +440,7 @@ const ChatInterface = (props: ChatInterfaceProps) => {
             </div>
           </Show>
         </div>
+      </Show>
     </>
   );
 };

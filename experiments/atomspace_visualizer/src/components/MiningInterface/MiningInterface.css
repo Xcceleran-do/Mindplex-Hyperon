@@ -1,7 +1,5 @@
 .mining-interface {
-  position: fixed;
-  right: 20px;
-  top: 50vh; /* Middle of screen to avoid overlap with legend */
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -11,8 +9,7 @@
   padding: 10px 12px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
   border: 2px solid rgba(139, 7, 89, 0.2);
-  z-index: 100;
-  width: 340px;
+  width: 100%;
   box-sizing: border-box;
 }
 

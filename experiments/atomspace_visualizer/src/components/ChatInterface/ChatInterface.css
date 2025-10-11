@@ -1,8 +1,8 @@
 /* Chat Toggle Button */
 .chat-toggle-btn {
   position: fixed;
-  bottom: 20px;
-  left: 20px;
+  bottom: 24px;
+  right: 24px;
   width: 60px;
   height: 60px;
   border-radius: 50%;
@@ -49,11 +49,11 @@
 /* Chat Interface - positioned to the right, below mining button */
 .chat-interface {
   position: fixed;
-  right: 20px;
-  bottom: 20px; /* Position from bottom for consistent placement */
-  width: 340px;
-  height: calc(100vh - 200px); /* Leave room for legend and mining interface at top */
-  max-height: 600px; /* Maximum height to prevent overflow */
+  right: 24px;
+  bottom: 96px; /* Leave room for floating button */
+  width: 380px;
+  height: calc(60vh);
+  max-height: 80vh;
   min-height: 54px;
   background: var(--bg-secondary);
   border-radius: 12px;

@@ -106,3 +106,5 @@
            (() (println! (" conjuncts we have got is " $temp4)))
         )  $temp4)
 )
+
+; !(unique_combinations_star ((length $x "high") (length $x "low") (length $x "medium") (tone $x "Conversational") (tone $x "Humorous") (tone $x "Motivational") (tone $x "Gentle") (tone $x "Educational") (tone $x "Analytical") (writing_style $x "Conversational") (writing_style $x "Descriptive") (writing_style $x "Informal") (writing_style $x "Narrative") (writing_style $x "Formal") ) 3)
