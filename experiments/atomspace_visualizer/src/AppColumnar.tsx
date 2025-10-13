@@ -150,19 +150,6 @@ const App: Component = () => {
     canvas.dispatchEvent(evt);
   };
 
-  const handleReset = () => {
-    setFilterState({
-      active: false,
-      articleIds: [],
-      propertyFilters: []
-    });
-    // Reset view by reloading
-    const canvas = document.querySelector('canvas');
-    if (canvas) {
-      canvas.dispatchEvent(new CustomEvent('reset'));
-    }
-  };
-
   const handleMiningStart = () => {
     console.log('AppColumnar.tsx: Mining started, starting animation');
     startMiningAnimation();
@@ -359,14 +346,58 @@ const App: Component = () => {
         <div class={styles.graphCard}>
           {/* Canvas Control Buttons - Top of Canvas */}
           <div class={styles.canvasControls}>
-            <button class={styles.controlBtn} onClick={handleZoomIn} title="Zoom In">
-              🔍+
+            <button
+              class={styles.controlBtn}
+              onClick={handleZoomIn}
+              title="Zoom in"
+              aria-label="Zoom in"
+            >
+              <span aria-hidden="true" class={styles.controlBtnIcon}>
+                <svg
+                  viewBox="0 0 24 24"
+                  role="presentation"
+                >
+                  <circle cx="11" cy="11" r="6" fill="none" stroke="currentColor" stroke-width="1.8" />
+                  <line x1="11" y1="8" x2="11" y2="14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                  <line x1="8" y1="11" x2="14" y2="11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                </svg>
+              </span>
             </button>
-            <button class={styles.controlBtn} onClick={handleZoomOut} title="Zoom Out">
-              🔍-
+            <button
+              class={styles.controlBtn}
+              onClick={handleZoomOut}
+              title="Zoom out"
+              aria-label="Zoom out"
+            >
+              <span aria-hidden="true" class={styles.controlBtnIcon}>
+                <svg
+                  viewBox="0 0 24 24"
+                  role="presentation"
+                >
+                  <circle cx="11" cy="11" r="6" fill="none" stroke="currentColor" stroke-width="1.8" />
+                  <line x1="8" y1="11" x2="14" y2="11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                </svg>
+              </span>
             </button>
-            <button class={styles.controlBtn} onClick={handleReset} title="Reset View">
-              🔄
+            <button
+              class={styles.controlBtn}
+              onClick={() => applyTheme(theme() === 'dark' ? 'light' : 'dark')}
+              title="Toggle light and dark mode"
+              aria-label="Toggle light and dark mode"
+            >
+              <span aria-hidden="true" class={styles.controlBtnIcon}>
+                <svg
+                  viewBox="0 0 24 24"
+                  role="presentation"
+                >
+                  <path
+                    d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"
+                    fill="currentColor"
+                  />
+                </svg>
+              </span>
             </button>
           </div>
 
@@ -413,7 +444,7 @@ const App: Component = () => {
       {/* Floating bottom-center mining button (ungrouped from legend/filter) */}
       <button
         class={styles.floatingMine}
-        onClick={() => startMiningUnified(3)}
+        onClick={() => startMiningUnified(4)}
         aria-label="Start Mining"
         title="Mine Neural Gold"
       >
@@ -428,11 +459,6 @@ const App: Component = () => {
       >
         🤖
       </button>
-
-      {/* Theme Toggle */}
-      <div class={styles.themeToggle}>
-        <button onClick={() => applyTheme(theme() === 'dark' ? 'light' : 'dark')}>🌓</button>
-      </div>
 
       {/* Chat Interface - Opens when mining completes or user clicks the button */}
       <ChatInterface

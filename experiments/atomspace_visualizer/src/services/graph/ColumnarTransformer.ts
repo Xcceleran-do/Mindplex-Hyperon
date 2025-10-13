@@ -229,6 +229,8 @@ export class ColumnarTransformer {
       length: '#d97706',
       tone: '#dc2626',
       writing_style: '#7c3aed',
+      format: '#2563eb',
+      audience: '#0f766e',
       engagement_level: '#0284c7'
     };
 
@@ -241,6 +243,8 @@ export class ColumnarTransformer {
       length: '#fbbf24',
       tone: '#f87171',
       writing_style: '#a78bfa',
+      format: '#60a5fa',
+      audience: '#2dd4bf',
       engagement_level: '#38bdf8'
     };
 

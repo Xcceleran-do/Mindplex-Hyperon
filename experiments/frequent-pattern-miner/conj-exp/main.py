@@ -202,6 +202,24 @@ def _expr_vars(expr: str) -> set[str]:
     return _extract_vars_from_expr(expr)
 
 
+_FUNCTOR_RE = re.compile(r"^\(?([\w:-]+)")
+
+
+def _expr_functor(expr: str) -> str:
+    """Extract the leading functor symbol from an expression string.
+
+    Example: "(length $x medium)" -> "length".
+    Returns an empty string if no functor can be identified.
+    """
+    s = expr.strip()
+    if not s:
+        return ""
+    if s[0] == '(':
+        s = s[1:]
+    match = re.match(r"([^\s()]+)", s)
+    return match.group(1) if match else ""
+
+
 def _group_clauses_by_var(exprs: list[str]) -> dict[str, list[int]]:
     """Build inverted index: var -> list of indices of exprs containing it."""
     inv: dict[str, list[int]] = {}
@@ -247,6 +265,7 @@ def _generate_star_join_combos(exprs: list[str], k: int) -> list[tuple[str, ...]
 
     inv = _group_clauses_by_var(exprs)
     var_ids, expr_vars = _nonhub_mask_setup(exprs)
+    functors = [_expr_functor(expr) for expr in exprs]
 
     results: list[tuple[str, ...]] = []
     seen: set[tuple[int, ...]] = set()
@@ -263,6 +282,7 @@ def _generate_star_join_combos(exprs: list[str], k: int) -> list[tuple[str, ...]
         pool.sort(key=lambda i: bin(masks[i]).count("1"))
 
         choose: list[int] = []
+        used_functors: set[str] = set()
 
         def backtrack(start: int, used_mask: int):
             if len(choose) == k:
@@ -273,12 +293,21 @@ def _generate_star_join_combos(exprs: list[str], k: int) -> list[tuple[str, ...]
                 return
             for idx in range(start, len(pool)):
                 i = pool[idx]
+                functor = functors[i]
+                if functor and functor in used_functors:
+                    continue
                 m = masks[i]
                 if (m & used_mask) != 0:
                     continue  # would create a second shared variable
                 choose.append(i)
+                added_functor = False
+                if functor:
+                    used_functors.add(functor)
+                    added_functor = True
                 backtrack(idx + 1, used_mask | m)
                 choose.pop()
+                if added_functor:
+                    used_functors.remove(functor)
 
         backtrack(0, 0)
 

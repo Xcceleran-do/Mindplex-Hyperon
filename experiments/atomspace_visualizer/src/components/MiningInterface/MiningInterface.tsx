@@ -20,7 +20,7 @@ export interface MiningInterfaceProps {
 const MiningInterface = (props: MiningInterfaceProps) => {
   const [isMining, setIsMining] = createSignal(false);
   const [miningResult, setMiningResult] = createSignal<MiningResult | null>(null);
-  const [conjunctionCount, setConjunctionCount] = createSignal(3);
+  const [conjunctionCount, setConjunctionCount] = createSignal(4);
   const [showResult, setShowResult] = createSignal(false);
 
   const startMining = async () => {
@@ -129,7 +129,7 @@ const MiningInterface = (props: MiningInterfaceProps) => {
             min="1"
             max="10"
             value={conjunctionCount()}
-            onInput={(e) => setConjunctionCount(parseInt(e.target.value) || 3)}
+            onInput={(e) => setConjunctionCount(parseInt(e.target.value) || 4)}
             disabled={isMining()}
           />
         </div>
