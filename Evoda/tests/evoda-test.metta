@@ -41,9 +41,9 @@
 !(assertEqual (let ($child1 $child2) (crossover rule1 rule2 0) (and (== rule1 $child1) (== rule2 $child2))) True)
 
 ;; Test cases for ruleLearning 
-!(assertEqual (let $rule (ruleLearning &kb (has_read (User "Saron Melaku") (Book $x)) 100 100 stdConfidence 0.1 0.7 ($a $b $c)) (> (countSupport $rule) 1)) True) ; we'll need to run it for significant amount of popSize and maxGen to gen a result which is not possible with metta
-!(assertEqual (let $rule (ruleLearning &kb (has_read (User $y) (Book $x)) 100 100 stdConfidence 0.1 $crossoverRate ($a $b $c)) (> (countSupport $rule) 1)) True) ; we'll need to run it for significant amount of popSize and maxGen to gen a result which is not possible with metta
-!(assertEqual (let $rule (ruleLearning &kb (has_read (User $y) (Book "Emegua")) 100 100 stdConfidence 0.1 $crossoverRate ($a $b $c)) (> (countSupport $rule) 1)) True) ; we'll need to run it for significant amount of popSize and maxGen to gen a result which is not possible with metta
+; !(assertEqual (let $rule (ruleLearning &kb (has_read (User "Saron Melaku") (Book $x)) 100 100 stdConfidence 0.1 0.7 ($a $b $c)) (> (countSupport $rule) 1)) True) ; we'll need to run it for significant amount of popSize and maxGen to gen a result which is not possible with metta
+; !(assertEqual (let $rule (ruleLearning &kb (has_read (User $y) (Book $x)) 100 100 stdConfidence 0.1 $crossoverRate ($a $b $c)) (> (countSupport $rule) 1)) True) ; we'll need to run it for significant amount of popSize and maxGen to gen a result which is not possible with metta
+; !(assertEqual (let $rule (ruleLearning &kb (has_read (User $y) (Book "Emegua")) 100 100 stdConfidence 0.1 $crossoverRate ($a $b $c)) (> (countSupport $rule) 1)) True) ; we'll need to run it for significant amount of popSize and maxGen to gen a result which is not possible with metta
 
 ;; Test cases for generatePop (Don't forget to pass the initial population)
 ; !(assertEqual (let $rules (generatePop ((freind (User "Saron Melaku") (User $y)) (similar_interest (User "Saron Melaku") (User $y))) &kb (freind (User "Saron Melaku") (User $y)) 100 100 stdConfidence 0.1 0.7 ($a $b $c)) (> (size-atom $rules) 100)) True) ; we'll need to run it for significant amount of popSize and maxGen to gen a result which is not possible with metta
