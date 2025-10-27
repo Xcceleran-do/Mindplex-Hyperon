@@ -85,7 +85,7 @@ Since MeTTa lacks a flexible formatter, formatting is done as you write code. So
 - Comments should be sufficient to describe the function's purpose and how it works at a high level.
 - Include examples in the comments if necessary.
 - It is recommended to comment every function, no matter how small it seems.
-# Naming and Code Conventions for Mindplex Hyperon
+# Naming and Code Conventions for Mindplex Hyperon on .metta files
 
 ## File Naming
 - All files and folders should use camelCase (e.g., `userProfile.metta`, `recommendationEngine.metta`, `userProfile/`).
@@ -96,6 +96,9 @@ Since MeTTa lacks a flexible formatter, formatting is done as you write code. So
 
 ## Variable Naming
 - Use camelCase for all variable names (e.g., `userHistory`, `interactionScore`).
+
+#### Note: You have to use conventional way of naming when using other languages. (e.g., `user_profile.py` )
+
 ## Commit Message Conventions
 
 A helpful technique is to use a heading and bullet points:
