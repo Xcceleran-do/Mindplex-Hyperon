@@ -102,8 +102,7 @@ class LossFunction():
         # v_o_bar has shape (batch_size, 1), vo has shape (batch_size,)
         # We need to flatten v_o_bar to match vo shape for consistent loss calculation
 
-        v_o_bar_flat = v_o_bar.squeeze(1)  # (batch_size,)
-        print(v_o_bar, v_o_bar_flat)
+        v_o_bar_flat = v_o_bar.squeeze(1) 
         L_I = F.binary_cross_entropy(v_o_bar_flat, vo)
 
         # --- LS: Row Sum Loss (encourages ~1.0 per row) ---
@@ -217,12 +216,6 @@ class DFOLTrainer:
                 self.model.MS_P.data.clamp_(min=0.0, max=1.0)
                 self.model.MA_P.data.clamp_(min=0.0, max=1.0)
                 
-            # Print progress every 20 epochs to see convergence
-            # if epoch % 20 == 0:
-            #     v_o_bar_flat = v_o_bar.squeeze(1)
-            #     print(f"Epoch {epoch}: Loss={final_loss.item():.4f}, LI={losses['LI'].item():.4f}")
-            #     print(f"  Predictions: {v_o_bar_flat.detach().numpy()}")
-            #     print(f"  Targets:     {self.vo_tensor.detach().numpy()}")
                 
         _, final_MP = self.model(self.vi_tensor)
         return final_MP.detach()
@@ -241,7 +234,6 @@ class DFOLTrainer:
             correct = (pred == self.vo_tensor).type(torch.float).sum().item()
             size = self.vo_tensor.shape[0]
             accuracy = correct / size
-            # print(f"DFOL Test: \n Accuracy: {(100 * accuracy):>0.1f}%, Avg loss: {test_loss:>8f} \n")
 
             
             
@@ -289,199 +281,3 @@ class DFOLTrainer:
                     })
                     
         return candidate_rules
-
-# # dfol_grandparent_fixed.py
-# # Ready-to-run DFOL-style implementation for the grandparent task
-# # Requirements: torch, numpy
-
-# import itertools
-# import numpy as np
-# import torch
-# import torch.nn as nn
-# import torch.optim as optim
-
-# torch.manual_seed(0)
-# np.random.seed(0)
-
-# # ----------------------------
-# # 1) Construct grandparent dataset
-# # ----------------------------
-# E = ["alice", "bob", "carol", "dave", "erin"]
-
-# parent_facts = {
-#     ("mother", "alice", "bob"),
-#     ("father", "bob", "carol"),
-#     ("father", "carol", "dave"),
-#     ("mother", "alice", "erin"),
-# }
-
-# gp_positives = {
-#     ("gp", "alice", "carol"),
-#     ("gp", "bob", "dave"),
-#     ("gp", "alice", "dave"),
-# }
-
-# B = set(parent_facts)
-# P = set(gp_positives)
-
-# print(f"Background parent facts: {len(parent_facts)}, gp positives: {len(gp_positives)}")
-
-# # ----------------------------
-# # 2) Propositionalization
-# # ----------------------------
-# binary_preds = ["father", "mother", "gp"]
-# V_vars = ["X", "Y", "Z"]  # includes depth-1 variable Z
-
-# # PF = all possible parent atoms (exclude target gp)
-# PF = []
-# for p in binary_preds:
-#     if p == "gp":
-#         continue  # exclude target predicate
-#     for a, b in itertools.permutations(V_vars, 2):
-#         PF.append((p, a, b))
-# PF = list(dict.fromkeys(PF))
-# C = len(PF)
-# print("Valid body features (PF):")
-# for i, f in enumerate(PF):
-#     print(i, f)
-# print("Total features C =", C)
-
-# # Domains
-# domain_X = sorted({ex[1] for ex in P})
-# domain_Y = sorted({ex[2] for ex in P})
-# domain_Z = list(E)
-
-# # substitutions S = X × Y × Z
-# substitutions = list(itertools.product(domain_X, domain_Y, domain_Z))
-
-# def fact_true(atom):
-#     return atom in B or atom in P
-
-# # Build training dataset
-# T_inputs, T_outputs = [], []
-# for (x_val, y_val, z_val) in substitutions:
-#     vi = np.zeros(C, dtype=np.float32)
-#     for i, feat in enumerate(PF):
-#         p, a, b = feat
-#         a_val = {"X": x_val, "Y": y_val, "Z": z_val}[a]
-#         b_val = {"X": x_val, "Y": y_val, "Z": z_val}[b]
-#         if fact_true((p, a_val, b_val)):
-#             vi[i] = 1.0
-#     vo = np.array([1.0 if ("gp", x_val, y_val) in P else 0.0], dtype=np.float32)
-#     if vi.sum() > 0:
-#         T_inputs.append(vi)
-#         T_outputs.append(vo)
-
-# T_inputs = np.stack(T_inputs)
-# T_outputs = np.stack(T_outputs)
-# print("Train dataset size:", T_inputs.shape[0])
-
-# # ----------------------------
-# # 3) Model
-# # ----------------------------
-# device = torch.device("cpu")
-# m = 3  # number of candidate rules
-# MP_raw = nn.Parameter(torch.randn(m, C) * 0.1)
-# gamma = 10.0
-# optimizer = optim.Adam([MP_raw], lr=0.01)
-
-# X_train = torch.tensor(T_inputs, dtype=torch.float32, device=device)
-# Y_train = torch.tensor(T_outputs, dtype=torch.float32, device=device)
-
-# bce_loss = nn.BCELoss()
-# mse_loss = nn.MSELoss()
-
-# # Build basic embeddings b(alpha) for X,Y head vars
-# basic_embeddings = []
-# for feat in PF:
-#     _, a, b = feat
-#     bvec = [1 if a != "Z" else 0, 1 if b != "Z" else 0]
-#     basic_embeddings.append(bvec)
-# basic_embeddings = torch.tensor(basic_embeddings, dtype=torch.float32, device=device)
-
-# def fuzzy_or(xs): return 1 - torch.prod(1 - xs, dim=-1)
-# def phi(z): return torch.sigmoid(gamma * z)
-
-# def infer_vbar(MP_sigmoid, Xi):
-#     dots = Xi @ MP_sigmoid.t()
-#     z = dots - 1.0
-#     rule_vals = phi(z)
-#     vbar = 1 - torch.prod(1 - rule_vals, dim=1, keepdim=True)
-#     return vbar
-
-# def basic_loss(MP_sigmoid):
-#     Mk_b = MP_sigmoid[:, :, None] * basic_embeddings[None, :, :]
-#     or_per_kj = 1.0 - torch.prod(1.0 - Mk_b, dim=1)
-#     basick = torch.prod(or_per_kj, dim=1)
-#     return mse_loss(basick, torch.ones_like(basick))
-
-# def rowsum_loss(MP_sigmoid):
-#     return mse_loss(torch.sum(MP_sigmoid, dim=1), torch.ones(m, device=MP_sigmoid.device))
-
-# # Occurrence loss: encourage all variables {X,Y,Z} to appear
-# var_sets = []
-# for feat in PF:
-#     _, a, b = feat
-#     var_sets.append({a, b})
-
-# def occurrence_loss(MP_sigmoid):
-#     losses = []
-#     for k in range(MP_sigmoid.shape[0]):
-#         cover = {v: 0.0 for v in V_vars}
-#         for i, vars_in_feat in enumerate(var_sets):
-#             for v in vars_in_feat:
-#                 cover[v] = max(cover[v], MP_sigmoid[k, i].item())
-#         losses.append(np.prod(list(cover.values())))
-#     return 1 - torch.tensor(losses, dtype=torch.float32, device=MP_sigmoid.device).mean()
-
-# # ----------------------------
-# # 4) Training
-# # ----------------------------
-# num_epochs = 5000
-# for epoch in range(1, num_epochs+1):
-#     optimizer.zero_grad()
-#     MP_sigmoid = torch.sigmoid(MP_raw)
-#     vbar = infer_vbar(MP_sigmoid, X_train)
-#     LI = bce_loss(vbar, Y_train)
-#     LS = rowsum_loss(MP_sigmoid)
-#     LB = basic_loss(MP_sigmoid)
-#     LO = occurrence_loss(MP_sigmoid)
-#     loss = LI + 0.5 * LS + 10 * LB + 10 * LO
-#     loss.backward()
-#     optimizer.step()
-#     if epoch % 500 == 0:
-#         acc = ((vbar.detach().cpu().numpy() > 0.5).astype(int).squeeze()
-#                == Y_train.cpu().numpy().squeeze()).mean()
-#         print(f"Epoch {epoch} loss={loss.item():.4f} acc={acc:.3f}")
-
-# # ----------------------------
-# # 5) Extraction
-# # ----------------------------
-# MP_final = torch.sigmoid(MP_raw).detach().cpu().numpy()
-# taus = np.arange(0.0, 1.01, 0.1)
-
-# def apply_candidate_rule(body_feats):
-#     supports, correct = 0, 0
-#     for (x_val, y_val, z_val) in substitutions:
-#         if all((p, {"X":x_val,"Y":y_val,"Z":z_val}[a],
-#                      {"X":x_val,"Y":y_val,"Z":z_val}[b]) in B
-#                for (p,a,b) in body_feats):
-#             supports += 1
-#             if ("gp", x_val, y_val) in P:
-#                 correct += 1
-#     return (correct / supports if supports else 0.0), supports
-
-# candidates = []
-# for k in range(m):
-#     for tau in taus:
-#         body = [PF[i] for i,v in enumerate(MP_final[k]) if v > tau]
-#         if not body: continue
-#         prec, sup = apply_candidate_rule(body)
-#         candidates.append((prec, sup, body))
-
-# sound = [ (prec, sup, tuple(body)) for (prec, sup, body) in candidates if prec >= 0.999 and sup > 0 ]
-# sound = list(set(sound))
-# print("\nExtracted sound rules:")
-# for prec, sup, body in sound:
-#     print(f"gp(X,Y) :- {body}   (prec={prec:.3f}, support={sup})")
-

@@ -153,54 +153,54 @@
 
 ;; Test case for the whole pipline
 
-; !(bind! &C_val 4)
+!(bind! &C_val 4)
 
-; !(bind! &t_val 2)
+!(bind! &t_val 2)
 
-; !(bind! &V_size_val 3)
+!(bind! &V_size_val 3)
 
-; !(bind! &m1_val 2)
+!(bind! &m1_val 2)
 
-; !(bind! &m2_val 1)
+!(bind! &m2_val 1)
 
-; !(bind! &na_val 2)
+!(bind! &na_val 2)
 
-; !(let ($vi $vo) (propositionalization
-;     ()
-;     ()
-;     (3) 
-;     (grandparent X Y)
-;     ((father X A) (mother A Y) (mother X A) (father A Y))
-;     ((grandparent "alica" "bob") (grandparent "john" "lol"))
-;     (
-;     (mother "alica" "dani")
-;     (father "dani" "bob")
-;     (mother "john" "beki")
-;     (father "beki" "lol")   
-;     )
+!(let ($vi $vo) (propositionalization
+    ()
+    ()
+    (3) 
+    (grandparent X Y)
+    ((father X A) (mother A Y) (mother X A) (father A Y))
+    ((grandparent "alica" "bob") (grandparent "john" "lol"))
+    (
+    (mother "alica" "dani")
+    (father "dani" "bob")
+    (mother "john" "beki")
+    (father "beki" "lol")   
+    )
 
-;  ) (let () (bind! &vi_data_val (torch:tensor $vi)) (bind! &vo_data_val (torch:tensor $vo))))
+ ) (let () (bind! &vi_data_val (torch:tensor $vi)) (bind! &vo_data_val (torch:tensor $vo))))
  
 
-; !(let $b (map-atom ((father X A) (mother A Y) (mother X A) (father A Y)) $cur (basicEmbedding $cur (grandparent X Y))) (bind! &b_embeddings_val (torch:tensor $b)))
+!(let $b (map-atom ((father X A) (mother A Y) (mother X A) (father A Y)) $cur (basicEmbedding $cur (grandparent X Y))) (bind! &b_embeddings_val (torch:tensor $b)))
 
-; !(let $o (map-atom ((father X A) (mother A Y) (mother X A) (father A Y)) $cur (occurrenceEmbedding (A) $cur)) (bind! &o_embeddings_val (torch:tensor $o)))
+!(let $o (map-atom ((father X A) (mother A Y) (mother X A) (father A Y)) $cur (occurrenceEmbedding (A) $cur)) (bind! &o_embeddings_val (torch:tensor $o)))
 
 
-; !(bind! &a_val 1.0)
+!(bind! &a_val 1.0)
 
-; !(bind! &b_val 1.0)
+!(bind! &b_val 1.0)
 
-; !(bind! &c_val 10.0)
+!(bind! &c_val 10.0)
 
-; !(bind! &d_val 1.0)
+!(bind! &d_val 1.0)
 
-; !(println! ("vi after prepostionalization:" &vi_data_val))
-; !(println! ("vo after prepostionalization:" &vo_data_val))
-; !(println! ("basic embeddings:" &b_embeddings_val))
-; !(println! ("occurrence embeddings:" &o_embeddings_val))
+!(println! ("vi after prepostionalization:" &vi_data_val))
+!(println! ("vo after prepostionalization:" &vo_data_val))
+!(println! ("basic embeddings:" &b_embeddings_val))
+!(println! ("occurrence embeddings:" &o_embeddings_val))
 
-; !(bind! &trainer (torch:instantiate_module DFOLTrainer pythonDFOL &vi_data_val &vo_data_val &C_val &m1_val &m2_val &na_val &V_size_val &t_val 
+!(bind! &trainer (torch:instantiate_module DFOLTrainer pythonDFOL &vi_data_val &vo_data_val &C_val &m1_val &m2_val &na_val &V_size_val &t_val 
                     &b_embeddings_val &o_embeddings_val &a_val &b_val &c_val &d_val))
                     
 !(bind! &final (py-dot &trainer train))

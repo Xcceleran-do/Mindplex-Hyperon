@@ -22,8 +22,5 @@
             (user $prompt))
   (Functions func))
   )
-; !((langhcian-llm-agent "models/gemini-2.5-flash" "google_genai") 
-;   (Messages (system "You must use the available tools to respond to user questions. Always call the 'func' function to answer any user question. Do not provide direct answers without using the tools.")
-;             (user "What is my name?"))
-;   (Functions func))
-!(assertEqual (functionCalling "models/gemini-2.5-flash" "google_genai" "You must use the available tools to respond to user questions. Always call the 'func' function to answer any user question. Do not provide direct answers without using the tools." "add numbers") 3)
+
+; !(assertEqual (functionCalling "models/gemini-2.5-flash" "google_genai" "You must use the available tools to respond to user questions. Always call the 'func' function to answer any user question. Do not provide direct answers without using the tools." "add numbers") 3) ;; this needs api key to work
