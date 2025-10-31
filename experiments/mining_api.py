@@ -21,7 +21,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Configure Gemini API
-genai.configure(api_key=os.getenv("GEMINI_API_KEY3"))
+genai.configure(api_key=os.getenv("GEMINI_API_KEY4"))
 
 metta4Miner = MeTTa()
 
@@ -31,7 +31,7 @@ metta4Miner.run("""
     ! (import! &self experiments:pattern-miner:pattern-miner)
     ! (import! &self experiments:utils:common-utils)
     ! (import! &self experiments:frequent-pattern-miner:frequent-pattern-miner)
-    ! (import! &tempo experiments:atomspace_visualizer:public:small-ugly)
+    ! (import! &tempo experiments:atomspace_visualizer:public:data)
     ! (import! &self experiments:chainer:main)
                             
     !(bind! &res1 (new-space)) ;; space to hold the formatted miner result
@@ -59,8 +59,11 @@ def mine_pattern(numberOfConjunction: int) -> dict:
     
     try:
         # Extract the atom result
+        print("Debug: mine pattern function being called")
         result_atom = answer[0][0]
+        print(f"Debug: Result atom = {result_atom}")
         list_of_patterns = result_atom.get_children()
+        print(f"Debug: List of Patterns = {list_of_patterns}")
         
         # Parse each pattern
         patterns = []
@@ -162,7 +165,7 @@ def getAllFactsAndRules():
     can rewrite a user's natural-language question into a canonical MeTTa
     query that matches predicates/constants present in the KB. Example:
     user: "What is article 1's engagement level?"
-    assistant: call getAllFactsAndRules(), notice atoms like `(engagement_level 1 high)`,
+    assistant: call getAllFactsAndRules(), notice atoms like `(engagement_level 1 "high")`,
     rewrite as `(engagement_level 1 $whatIsIt)`, then call getChainerResult.
     """
     try:
@@ -305,7 +308,7 @@ def handle_backward_chain_for_message(message: str):
     else:
         # Apply a friendly/jokey wrapper without revealing internal steps
         resp_text = f"Alright, here's the scoop —\n\n{raw_just}\n\n(That's the reasoning I found.)"
-
+    print('DEBUG: final response text:', resp_text)
     return resp_text, function_calls
 
 # Define available functions for the AI with proper docstrings for automatic function calling
@@ -486,7 +489,7 @@ def formatter(mined_patterns):
 
 def backWardChainer(whatToCheck, depth=5):
     whatToCheck = metta4Miner.parse_single(whatToCheck)
-    answer = metta4Miner.run(f""" !(backward-chain &res1 (fromNumber {2}) (: $prf {whatToCheck})) """)
+    answer = metta4Miner.run(f""" !(backward-chain &res1 (S (S Z)) (: $prf {whatToCheck})) """)
     return answer
 
 def getChainerResult(whatToCheck, depth=5):
@@ -498,7 +501,7 @@ def getChainerResult(whatToCheck, depth=5):
         The justification of the backward chaining operation.
     """
     chainAnswer = backWardChainer(whatToCheck, depth)
-    
+    print("DEBUG: getChainerResult - chainAnswer type:", chainAnswer)
     # If no proofs found, return early
     if not chainAnswer or len(chainAnswer) == 0:
         return {
@@ -572,19 +575,19 @@ def getChainerResult(whatToCheck, depth=5):
 
 def summarize_patterns(patterns: list) -> str:
     """Use the Gemini model to create a single comprehensive summary of the
-    supplied mined patterns. The summary will reference patterns as [Pattern N]
+    supplied mined patterns. The summary will reference patterns as [N]
     so the frontend can make them clickable for visualization.
     """
     if not patterns:
         return "No patterns to summarize."
 
     # Build a compact prompt that lists the patterns and asks for a concise
-    # analytic summary that includes references like [Pattern 1], [Pattern 2]
-    prompt_parts = ["Please analyze the following mined patterns and produce a single concise summary that references specific patterns using [Pattern N] notation. Explain trends and actionable insights."]
+    # analytic summary that includes references like [1], [2]
+    prompt_parts = ["Please analyze the following mined patterns and produce a single concise summary that references specific patterns using [N] notation. Explain trends and actionable insights."]
     for i, p in enumerate(patterns, 1):
         patt = p.get('pattern') if isinstance(p, dict) else str(p)
         supp = p.get('support', '') if isinstance(p, dict) else ''
-        prompt_parts.append(f"[Pattern {i}] Pattern: {patt} -- Support: {supp}")
+        prompt_parts.append(f"[{i}] Pattern: {patt} -- Support: {supp}")
 
     prompt = "\n\n".join(prompt_parts)
 
@@ -615,8 +618,6 @@ available_functions = {
     "start_mining_job": start_mining_job,
     "startMiningJob": start_mining_job,
     "minePattern": start_mining_job,
-    "getAllFactsAndRules": getAllFactsAndRules,
-    "get_all_facts_and_rules": getAllFactsAndRules,
     "get_mining_results": get_mining_results,
     "analyze_specific_pattern": analyze_specific_pattern,
     "get_pattern_statistics": get_pattern_statistics,
@@ -627,7 +628,7 @@ available_functions = {
 # Initialize Gemini model with automatic function calling
 model = genai.GenerativeModel(
     "gemini-2.0-flash-exp",
-    tools=[start_mining_job, mine_pattern, analyze_specific_pattern, get_pattern_statistics, visualize_pattern_request, getAllFactsAndRules, getChainerResult],
+    tools=[start_mining_job, mine_pattern, analyze_specific_pattern, get_pattern_statistics, visualize_pattern_request, getChainerResult],
     system_instruction="""You are a friendly and knowledgeable AI assistant with expertise in data mining patterns, knowledge graphs, and pattern analysis. 
 
         **Your Primary Specialty:**
@@ -641,11 +642,11 @@ model = genai.GenerativeModel(
     - "Why is..." / "Explain why..." / "Prove that..." questions → Use getChainerResult() with the query formatted as a MeTTa expression
 
     **CRITICAL BACKWARD-CHAINING WORKFLOW (MUST FOLLOW):**
-    Before calling getChainerResult(), ALWAYS call getAllFactsAndRules() to fetch current facts and rules from the knowledge base. Use the returned atoms to identify canonical predicate and constant names, then rewrite the user's natural-language question into a MeTTa expression that matches those atoms. Only after rewriting the query to use the KB's canonical atoms should you call getChainerResult().
+    Before calling getChainerResult(), ALWAYS call getChainerResult().
 
     Example:
     - User: "What is article 1's engagement level?"
-    - Assistant: call getAllFactsAndRules(), observe atoms like `(engagement_level 1 high)`, rewrite as `(engagement_level 1 $whatIsIt)`, then call getChainerResult("(engagement_level 1 $whatIsIt)").
+    - Assistant: call getChainerResult("(engagement_level 1 $whatIsIt)").
     - This ensures the chainer is invoked with a query that matches KB atoms and returns useful proofs.
 
                 IMPORTANT: FOR ANY "WHY" / "EXPLAIN" / "PROVE" QUESTIONS (MANDATORY):
@@ -660,12 +661,12 @@ model = genai.GenerativeModel(
         1. ALWAYS call mine_pattern() immediately to get all patterns
         2. Analyze ALL patterns together to find common themes
         3. Create ONE comprehensive summary (not individual summaries)
-        4. In your summary, reference specific patterns using [Pattern N] notation where N is the pattern index
-        5. Format: "Based on the mining results, most of high engagement level is correlated to... [Pattern 1] ... the longer the article is ... [Pattern 3]"
+        4. In your summary, reference specific patterns using [Rule N] notation where N is the pattern index. Do NOT use comma separated list of rules format, like [Rule 1, Rule 2]; instead, use [Rule 1], [Rule 2]
+        5. Format: "Based on the mining results, most of high engagement level is correlated to... [Rule 1] ... the longer the article is ... [Rule 3]"
         6. Focus on insights and trends across ALL patterns
 
         **Pattern Reference Format:**
-        - Use [Pattern 1], [Pattern 2], etc. to reference patterns in your summary
+        - Use [Rule 1], [Rule 2], etc. to reference patterns in your summary
         - These will become clickable for visualization
         - Only reference patterns that support your statements
         - You don't need to list the patterns separately, just reference them in context
@@ -700,7 +701,7 @@ model = genai.GenerativeModel(
 
         **Proof 1:** The rule states that [rule explanation], and since we have the fact that [fact explanation], we can conclude that [conclusion].
 
-        **Proof 2:** Another supporting rule indicates that [rule explanation], combined with the established fact [fact explanation], also leads to [conclusion].
+        **Proof 2:** Another supporting rule indicates that [Rule N]:- [rule explanation], combined with the established facts:- [fact explanation], also leads to [conclusion].
 
         **Overall Justification:** [Summary of why this conclusion is well-supported]"
 
@@ -976,17 +977,25 @@ def chat():
         history = data.get('history', [])
         session_id = data.get('session_id', 'default')
 
+        # Ensure a conversation list exists for this session before any writes.
+        # This prevents KeyError when shortcut paths (e.g. backward chaining)
+        # attempt to append to conversations[session_id] before it's initialized.
+        if session_id not in conversations:
+            print(f"DEBUG: Creating new conversation session '{session_id}'")
+        conversations.setdefault(session_id, [])
+
         if not message:
             return jsonify({'error': 'Message is required'}), 400
 
         # Special-case: 'why' questions about articles should run the
-        # getAllFactsAndRules -> rewrite -> getChainerResult workflow and
         # return the chainer's justification directly.
         try:
             bc_text, bc_calls = handle_backward_chain_for_message(message)
+            print('DEBUG: backward chain shortcut result:', bc_text, bc_calls)
             if bc_text is not None:
-                # store in history
+                # store in history (conversations[session_id] is guaranteed to exist now)
                 conversations[session_id].append({'role': 'user', 'content': message})
+                print('DEBUG: stored backward chain shortcut in history')
                 conversations[session_id].append({'role': 'assistant', 'content': bc_text})
                 try:
                     safe_calls = make_json_safe(bc_calls)

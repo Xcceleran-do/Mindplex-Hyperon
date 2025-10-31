@@ -20,7 +20,7 @@ export interface MiningInterfaceProps {
 const MiningInterface = (props: MiningInterfaceProps) => {
   const [isMining, setIsMining] = createSignal(false);
   const [miningResult, setMiningResult] = createSignal<MiningResult | null>(null);
-  const [conjunctionCount, setConjunctionCount] = createSignal(3);
+  const [conjunctionCount, setConjunctionCount] = createSignal(5);
   const [showResult, setShowResult] = createSignal(false);
 
   const startMining = async () => {
@@ -39,7 +39,7 @@ const MiningInterface = (props: MiningInterfaceProps) => {
 
   // Fallback: if parent handler not provided, call API directly (legacy)
 
-    const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+    const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://animated-spoon-7vrp545w744vhq46-5000.app.github.dev/';
 
     try {
       // Start mining job
@@ -122,18 +122,20 @@ const MiningInterface = (props: MiningInterfaceProps) => {
       {/* Mining Control Panel */}
       <div class="mining-controls">
         <div class="conjunction-input">
-          <label for="conjunction-count">Pattern Count</label>
           <input
             id="conjunction-count"
             type="number"
             min="1"
             max="10"
             value={conjunctionCount()}
-            onInput={(e) => setConjunctionCount(parseInt(e.target.value) || 3)}
+            onInput={(e) => setConjunctionCount(parseInt(e.target.value) || 5)}
             disabled={isMining()}
+            class="separate-conj-input"
+            aria-label="Conjunction size"
+            placeholder="Conjuncts"
           />
         </div>
-        
+
         <div class="button-wrapper" style={{ position: 'relative' }}>
           <ButtonParticleEffects active={!isMining()} />
           <button
@@ -143,9 +145,7 @@ const MiningInterface = (props: MiningInterfaceProps) => {
           >
             <div class="button-content generate-sparkles">
               <Show when={!isMining()}>
-                <span class="pickaxe-icon">⛏️</span>
-                <span class="button-text">Mine Neural Gold</span>
-                <span class="gems-icon">💎</span>
+                <span class="button-text">Mine</span>
               </Show>
               <Show when={isMining()}>
                 <div class="mining-animation">

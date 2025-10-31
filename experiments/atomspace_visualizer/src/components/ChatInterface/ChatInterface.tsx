@@ -19,6 +19,8 @@ export interface ChatInterfaceProps {
   miningResults?: Array<{ pattern: string; support: string }>;
   conjunctSize?: number;
   onMiningStart?: (conjunctSize: number) => void;
+  isOpen?: boolean;
+  onClose?: () => void;
 }
 
 const ChatInterface = (props: ChatInterfaceProps) => {
@@ -56,6 +58,11 @@ const ChatInterface = (props: ChatInterfaceProps) => {
   createEffect(() => {
     const results = props.miningResults;
     if (results && results.length > 0) {
+      // Auto-open chat UI when mining completes if parent provided control
+      if (props.isOpen === undefined || props.isOpen === false) {
+        // If onClose/onOpen handlers exist on parent, prefer that
+        // We open by calling onMiningStart? Instead expose onOpen via adding message
+      }
       // Add system message about mining completion
       const systemMsg: Message = {
         id: `sys-${Date.now()}`,
@@ -68,7 +75,7 @@ const ChatInterface = (props: ChatInterfaceProps) => {
       
       // Request a single summary for all patterns and display it
       (async () => {
-        const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+        const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://animated-spoon-7vrp545w744vhq46-5000.app.github.dev';
         try {
           const resp = await fetch(`${API_BASE}/api/chat/summarize`, {
             method: 'POST',
@@ -106,7 +113,7 @@ const ChatInterface = (props: ChatInterfaceProps) => {
   });
 
   const analyzeConjunct = async (pattern: string, support: string) => {
-    const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+    const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://animated-spoon-7vrp545w744vhq46-5000.app.github.dev';
     
     try {
       const response = await fetch(`${API_BASE}/api/chat/analyze`, {
@@ -150,7 +157,7 @@ const ChatInterface = (props: ChatInterfaceProps) => {
 
   // Send AI message (internal function)
   const sendAIMessage = async (text: string) => {
-    const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+    const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://animated-spoon-7vrp545w744vhq46-5000.app.github.dev';
     
     // Show typing indicator
     const typingMsg: Message = {
@@ -227,7 +234,7 @@ const ChatInterface = (props: ChatInterfaceProps) => {
     const mineRegex = /mine(?: rules)?(?: with)?\s*(?:the )?(?:next )?(?:top )?\s*(\d+)\s*(?:patterns?|conjunctions?)/i;
     const m = text.match(mineRegex);
     if (m) {
-      const n = parseInt(m[1], 10) || 3;
+      const n = parseInt(m[1], 10) || 5;
       // If parent provides the unified mining handler, use it and avoid
       // sending the message to the AI (which may also call the mining
       // function and duplicate work).
@@ -265,7 +272,7 @@ const ChatInterface = (props: ChatInterfaceProps) => {
       const propertyFilters = [];
       let match;
       while ((match = regex.exec(pattern)) !== null) {
-        propertyFilters.push({ property: match[1], value: match[2] });
+        propertyFilters.push({ property: `${match[1]}`, value: `"${match[2]}"` });
       }
       props.onVisualize({
         active: true,
@@ -291,11 +298,15 @@ const ChatInterface = (props: ChatInterfaceProps) => {
         if (patternObj) {
           // Parse pattern string to extract property-value pairs
           // Example pattern: (length $x "low") (tone $x "Analytical")
-          const regex = /\((\w+) \$\w+ "([^"]+)"\)/g;
-          const propertyFilters = [];
+          const regex = /\((\w+)\s+\$\w+\s+("|'|)([^"')]+)\2\)/g;
+          const propertyFilters: { property: string; value: string }[] = [];
           let match;
           while ((match = regex.exec(patternObj.pattern)) !== null) {
-            propertyFilters.push({ property: match[1], value: `"${match[2]}"` });
+            const property = match[1];
+            const value = `"${ match[3]?.trim()}"`;
+            if (property && value) {
+              propertyFilters.push({ property, value });
+            }
           }
           console.log('Pattern:', patternObj.pattern);
           console.log('Extracted propertyFilters:', propertyFilters);
@@ -324,10 +335,14 @@ const ChatInterface = (props: ChatInterfaceProps) => {
     setMessages([]);
   };
 
+  // If parent controls visibility, honor it
+  const visible = () => props.isOpen === undefined ? true : props.isOpen;
+
   return (
     <>
-      {/* Chat Interface - Always Visible */}
-      <div class={`chat-interface ${isMinimized() ? 'minimized' : ''}`}>
+      {/* Chat Interface - Controlled visibility */}
+      <Show when={visible()}>
+        <div class={`chat-interface ${isMinimized() ? 'minimized' : ''}`}>
           <div class="chat-header" onClick={() => setIsMinimized(!isMinimized())} style={{ cursor: 'pointer' }}>
             <div class="chat-header-left">
               <span class="chat-icon">🤖</span>
@@ -429,6 +444,7 @@ const ChatInterface = (props: ChatInterfaceProps) => {
             </div>
           </Show>
         </div>
+      </Show>
     </>
   );
 };
@@ -442,7 +458,7 @@ const formatMessage = (content: string): string => {
     .replace(/```([^```]+)```/g, '<pre><code>$1</code></pre>');
   
   // Convert [Pattern N] to clickable references
-  formatted = formatted.replace(/\[Pattern (\d+)\]/g, '<span class="pattern-ref" data-pattern="$1" title="Click to visualize this pattern">[Pattern $1]</span>');
+  formatted = formatted.replace(/\[Rule (\d+)\]/g, '<span class="pattern-ref" data-pattern="$1" title="Click to visualize this pattern">[$1]</span>');
   
   formatted = formatted.replace(/\n/g, '<br/>');
   

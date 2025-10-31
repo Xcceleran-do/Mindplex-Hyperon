@@ -1,5 +1,4 @@
-// Enhanced Legend component with collapsible and clickable items
-import { Component, createSignal, For, createEffect } from 'solid-js';
+import { Component, For, Show, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import { GraphData, FilterState } from '../../types';
 import styles from './EnhancedLegend.module.css';
 
@@ -10,56 +9,155 @@ export interface EnhancedLegendProps {
 }
 
 const EnhancedLegend: Component<EnhancedLegendProps> = (props) => {
-  const [isCollapsed, setIsCollapsed] = createSignal(true);
-  
-  // Debug: Log filter state changes
-  createEffect(() => {
-    console.log('Legend: filterState updated:', props.filterState);
-    console.log('Legend: Available property columns:', getPropertyColumns());
+  const [isLegendCollapsed, setIsLegendCollapsed] = createSignal(true);
+  const [areFiltersCollapsed, setAreFiltersCollapsed] = createSignal(true);
+  const [activeFilterCategory, setActiveFilterCategory] = createSignal<string | null>(null);
+
+  let filterContentRef: HTMLDivElement | undefined;
+
+  const formatPropertyName = (name?: string) =>
+    (name ?? '')
+      .replace(/_/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/(^|\s)\w/g, (segment) => segment.toUpperCase());
+
+  const propertyColumns = createMemo(() => {
+    const columns = new Map<string, Set<string>>();
+
+    for (const node of props.graphData.nodes) {
+      if (node.metadata.columnType !== 'property' || !node.metadata.propertyName) {
+        continue;
+      }
+
+      if (!columns.has(node.metadata.propertyName)) {
+        columns.set(node.metadata.propertyName, new Set());
+      }
+
+      if (node.label !== 'None') {
+        columns.get(node.metadata.propertyName)!.add(node.label);
+      }
+    }
+
+    return columns;
   });
 
-  // Extract unique property columns and values
-  const getPropertyColumns = () => {
-    const columns = new Map<string, Set<string>>();
-    
+  const propertyEntries = () =>
+    Array.from(propertyColumns().entries()).sort(([a], [b]) => a.localeCompare(b));
+
+  const filterCategories = () => [
+    { key: 'articles', label: 'Articles' },
+    ...propertyEntries().map(([property]) => ({
+      key: property,
+      label: formatPropertyName(property)
+    }))
+  ];
+
+  const getCategoryLabel = (key: string) =>
+    key === 'articles' ? 'Articles' : formatPropertyName(key);
+
+  const toggleFilterCategory = (category: string) => {
+    setActiveFilterCategory((previous) => (previous === category ? null : category));
+  };
+
+  createEffect(() => {
+    if (areFiltersCollapsed()) {
+      setActiveFilterCategory(null);
+      return;
+    }
+
+    const handleDocumentClick = (event: MouseEvent) => {
+      if (!filterContentRef) return;
+      if (!filterContentRef.contains(event.target as Node)) {
+        setActiveFilterCategory(null);
+      }
+    };
+
+    document.addEventListener('click', handleDocumentClick);
+    onCleanup(() => document.removeEventListener('click', handleDocumentClick));
+  });
+
+  const getColorRepresentations = () => {
+    const colorMap = new Map<string, Set<string>>();
+    const propertyColorMap = new Map<string, string>();
+
     for (const node of props.graphData.nodes) {
-      if (node.metadata.columnType === 'property' && node.metadata.propertyName) {
-        if (!columns.has(node.metadata.propertyName)) {
-          columns.set(node.metadata.propertyName, new Set());
-        }
-        if (node.label !== 'None') {
-          columns.get(node.metadata.propertyName)!.add(node.label);
+      if (!node.color) continue;
+
+      if (node.metadata.propertyName && node.label !== 'None') {
+        propertyColorMap.set(node.metadata.propertyName, node.color);
+      }
+
+      const existing = colorMap.get(node.color) ?? new Set<string>();
+      colorMap.set(node.color, existing);
+
+      if (node.metadata.columnType === 'header') {
+        continue;
+      }
+
+      if (node.metadata.columnType === 'article') {
+        existing.add('article');
+        continue;
+      }
+
+      if (node.metadata.columnType === 'property') {
+        if (node.label === 'None') {
+          existing.add('none (missing)');
+        } else {
+          const label = formatPropertyName(node.metadata.propertyName || node.label || 'value');
+          existing.add(label);
         }
       }
     }
-    
-    return columns;
+
+    const filtered = Array.from(colorMap.entries()).filter(([_, labels]) => {
+      if (labels.size === 0) return false;
+      if (labels.size > 1) return true;
+
+      const onlyLabel = Array.from(labels)[0];
+      if (onlyLabel === 'article' || onlyLabel === 'none (missing)') return true;
+
+      const normalizedLabel = onlyLabel.replace(/\s+/g, '_').toLowerCase();
+      for (const propertyName of propertyColorMap.keys()) {
+        if (propertyName.toLowerCase() === normalizedLabel) {
+          return true;
+        }
+      }
+
+      return false;
+    });
+
+    return filtered
+      .map(([color, labels]) => ({
+        color,
+        labels: Array.from(labels).sort((a, b) => a.localeCompare(b)).join(', ')
+      }))
+      .sort((a, b) => a.labels.localeCompare(b.labels));
   };
 
-  // Extract articles
   const getArticles = () => {
     const articles: string[] = [];
+
     for (const node of props.graphData.nodes) {
       if (node.metadata.columnType === 'article') {
         articles.push(node.metadata.originalExpression || node.label);
       }
     }
+
     return articles.sort((a, b) => parseInt(a) - parseInt(b));
   };
 
-  const handleArticleClick = (articleId: string, e: MouseEvent) => {
-    const isMultiSelect = e.ctrlKey || e.metaKey;
+  const handleArticleClick = (articleId: string, event: MouseEvent) => {
+    const isMultiSelect = event.ctrlKey || event.metaKey;
     const currentArticleIds = new Set(props.filterState.articleIds || []);
-    
+
     if (isMultiSelect) {
-      // Toggle article in selection
       if (currentArticleIds.has(articleId)) {
         currentArticleIds.delete(articleId);
       } else {
         currentArticleIds.add(articleId);
       }
     } else {
-      // Single select - if clicking same article, clear; otherwise select only this one
       if (currentArticleIds.size === 1 && currentArticleIds.has(articleId)) {
         currentArticleIds.clear();
       } else {
@@ -67,7 +165,7 @@ const EnhancedLegend: Component<EnhancedLegendProps> = (props) => {
         currentArticleIds.add(articleId);
       }
     }
-    
+
     props.onFilterChange({
       active: currentArticleIds.size > 0 || (props.filterState.propertyFilters?.length || 0) > 0,
       articleIds: Array.from(currentArticleIds),
@@ -75,29 +173,24 @@ const EnhancedLegend: Component<EnhancedLegendProps> = (props) => {
     });
   };
 
-  const handlePropertyClick = (property: string, value: string, e: MouseEvent) => {
-    const isMultiSelect = e.ctrlKey || e.metaKey;
+  const handlePropertyClick = (property: string, value: string, event: MouseEvent) => {
+    const isMultiSelect = event.ctrlKey || event.metaKey;
     const propertyFilter = { property, value };
     let currentFilters = [...(props.filterState.propertyFilters || [])];
 
-    const index = currentFilters.findIndex(
-      f => f.property === property && f.value === value
-    );
+    const index = currentFilters.findIndex((filter) => filter.property === property && filter.value === value);
+
     if (isMultiSelect) {
-      // Toggle property filter
       if (index >= 0) {
         currentFilters.splice(index, 1);
       } else {
         currentFilters.push(propertyFilter);
       }
     } else {
-      // Single select: if already selected, deselect; else select only this value for this property
       if (index >= 0) {
-        // Deselect this value for this property
         currentFilters.splice(index, 1);
       } else {
-        // Remove all filters for this property, then add the new one
-        currentFilters = currentFilters.filter(f => f.property !== property);
+        currentFilters = currentFilters.filter((filter) => filter.property !== property);
         currentFilters.push(propertyFilter);
       }
     }
@@ -119,104 +212,134 @@ const EnhancedLegend: Component<EnhancedLegendProps> = (props) => {
 
   return (
     <div class={styles.legendContainer}>
-      <div class={styles.legendHeader} onClick={() => setIsCollapsed(!isCollapsed())}>
-        <h3>Legend & Filters</h3>
-        <button class={styles.collapseButton}>
-          {isCollapsed() ? '▼' : '▲'}
+      <div class={styles.toggleGroup}>
+        <button class={styles.sectionToggle} onClick={() => setIsLegendCollapsed(!isLegendCollapsed())}>
+          <span>Legend</span>
+          <span class={styles.toggleIcon}>{isLegendCollapsed() ? '▼' : '▲'}</span>
         </button>
-      </div>
-      
-      {!isCollapsed() && (
-        <div class={styles.legendContent}>
-          {props.filterState.active && (
-            <div class={styles.filterStatus}>
-              <div>
-                <strong>Active filters:</strong>
-                {props.filterState.articleIds && props.filterState.articleIds.length > 0 && (
-                  <div>Articles: {props.filterState.articleIds.join(', ')}</div>
-                )}
-                {props.filterState.propertyFilters && props.filterState.propertyFilters.length > 0 && (
-                  <div>
-                    Properties: {props.filterState.propertyFilters.map(f => `${f.property}=${f.value}`).join(', ')}
+
+        <Show when={!isLegendCollapsed()}>
+          <div class={styles.legendContent}>
+            <div class={styles.legendSection}>
+              <h4>Color representation</h4>
+              <For each={getColorRepresentations()}>
+                {(entry) => (
+                  <div class={styles.legendItem}>
+                    <div class={styles.legendColor} style={{ 'background-color': entry.color }} />
+                    <span class={styles.colorLabel}>
+                      <span class={styles.colorCode}>{entry.color}</span>
+                      <span>:</span>
+                      <span>{entry.labels}</span>
+                    </span>
                   </div>
-                )}
-                <small style={{ display: 'block', 'margin-top': '4px', opacity: 0.7 }}>
-                  Hold Ctrl/Cmd to select multiple
-                </small>
-              </div>
-              <button class={styles.clearButton} onClick={clearFilter}>
-                Clear All
-              </button>
-            </div>
-          )}
-
-          <div class={styles.legendSection}>
-            <h4>Node Types</h4>
-            <div class={styles.legendItem}>
-              <div class={styles.legendColor} style={{ 'background-color': '#3b82f6' }}></div>
-              <span>Article</span>
-            </div>
-            <div class={styles.legendItem}>
-              <div class={styles.legendColor} style={{ 'background-color': '#8b5cf6' }}></div>
-              <span>Property Header</span>
-            </div>
-            <div class={styles.legendItem}>
-              <div class={styles.legendColor} style={{ 'background-color': '#10b981' }}></div>
-              <span>Property Value</span>
-            </div>
-            <div class={styles.legendItem}>
-              <div class={styles.legendColor} style={{ 'background-color': '#6b7280' }}></div>
-              <span>None (Missing)</span>
-            </div>
-          </div>
-
-          <div class={styles.legendSection}>
-            <h4>Articles (click to filter)</h4>
-            <div class={styles.itemGrid}>
-              <For each={getArticles()}>
-                {(article) => (
-                  <button
-                    class={`${styles.filterButton} ${
-                      props.filterState.articleIds?.includes(article)
-                        ? styles.active
-                        : ''
-                    }`}
-                    onClick={(e) => handleArticleClick(article, e)}
-                  >
-                    {article}
-                  </button>
                 )}
               </For>
             </div>
           </div>
+        </Show>
 
-          <For each={Array.from(getPropertyColumns().entries())}>
-            {([property, values]) => (
-              <div class={styles.legendSection}>
-                <h4>{property.replace(/_/g, ' ')} (click to filter)</h4>
-                <div class={styles.itemGrid}>
-                  <For each={Array.from(values).sort()}>
-                    {(value) => (
-                      <button
-                        class={`${styles.filterButton} ${
-                          props.filterState.propertyFilters?.some(
-                            f => f.property === property && f.value === value
-                          )
-                            ? styles.active
-                            : ''
-                        }`}
-                        onClick={(e) => handlePropertyClick(property, value, e)}
-                      >
-                        {value}
-                      </button>
-                    )}
-                  </For>
+        <button class={styles.sectionToggle} onClick={() => setAreFiltersCollapsed(!areFiltersCollapsed())}>
+          <span>Filters</span>
+          <span class={styles.toggleIcon}>{areFiltersCollapsed() ? '▼' : '▲'}</span>
+        </button>
+
+        <Show when={!areFiltersCollapsed()}>
+          <div class={styles.legendContent} ref={(element) => (filterContentRef = element)}>
+            <Show when={props.filterState.active}>
+              <div class={styles.filterStatus}>
+                <div>
+                  <strong>Active filters:</strong>
+                  <Show when={props.filterState.articleIds && props.filterState.articleIds.length > 0}>
+                    <div>Articles: {props.filterState.articleIds!.join(', ')}</div>
+                  </Show>
+                  <Show when={props.filterState.propertyFilters && props.filterState.propertyFilters.length > 0}>
+                    <div>
+                      Properties:{' '}
+                      {props.filterState.propertyFilters!
+                        .map((filter) => `${formatPropertyName(filter.property)} = ${filter.value}`)
+                        .join(', ')}
+                    </div>
+                  </Show>
+                  <small class={styles.multiSelectHint}>Hold Ctrl/Cmd to select multiple</small>
                 </div>
+                <button class={styles.clearButton} onClick={clearFilter}>
+                  Clear All
+                </button>
               </div>
-            )}
-          </For>
-        </div>
-      )}
+            </Show>
+
+            <div class={styles.legendSection}>
+              <h4>Pick a category</h4>
+              <div class={styles.categoryGrid}>
+                <For each={filterCategories()}>
+                  {(category) => (
+                    <button
+                      class={styles.categoryButton}
+                      classList={{ [styles.categoryButtonActive]: activeFilterCategory() === category.key }}
+                      onClick={() => toggleFilterCategory(category.key)}
+                    >
+                      {category.label}
+                    </button>
+                  )}
+                </For>
+              </div>
+            </div>
+
+            <Show when={activeFilterCategory()}>
+              {(categoryAccessor) => {
+                const categoryKey = createMemo(() => categoryAccessor());
+                const propertyValues = createMemo(() =>
+                  Array.from(propertyColumns().get(categoryKey()) ?? []).sort((a, b) => a.localeCompare(b))
+                );
+
+                return (
+                  <div class={styles.filterOptions}>
+                    <h4>{getCategoryLabel(categoryKey())}</h4>
+                    <Show
+                      when={categoryKey() === 'articles'}
+                      fallback={
+                        <div class={styles.itemGrid}>
+                          <For each={propertyValues()}>
+                            {(value) => (
+                              <button
+                                class={styles.filterButton}
+                                classList={{
+                                  [styles.filterButtonActive]: props.filterState.propertyFilters?.some(
+                                    (filter) => filter.property === categoryKey() && filter.value === value
+                                  )
+                                }}
+                                onClick={(event) => handlePropertyClick(categoryKey(), value, event)}
+                              >
+                                {value}
+                              </button>
+                            )}
+                          </For>
+                        </div>
+                      }
+                    >
+                      <div class={styles.itemGrid}>
+                        <For each={getArticles()}>
+                          {(article) => (
+                            <button
+                              class={styles.filterButton}
+                              classList={{
+                                [styles.filterButtonActive]: props.filterState.articleIds?.includes(article)
+                              }}
+                              onClick={(event) => handleArticleClick(article, event)}
+                            >
+                              {article}
+                            </button>
+                          )}
+                        </For>
+                      </div>
+                    </Show>
+                  </div>
+                );
+              }}
+            </Show>
+          </div>
+        </Show>
+      </div>
     </div>
   );
 };
