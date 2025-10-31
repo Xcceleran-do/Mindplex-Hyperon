@@ -3,7 +3,7 @@
 ! (import! &self experiments:pattern-miner:pattern-miner)
 ! (import! &self experiments:utils:common-utils)
 ! (import! &self experiments:frequent-pattern-miner:frequent-pattern-miner)
-! (import! &db experiments:atomspace_visualizer:public:small-ugly)
+! (import! &db experiments:atomspace_visualizer:public:data)
 
 ! (bind! purifiedDbSpace (new-space)) ; space to hold the database atoms
 ! (add-reduct purifiedDbSpace (get-atoms &db))

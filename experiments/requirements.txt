@@ -2,3 +2,5 @@ flask
 flask-cors
 google-generativeai
 hyperon
+dotenv
+regex

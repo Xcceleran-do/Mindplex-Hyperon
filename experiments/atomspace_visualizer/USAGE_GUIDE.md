@@ -84,7 +84,7 @@ Inside the legend:
 
 ## Understanding the Data
 
-### The Sample Data (small-ugly.metta)
+### The Sample Data (data.metta)
 - **10 articles** (0-9)
 - **5 property types**: topic, length, tone, writing_style, engagement_level
 - Each article has different property values
