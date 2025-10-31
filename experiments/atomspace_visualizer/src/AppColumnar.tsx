@@ -4,6 +4,7 @@ import { createSignal, createEffect, createResource } from 'solid-js';
 import ColumnarVisualizer from './components/ColumnarVisualizer/ColumnarVisualizer';
 import EnhancedLegend from './components/Legend/EnhancedLegend';
 import ChatInterface from './components/ChatInterface/ChatInterface';
+import MiningInterface from './components/MiningInterface/MiningInterface';
 import { GraphData, GraphNode, FilterState } from './types';
 import { MettaParserImpl } from './services/parser/MettaParser';
 import { ColumnarTransformer } from './services/graph/ColumnarTransformer';
@@ -14,10 +15,10 @@ import './styles/themes.css';
 import styles from './AppColumnar.module.css';
 
 const App: Component = () => {
-  // Load initial text from small-ugly.metta file
+  // Load initial text from data.metta file
   const [initialTextResource] = createResource(async () => {
     try {
-      const response = await fetch('/small-ugly.metta');
+      const response = await fetch('/data.metta');
       if (!response.ok) {
         throw new Error('Failed to load file');
       }
@@ -158,7 +159,7 @@ const App: Component = () => {
   // Unified mining flow: called by either the mining button or the chat trigger
   const startMiningUnified = async (conjunctSize: number) => {
     console.log('AppColumnar.tsx: startMiningUnified called with', conjunctSize);
-    const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+    const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://animated-spoon-7vrp545w744vhq46-5000.app.github.dev';
 
     try {
       // Start the animation and visual indicator
@@ -441,15 +442,10 @@ const App: Component = () => {
         </div>
       </div>
 
-      {/* Floating bottom-center mining button (ungrouped from legend/filter) */}
-      <button
-        class={styles.floatingMine}
-        onClick={() => startMiningUnified(4)}
-        aria-label="Start Mining"
-        title="Mine Neural Gold"
-      >
-        ⛏️ Mine
-      </button>
+      {/* Floating bottom-center mining control (now using MiningInterface component) */}
+      <div style={{ position: 'fixed', left: '50%', transform: 'translateX(-50%)', bottom: '28px', 'z-index': '1150' }}>
+        <MiningInterface onMiningStart={startMiningUnified} onPatternsFound={handlePatternsFound} />
+      </div>
 
       {/* Floating Chat Toggle Button */}
       <button

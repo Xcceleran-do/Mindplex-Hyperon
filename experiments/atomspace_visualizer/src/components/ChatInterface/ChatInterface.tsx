@@ -75,7 +75,7 @@ const ChatInterface = (props: ChatInterfaceProps) => {
       
       // Request a single summary for all patterns and display it
       (async () => {
-        const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+        const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://animated-spoon-7vrp545w744vhq46-5000.app.github.dev';
         try {
           const resp = await fetch(`${API_BASE}/api/chat/summarize`, {
             method: 'POST',
@@ -113,7 +113,7 @@ const ChatInterface = (props: ChatInterfaceProps) => {
   });
 
   const analyzeConjunct = async (pattern: string, support: string) => {
-    const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+    const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://animated-spoon-7vrp545w744vhq46-5000.app.github.dev';
     
     try {
       const response = await fetch(`${API_BASE}/api/chat/analyze`, {
@@ -157,7 +157,7 @@ const ChatInterface = (props: ChatInterfaceProps) => {
 
   // Send AI message (internal function)
   const sendAIMessage = async (text: string) => {
-    const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+    const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://animated-spoon-7vrp545w744vhq46-5000.app.github.dev';
     
     // Show typing indicator
     const typingMsg: Message = {
@@ -234,7 +234,7 @@ const ChatInterface = (props: ChatInterfaceProps) => {
     const mineRegex = /mine(?: rules)?(?: with)?\s*(?:the )?(?:next )?(?:top )?\s*(\d+)\s*(?:patterns?|conjunctions?)/i;
     const m = text.match(mineRegex);
     if (m) {
-      const n = parseInt(m[1], 10) || 4;
+      const n = parseInt(m[1], 10) || 5;
       // If parent provides the unified mining handler, use it and avoid
       // sending the message to the AI (which may also call the mining
       // function and duplicate work).

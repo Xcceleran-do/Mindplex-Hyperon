@@ -21,7 +21,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Configure Gemini API
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+genai.configure(api_key=os.getenv("GEMINI_API_KEY4"))
 
 metta4Miner = MeTTa()
 
@@ -31,7 +31,7 @@ metta4Miner.run("""
     ! (import! &self experiments:pattern-miner:pattern-miner)
     ! (import! &self experiments:utils:common-utils)
     ! (import! &self experiments:frequent-pattern-miner:frequent-pattern-miner)
-    ! (import! &tempo experiments:atomspace_visualizer:public:small-ugly)
+    ! (import! &tempo experiments:atomspace_visualizer:public:data)
     ! (import! &self experiments:chainer:main)
                             
     !(bind! &res1 (new-space)) ;; space to hold the formatted miner result
@@ -59,8 +59,11 @@ def mine_pattern(numberOfConjunction: int) -> dict:
     
     try:
         # Extract the atom result
+        print("Debug: mine pattern function being called")
         result_atom = answer[0][0]
+        print(f"Debug: Result atom = {result_atom}")
         list_of_patterns = result_atom.get_children()
+        print(f"Debug: List of Patterns = {list_of_patterns}")
         
         # Parse each pattern
         patterns = []
@@ -305,7 +308,7 @@ def handle_backward_chain_for_message(message: str):
     else:
         # Apply a friendly/jokey wrapper without revealing internal steps
         resp_text = f"Alright, here's the scoop —\n\n{raw_just}\n\n(That's the reasoning I found.)"
-
+    print('DEBUG: final response text:', resp_text)
     return resp_text, function_calls
 
 # Define available functions for the AI with proper docstrings for automatic function calling
@@ -486,7 +489,7 @@ def formatter(mined_patterns):
 
 def backWardChainer(whatToCheck, depth=5):
     whatToCheck = metta4Miner.parse_single(whatToCheck)
-    answer = metta4Miner.run(f""" !(backward-chain &res1 (fromNumber {2}) (: $prf {whatToCheck})) """)
+    answer = metta4Miner.run(f""" !(backward-chain &res1 (S (S Z)) (: $prf {whatToCheck})) """)
     return answer
 
 def getChainerResult(whatToCheck, depth=5):
@@ -974,6 +977,13 @@ def chat():
         history = data.get('history', [])
         session_id = data.get('session_id', 'default')
 
+        # Ensure a conversation list exists for this session before any writes.
+        # This prevents KeyError when shortcut paths (e.g. backward chaining)
+        # attempt to append to conversations[session_id] before it's initialized.
+        if session_id not in conversations:
+            print(f"DEBUG: Creating new conversation session '{session_id}'")
+        conversations.setdefault(session_id, [])
+
         if not message:
             return jsonify({'error': 'Message is required'}), 400
 
@@ -981,9 +991,11 @@ def chat():
         # return the chainer's justification directly.
         try:
             bc_text, bc_calls = handle_backward_chain_for_message(message)
+            print('DEBUG: backward chain shortcut result:', bc_text, bc_calls)
             if bc_text is not None:
-                # store in history
+                # store in history (conversations[session_id] is guaranteed to exist now)
                 conversations[session_id].append({'role': 'user', 'content': message})
+                print('DEBUG: stored backward chain shortcut in history')
                 conversations[session_id].append({'role': 'assistant', 'content': bc_text})
                 try:
                     safe_calls = make_json_safe(bc_calls)

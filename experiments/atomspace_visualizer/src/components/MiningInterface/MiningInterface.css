@@ -3,12 +3,12 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  border-radius: 12px;
-  padding: 10px 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-  border: 2px solid rgba(139, 7, 89, 0.2);
+  background: var(--card-bg);
+  backdrop-filter: blur(8px);
+  border-radius: var(--border-radius, 12px);
+  padding: 8px 10px;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-primary);
   width: 100%;
   box-sizing: border-box;
 }
@@ -32,29 +32,29 @@
 .conjunction-input label {
   font-size: 10px;
   font-weight: 600;
-  color: #3a0647;
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.3px;
   white-space: nowrap;
 }
 
 .conjunction-input label::before {
-  content: '⚡ ';
-  font-size: 11px;
+  content: '';
+  font-size: 0;
 }
 
 .conjunction-input input {
-  width: 40px;
-  padding: 4px 8px;
-  border: 2px solid #8b0759;
-  border-radius: 6px;
+  width: 56px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-secondary);
+  border-radius: 8px;
   text-align: center;
   font-size: 12px;
-  font-weight: bold;
-  color: #3a0647;
-  background: linear-gradient(135deg, #fff 0%, #fef3f8 100%);
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 8px rgba(139, 7, 89, 0.15);
+  font-weight: 700;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  transition: all 0.18s ease;
+  box-shadow: var(--shadow-sm);
 }
 
 .conjunction-input input:focus {
@@ -80,7 +80,7 @@
   font-size: 11px;
   font-weight: 600;
   color: #fff;
-  background: linear-gradient(135deg, #3a0647 0%, #8b0759 100%);
+  background: linear-gradient(180deg, #ffd66b 0%, #ffb800 100%);
   border: none;
   border-radius: 8px;
   cursor: pointer;
@@ -97,33 +97,28 @@
   max-width: 180px;
 }
 
+
 .mine-button::before {
+  /* subtle decorative border, kept hidden by default */
   content: '';
   position: absolute;
-  top: -2px;
-  left: -2px;
-  right: -2px;
-  bottom: -2px;
-  background: linear-gradient(45deg, 
-    #ff00cc, #3a0647, #ff9500, #ff00cc, 
-    #3a0647, #ff9500, #ff00cc);
+  top: -1px;
+  left: -1px;
+  right: -1px;
+  bottom: -1px;
+  border-radius: 999px;
   z-index: -1;
-  border-radius: 10px;
-  background-size: 400%;
-  animation: mine-border 6s linear infinite;
   opacity: 0;
-  transition: opacity 0.3s ease;
+  transition: opacity 0.18s ease;
 }
 
 .mine-button:hover {
-  transform: perspective(800px) translateZ(10px);
-  box-shadow: 0 7px 25px rgba(0, 0, 0, 0.3), 
-              0 0 0 2px rgba(255, 255, 255, 0.2) inset,
-              0 0 40px rgba(139, 7, 89, 0.6);
+  transform: translateY(-3px);
+  box-shadow: 0 12px 36px rgba(255, 184, 28, 0.26);
 }
 
 .mine-button:hover::before {
-  opacity: 1;
+  opacity: 0.08;
 }
 
 .mine-button:active {
@@ -142,15 +137,37 @@
 
 .mine-button .pickaxe-icon, 
 .mine-button .gems-icon {
-  display: inline-block;
-  font-size: 12px;
-  filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.7));
+  display: none;
 }
 
 .mine-button .button-text {
   position: relative;
   overflow: hidden;
-  font-size: 11px;
+  font-size: 12px;
+}
+
+/* Separate compact conjunction input next to the button */
+.separate-conj-input {
+  width: 72px;
+  padding: 6px 10px;
+  margin-right: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border-secondary);
+  font-weight: 700;
+  font-size: 13px;
+  text-align: center;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.separate-conj-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(139,7,89,0.08);
+}
+
+.separate-conj-input[disabled] {
+  opacity: 0.6;
 }
 
 .mine-button .button-text::after {
@@ -185,27 +202,21 @@
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
 }
 
-.mining-text {
+.mine-button {
   position: relative;
-  font-weight: 600;
-  animation: pulse 1s ease-in-out infinite;
-}
-
-.sparkles {
-  position: relative;
-  width: 24px;
-  height: 24px;
-}
-
-.sparkle {
-  position: absolute;
-  animation: float-up 2s ease-out infinite;
-  opacity: 0;
-}
-
-.sparkle:nth-child(1) {
-  left: 0;
-  animation-delay: 0s;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent-gold-contrast);
+  background: linear-gradient(180deg, var(--accent-gold) 0%, #ffb800 100%);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  overflow: hidden;
+  transition: transform 0.14s ease, box-shadow 0.14s ease;
+  box-shadow: 0 8px 20px rgba(255, 184, 28, 0.12);
+  white-space: nowrap;
+  min-width: 64px;
 }
 
 .sparkle:nth-child(2) {
@@ -379,6 +390,6 @@
 
 /* Advanced button effects */
 .mine-button.mining {
-  background: linear-gradient(135deg, #4b0082 0%, #9400d3 100%);
-  animation: mining-glow 1.5s ease-in-out infinite;
+  background: linear-gradient(180deg, #ffd66b 0%, #ffb800 100%);
+  box-shadow: 0 12px 36px rgba(148, 40, 255, 0.18);
 }

@@ -27,6 +27,10 @@
   --node-highlight: #f59e0b;
   
   --separator-color: rgba(0, 0, 0, 0.05);
+
+  /* Accent colors */
+  --accent-gold: #ffb800;
+  --accent-gold-contrast: #3a1f00;
   
   --scrollbar-track: rgba(241, 245, 249, 0.5);
   --scrollbar-thumb: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
