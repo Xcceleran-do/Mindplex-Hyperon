@@ -322,7 +322,7 @@ experiments/
 ├── chat_api.py                   # Chat API with Gemini
 ├── requirements.txt              # Python dependencies
 ├── data/
-│   └── small-ugly.metta         # Sample data
+│   └── data.metta         # Sample data
 └── atomspace_visualizer/
     ├── src/
     │   ├── App.tsx              # Main app with visualization logic

@@ -21,17 +21,11 @@
 ;; Output: the instantiated pattern with a variable on the open side, or Empty
 ; (:candidatePatternMaker (-> SpaceType (Specialized Pattern) Number Expression Expression))
 ( = (candidatePatternMaker $dbspace ($link left $rValue) $minsup)
-    (
-        let $result (sup-eval $dbspace ($link $x $rValue) $minsup)
-            (if $result ($link $x $rValue) Empty )
-    )
+        (if (sup-eval $dbspace ($link $x $rValue) $minsup) ($link $x $rValue) Empty )
 )
 
 ( = (candidatePatternMaker $dbspace ($link $lValue right) $minsup)
-    (
-        let $result (sup-eval $dbspace ($link $lValue $y) $minsup)
-            (if $result ($link $lValue $y) Empty )
-    )
+    (if (sup-eval $dbspace ($link $lValue $y) $minsup) ($link $lValue $y) Empty )
 )
 
 
@@ -71,25 +65,20 @@
 ;; 2:- Compute support with sup-num; skip if < $minSup
 ;; 3:- Sort clauses with sort_conj and emit (supportOf (, $sorted) $support)
 ;(: formatter (-> SpaceType SpaceType Number Atom ))
-(= (formatter $conjuncts $dbspace $minSup) 
-   (    
-    let* (
-            (() (println! "==== Formating  started ====="))
-            ((conjunct $conjunct) (superpose $conjuncts))
-            ($support (sup-num $dbspace $conjunct))
-            ($add (>= $support $minSup))
-        ) 
-        ( if $add
-            (let $sorted (sort_conj $conjunct) (supportOf (cons-atom , $sorted) $support))
-            Empty            
+
+(= (formatter (conjunct $conjunct) $dbspace $minSup) 
+        (function 
+            (chain (eval (counter $dbspace $conjunct)) $cnt 
+                    (return (if (>= $cnt $minSup)
+                        (chain (eval (sort_conj $conjunct)) $sorted 
+                                (supportOf (cons-atom , $sorted) $cnt))
+                                Empty)))
         )
-   )
+   
 )
-
-
---------------------------------------------------------
+; --------------------------------------------------------
 ;; frequency-pattern-miner
----------------------------------------------------------
+; ---------------------------------------------------------
 ;; End-to-end frequent pattern mining pipeline.
 ;; Steps:
 ;;  1:- Build specialization templates from DB and filter to candidates (absSpeCan)
@@ -97,12 +86,15 @@
 ;;  3:- Format passing conjunctions as (supportOf (, ...) n) with sorted clauses
 ;(: frequency-pattern-miner (-> SpaceType SpaceType SpaceType SpaceType SpaceType Number Number Atoms))
 (= (frequency-pattern-miner $dbspace $minsup $depth)
-   (let*(
+   (let* (
            (() (println! "==== Frequent miner started ====="))
            ($candidatePatterns (collapse (absSpeCan $dbspace $minsup))); get candidate patterns
            (() (println! ("candidatePatterns ended and got" $candidatePatterns)))
            ($conjuncts  (unique_combinations_star $candidatePatterns $depth))
-           ($temp4 (collapse (formatter $conjuncts $dbspace $minsup)))      
+           (() (println! ("conjuncts we have got is "  $conjuncts)))
+           ($temp4 (collapse (formatter (superpose $conjuncts) $dbspace $minsup)))      
            (() (println! (" conjuncts we have got is " $temp4)))
         )  $temp4)
 )
+
+; !(unique_combinations_star ((length $x "high") (length $x "low") (length $x "medium") (tone $x "Conversational") (tone $x "Humorous") (tone $x "Motivational") (tone $x "Gentle") (tone $x "Educational") (tone $x "Analytical") (writing_style $x "Conversational") (writing_style $x "Descriptive") (writing_style $x "Informal") (writing_style $x "Narrative") (writing_style $x "Formal") ) 3)

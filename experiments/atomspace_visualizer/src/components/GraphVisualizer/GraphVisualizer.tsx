@@ -27,6 +27,9 @@ const GraphVisualizer: Component<GraphVisualizerProps> = (props) => {
   let lastPanPoint: Point = { x: 0, y: 0 };
   let hoveredNode: GraphNode | null = null;
   let selectedNode: GraphNode | null = null;
+  // Highlighted chain state (nodes and edges connected to the selected node)
+  let highlightedNodeIds: Set<string> = new Set();
+  let highlightedEdgeIds: Set<string> = new Set();
 
   // Node colors based on template.html color scheme
   const getNodeColor = (node: GraphNode): string => {
@@ -77,15 +80,15 @@ const GraphVisualizer: Component<GraphVisualizerProps> = (props) => {
 
   // Find node at given world position (with z-order consideration)
   const getNodeAtPosition = (worldPos: Point): GraphNode | null => {
-    const nodeRadius = 20; // Base node radius
     let foundNodes: { node: GraphNode; distance: number }[] = [];
-    
-    // Find all nodes under the cursor
+
+    // Find all nodes under the cursor using per-node radius (world units)
     for (const node of props.graphData.nodes) {
       const dx = worldPos.x - node.position.x;
       const dy = worldPos.y - node.position.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
-      
+      const nodeRadius = node.size || 120; // much larger default hit area
+
       if (distance <= nodeRadius) {
         foundNodes.push({ node, distance });
       }
@@ -110,7 +113,7 @@ const GraphVisualizer: Component<GraphVisualizerProps> = (props) => {
     if (!canvasRef) return;
 
     const screenPos = worldToScreen(node.position);
-    const baseRadius = node.size || 40;
+  const baseRadius = node.size || 120; // much bigger default nodes
     let radius = baseRadius * transform.scale;
     
     // Skip rendering if node is outside viewport (with margin)
@@ -137,6 +140,13 @@ const GraphVisualizer: Component<GraphVisualizerProps> = (props) => {
     if (node === selectedNode) {
       strokeColor = 'rgba(59, 130, 246, 0.8)'; // Blue selection ring
       strokeWidth = 3;
+    }
+
+    // Highlighted chain effect
+    if (highlightedNodeIds.has(node.id)) {
+      strokeColor = 'rgba(245, 158, 11, 0.95)'; // amber highlight
+      strokeWidth = Math.max(strokeWidth, 3);
+      radius *= 1.08;
     }
     
     // Dragging effect
@@ -217,13 +227,14 @@ const GraphVisualizer: Component<GraphVisualizerProps> = (props) => {
     const endX = targetScreen.x - Math.cos(angle) * targetRadius;
     const endY = targetScreen.y - Math.sin(angle) * targetRadius;
 
-    // Draw edge line (stops at node borders)
-    ctx.beginPath();
-    ctx.moveTo(startX, startY);
-    ctx.lineTo(endX, endY);
-    ctx.strokeStyle = edge.color || getEdgeColor(edge);
-    ctx.lineWidth = Math.max(2, 4 * transform.scale);
-    ctx.stroke();
+  // Draw edge line (stops at node borders)
+  ctx.beginPath();
+  ctx.moveTo(startX, startY);
+  ctx.lineTo(endX, endY);
+  const isHighlighted = highlightedEdgeIds.has(edge.id) || (selectedNode && (edge.source === selectedNode.id || edge.target === selectedNode.id));
+  ctx.strokeStyle = isHighlighted ? 'rgba(245, 158, 11, 0.95)' : (edge.color || getEdgeColor(edge));
+  ctx.lineWidth = isHighlighted ? Math.max(3, 6 * transform.scale) : Math.max(2, 4 * transform.scale);
+  ctx.stroke();
 
     // Draw arrow for directed edges
     if (edge.directed) {
@@ -349,9 +360,16 @@ const GraphVisualizer: Component<GraphVisualizerProps> = (props) => {
     const node = getNodeAtPosition(worldPos);
     
     if (node) {
+      // Clear previous highlights/selections
+      highlightedNodeIds.clear();
+      highlightedEdgeIds.clear();
+
       // Node interaction
       selectedNode = node;
       props.onNodeSelect(node);
+
+      // Compute connected chain (BFS) and highlight nodes/edges
+      computeHighlights(node.id);
       
       // Start node dragging
       isDraggingNode = true;
@@ -364,11 +382,36 @@ const GraphVisualizer: Component<GraphVisualizerProps> = (props) => {
     } else {
       // Clear selection if clicking on empty space
       selectedNode = null;
+      highlightedNodeIds.clear();
+      highlightedEdgeIds.clear();
       
       // Start canvas panning
       isPanning = true;
       lastPanPoint = mousePos;
       canvasRef.style.cursor = 'grabbing';
+    }
+  };
+
+  // Compute connected nodes and edges starting from a node id
+  const computeHighlights = (startNodeId: string) => {
+    const nodeQueue: string[] = [startNodeId];
+    const visited = new Set<string>([startNodeId]);
+    highlightedNodeIds.add(startNodeId);
+
+    while (nodeQueue.length > 0) {
+      const current = nodeQueue.shift()!;
+      // Find edges connected to current
+      for (const edge of props.graphData.edges) {
+        if (edge.source === current || edge.target === current) {
+          highlightedEdgeIds.add(edge.id);
+          const neighbor = edge.source === current ? edge.target : edge.source;
+          if (!visited.has(neighbor)) {
+            visited.add(neighbor);
+            highlightedNodeIds.add(neighbor);
+            nodeQueue.push(neighbor);
+          }
+        }
+      }
     }
   };
 
@@ -542,18 +585,38 @@ const GraphVisualizer: Component<GraphVisualizerProps> = (props) => {
     };
     const centerX = (bounds.minX + bounds.maxX) / 2;
     const centerY = (bounds.minY + bounds.maxY) / 2;
-    
-    // Calculate scale to fit graph in view with some padding
-    const graphWidth = bounds.maxX - bounds.minX;
-    const graphHeight = bounds.maxY - bounds.minY;
-    const padding = 100;
-    const scaleX = (canvasRef.width - padding * 2) / Math.max(graphWidth, 1);
-    const scaleY = (canvasRef.height - padding * 2) / Math.max(graphHeight, 1);
-    const fitScale = Math.min(scaleX, scaleY, 2); // Cap at 2x zoom
-    
+    // Calculate scale to fit graph in view with padding that considers node sizes.
+    // Use the canvas layout size (CSS pixels) for this calculation.
+    const rect = canvasRef.getBoundingClientRect();
+
+    // Determine max node radius (world units) for padding
+    const maxNodeRadius = Math.max(...props.graphData.nodes.map(n => (n.size || 120)));
+
+    // Expand bounds by node radius so nodes won't be cut off
+    const paddedMinX = bounds.minX - maxNodeRadius;
+    const paddedMaxX = bounds.maxX + maxNodeRadius;
+    const paddedMinY = bounds.minY - maxNodeRadius;
+    const paddedMaxY = bounds.maxY + maxNodeRadius;
+
+    const graphWidth = Math.max(1, paddedMaxX - paddedMinX);
+    const graphHeight = Math.max(1, paddedMaxY - paddedMinY);
+
+    // Padding in pixels around the graph (at least 100px)
+    const paddingPx = Math.max(120, maxNodeRadius * 1.5);
+
+    const availableWidth = Math.max(50, rect.width - paddingPx * 2);
+    const availableHeight = Math.max(50, rect.height - paddingPx * 2);
+
+    const scaleX = availableWidth / graphWidth;
+    const scaleY = availableHeight / graphHeight;
+
+    // Fit scale, leave small margin (0.9) to prevent touching edges
+    const fitScale = Math.max(0.01, Math.min(scaleX, scaleY) * 0.9);
+
+    // Compute transform so center of graph maps to center of canvas
     return {
-      x: canvasRef.width / 2 - centerX * fitScale,
-      y: canvasRef.height / 2 - centerY * fitScale,
+      x: rect.width / 2 - ((paddedMinX + paddedMaxX) / 2) * fitScale,
+      y: rect.height / 2 - ((paddedMinY + paddedMaxY) / 2) * fitScale,
       scale: fitScale
     };
   };
@@ -564,6 +627,28 @@ const GraphVisualizer: Component<GraphVisualizerProps> = (props) => {
     const target = getGraphCenterAndScale();
     const start = { ...transform };
     const duration = 300;
+    const startTime = performance.now();
+
+    const step = (now: number) => {
+      const t = Math.min(1, (now - startTime) / duration);
+      const ease = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+      transform.x = start.x + (target.x - start.x) * ease;
+      transform.y = start.y + (target.y - start.y) * ease;
+      transform.scale = start.scale + (target.scale - start.scale) * ease;
+      if (t < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  };
+
+  // Smooth fit-to-view with a slight zoom-out padding
+  const fitToView = (extraPadding = 0.9) => {
+    if (!canvasRef) return;
+    const target = getGraphCenterAndScale();
+    // Apply padding factor to zoom out slightly (extraPadding < 1 -> zoom out)
+    target.scale = target.scale * extraPadding;
+
+    const start = { ...transform };
+  const duration = 700;
     const startTime = performance.now();
 
     const step = (now: number) => {
@@ -644,6 +729,8 @@ const GraphVisualizer: Component<GraphVisualizerProps> = (props) => {
       transform.x = centerData.x;
       transform.y = centerData.y;
       transform.scale = centerData.scale;
+      // Smoothly fit to view after initial render (zoom out more)
+      setTimeout(() => fitToView(0.6), 120);
     }
 
     // Start animation loop
@@ -685,6 +772,11 @@ const GraphVisualizer: Component<GraphVisualizerProps> = (props) => {
       transform.x = (canvasRef?.width || window.innerWidth) / 2 - centerX * transform.scale;
       transform.y = (canvasRef?.height || window.innerHeight) / 2 - centerY * transform.scale;
     }
+    // Clear any previous highlights when data changes
+    highlightedNodeIds.clear();
+    highlightedEdgeIds.clear();
+    // Fit graph to view with a stronger zoom-out when data updates
+    setTimeout(() => fitToView(0.6), 80);
   });
 
   return (
@@ -695,12 +787,12 @@ const GraphVisualizer: Component<GraphVisualizerProps> = (props) => {
         position: 'absolute',
         top: '0',
         left: '0',
-        width: '100vw',
-        height: '100vh',
+        width: '100%',
+        height: '100%',
         cursor: 'grab',
         'background-color': 'var(--bg-primary)',
-        'background-image': 'radial-gradient(circle at 1px 1px, rgba(0,0,0,0.02) 1px, transparent 0)',
-        'background-size': '20px 20px'
+        'background-image': 'radial-gradient(circle at 1px 1px, rgba(0,0,0,0.02) 1px, transparent 0), linear-gradient(135deg, rgba(102,118,234,0.06), rgba(118,75,162,0.02))',
+        'background-size': '20px 20px, 400%'
       }}
     >
       Your browser does not support the HTML5 canvas element.
