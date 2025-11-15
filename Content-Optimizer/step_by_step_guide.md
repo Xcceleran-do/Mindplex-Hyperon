@@ -9,7 +9,6 @@ Use this as a checklist: paste each prompt into a new file (or start a new edito
 # Repo layout (target)
 
 ```
-content-opt-recommender/
 ├─ infra/
 │  ├─ docker-compose.yml
 │  └─ neo4j/neo4j.conf
@@ -59,13 +58,6 @@ content-opt-recommender/
 - Frontend: `react`, `vite` or `create-react-app`, `axios`
 
 ---
-
-# HOW TO USE THESE Copilot prompts
-
-1. Create the file named as specified.
-2. Paste the **exact** prompt (quoted below) into the file as a comment header or as the file content (Copilot will read/edit and propose content).
-3. Accept or iterate on Copilot suggestions. If it generates partial code, paste additional prompt(s) to refine.
-4. Run the tests in `tests/` and manually run a small data ingest to validate end-to-end.
 
 ---
 
@@ -467,3 +459,5 @@ Prompt:
 - If Neo4j connection refused: check docker-compose logs and that bolt port 7687 is bound.
 
 ---
+
+#

@@ -218,26 +218,11 @@ A recommender that **suggests content ideas / optimizations to a creator** (topi
 
 ---
 
-# 14. Security & privacy FRs
-
-- **Authentication:** All APIs require JWT tokens; support OAuth2 for creators.
-- **Authorization:** Creator can access only their own recommendations and content.
-- **Audit logs:** Store who triggered retrain, model switch, or imported data.
-- **Data masking:** PII in `body` or `audience attributes` must be hashed/redacted unless allowed.
-- **Acceptance:** Pen-test checklists and role-based access control (RBAC) in place.
+---
 
 ---
 
-# 15. Operational FRs (jobs & orchestration)
-
-- **Scheduled jobs:** daily or weekly embedding refresh & model retrain configurable.
-- **On-demand:** Admin API to start graph projection, GraphSAGE train, export dataset, train model.
-- **Retries & idempotency:** Jobs are idempotent; failed jobs have retry policy and alerting.
-- **Acceptance:** Scheduled job runs tracked in job logs and failure notifications sent to configured channels.
-
----
-
-# 16. Testing & acceptance criteria (summary)
+# 14. Testing & acceptance criteria (summary)
 
 - **Unit tests:** for ingestion parsers, feature assembly, model export.
 - **Integration tests:** Graph projection → GraphSAGE produces embeddings → text embeddings present → vector assembly → train small model end-to-end on sample dataset.
@@ -247,7 +232,7 @@ A recommender that **suggests content ideas / optimizations to a creator** (topi
 
 ---
 
-# 17. Example Neo4j GraphSAGE commands (implementation notes)
+# 15. Example Neo4j GraphSAGE commands (implementation notes)
 
 These are the canonical Cypher-style commands for implementation (already referenced in the pipeline):
 
@@ -300,7 +285,7 @@ CALL gds.beta.graphSage.write('contentGraph_v1', {
 
 ---
 
-# 18. Feature engineering rules (concrete)
+# 16. Feature engineering rules (concrete)
 
 - **Normalization:** numeric engagement metrics normalized per-day and per-platform.
 - **One-hot encoding:** `format`, `platform`, `language`.
@@ -315,5 +300,8 @@ CALL gds.beta.graphSage.write('contentGraph_v1', {
 # 19. Edge cases & business constraints
 
 - Cold-start: New content without ENGAGED_WITH edges uses text_embedding + metadata; GraphSAGE inductive capability uses feature-only fallback.
+    
+    ---
+    
 - Sparse engagement: If content has < N engagement events, downweight or mark as low-confidence; surface to creator with disclaimer.
 - Diversity control: Add tunable lambda for diversification to avoid repetitive suggestions.

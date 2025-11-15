@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+neo4j
+pandas
+numpy
+scikit-learn
+lightgbm
+sentence-transformers
+python-dotenv
+joblib
+requests
+apoc
