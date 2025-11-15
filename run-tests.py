@@ -35,6 +35,7 @@ def run_test_file(test_file):
             capture_output=True,
             text=True,
             check=True,
+            shell=True
         )
         return result, test_file, False
     except subprocess.CalledProcessError as e:
