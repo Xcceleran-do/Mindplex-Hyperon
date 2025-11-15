@@ -46,7 +46,7 @@ def print_ascii_art(text):
            """
     print(CYAN + art + RESET)
 
-metta_run_command = "metta"
+metta_run_command = "cd /workspaces/Mindplex-Hyperon/PeTTa && ./run.sh"
 root = pathlib.Path("../")
 testMettaFiles = list(root.rglob("*test.metta"))
 total_files = len(testMettaFiles)
