@@ -80,7 +80,7 @@
     
     
 (= (getId $sub) 
-    (let $sup (superpose dict) (unify $sup ($id $sub) $id Empty)))
+    (let $sup (superpose ((1 X) (2 Y) (7 Z) (3 A) (4 B) (5 C) (6 D))) (unify $sup ($id $sub) $id (empty))))
 
 (= (getSub $id $curSub)
     (let ($sub $id) (superpose $curSub) $sub))
