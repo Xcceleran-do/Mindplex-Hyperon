@@ -1,5 +1,4 @@
-!(register-module! ../../mettaMotto)
-!(import! &self mettaMotto:motto)
+!(import! &self ../../mettaMotto/motto)
 
 ; Test using Google Gemini via LangChain
 ; Using the correct full model names with models/ prefix
