@@ -3,15 +3,18 @@ services:
   neo4j:
     image: neo4j:5.11
     container_name: content_optimizer_neo4j
-    environment:
-      - NEO4J_AUTH=neo4j/yourpassword
+    # Load only Neo4j-specific env (avoids passing unrelated NEO4J_* vars like NEO4J_URI)
+    env_file:
+      - ./neo4j.env
     ports:
       - "7474:7474"
       - "7687:7687"
     volumes:
-      - ./neo4j/import:/var/lib/neo4j/import
-      - ./neo4j/cypher:/var/lib/neo4j/cypher
-      - ./infra/neo4j/neo4j.conf:/var/lib/neo4j/conf/neo4j.conf
+      # Map repo-root neo4j assets into the container (compose file lives in infra/)
+      - ../neo4j/import:/var/lib/neo4j/import
+      - ../neo4j/cypher:/var/lib/neo4j/cypher
+      # Do not mount a single config file on Windows; it prevents Neo4j from updating the file at startup.
+      # If you need custom config, mount a directory instead (e.g. ./neo4j/conf:/var/lib/neo4j/conf)
 
   backend:
     image: python:3.10-slim
