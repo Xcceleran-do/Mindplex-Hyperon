@@ -10,3 +10,5 @@ python-dotenv
 joblib
 requests
 apoc
+pytest
+httpx
