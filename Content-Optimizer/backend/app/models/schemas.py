@@ -103,3 +103,25 @@ __all__ = [
     'RetrainResponse',
     'ProjectGraphResponse',
 ]
+
+# -----------------------------
+# Strategy (format/platform/length) schemas
+# -----------------------------
+
+class StrategyRequest(BaseModel):
+    creatorId: Optional[str] = Field('', description="Creator to personalize suggestions for (optional).")
+    topK: int = Field(3, gt=0, le=10)
+
+
+class StrategyItem(BaseModel):
+    format: Optional[str] = None
+    platform: Optional[str] = None
+    score: float = 0.0
+    lengthRangeSec: Optional[list[int]] = Field(None, description="[low, high] recommended length band in seconds")
+    examples: Optional[list[str]] = Field(default=None, description="Sample contentIds representative of this strategy")
+
+
+class StrategyResponse(BaseModel):
+    items: list[StrategyItem]
+    summary: Optional[str] = None
+

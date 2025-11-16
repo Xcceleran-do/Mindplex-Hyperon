@@ -7,6 +7,7 @@ export function RecommendationsPanel() {
   const [topK, setTopK] = useState(5)
   const [recs, setRecs] = useState([])
   const [modelVersion, setModelVersion] = useState(null)
+  const [strategy, setStrategy] = useState({ items: [], summary: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [health, setHealth] = useState(null)
@@ -54,6 +55,20 @@ export function RecommendationsPanel() {
     }
   }, [creatorId, topK, sortDir])
 
+  const fetchStrategy = useCallback(async () => {
+    try {
+      const url = new URL(`${API_BASE}/strategy`)
+      if (creatorId) url.searchParams.set('creatorId', creatorId)
+      url.searchParams.set('topK', 3)
+      const res = await fetch(url.toString())
+      if (!res.ok) return
+      const data = await res.json()
+      setStrategy(data)
+    } catch {
+      // ignore
+    }
+  }, [creatorId])
+
   const refreshCache = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -70,7 +85,8 @@ export function RecommendationsPanel() {
   useEffect(() => {
     fetchHealth()
     fetchRecs()
-  }, [fetchHealth, fetchRecs])
+    fetchStrategy()
+  }, [fetchHealth, fetchRecs, fetchStrategy])
 
   return (
     <div className="w-full max-w-4xl mx-auto relative group bg-white/70 dark:bg-slate-900/70 backdrop-blur border border-slate-200 dark:border-slate-700 shadow-md rounded-xl p-6 space-y-6 overflow-hidden">
@@ -190,6 +206,41 @@ export function RecommendationsPanel() {
           )}
         </div>
       )}
+      {/* Strategy section */}
+      <div className="mt-6">
+        <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Strategy suggestions</h3>
+        {strategy?.items?.length ? (
+          <div className="mt-3 grid sm:grid-cols-2 gap-3">
+            {strategy.items.map((s, idx) => (
+              <div key={idx} className="p-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-sm text-slate-500 dark:text-slate-400">Platform</div>
+                    <div className="font-medium text-slate-800 dark:text-slate-100">{s.platform || 'n/a'}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm text-slate-500 dark:text-slate-400">Format</div>
+                    <div className="font-medium text-slate-800 dark:text-slate-100">{s.format || 'n/a'}</div>
+                  </div>
+                </div>
+                <div className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                  {s.lengthRangeSec ? (
+                    <span>Optimal length: {Math.round(s.lengthRangeSec[0]/60)}–{Math.round(s.lengthRangeSec[1]/60)} min ({s.lengthRangeSec[0]}–{s.lengthRangeSec[1]}s)</span>
+                  ) : (
+                    <span>Optimal length: n/a</span>
+                  )}
+                </div>
+                {s.examples?.length ? (
+                  <div className="mt-2 text-xs text-slate-500">Examples: {s.examples.join(', ')}</div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-slate-500 mt-2">No strategy suggestions available.</p>
+        )}
+        {strategy?.summary && <p className="text-xs text-slate-500 mt-2">{strategy.summary}</p>}
+      </div>
       {modelVersion && <p className="text-xs text-slate-500">Model version: <span className="font-semibold">{modelVersion}</span></p>}
     </div>
   )

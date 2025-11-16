@@ -245,6 +245,10 @@ def _refresh_cache() -> Dict[str, Any]:
     _initialize_cache()
     return {'status': 'refreshed', 'count': len(_CACHE)}
 
+# Expose programmatic refresh for orchestrator
+def refresh_cache_programmatically() -> Dict[str, Any]:
+    return _refresh_cache()
+
 @router.post('/recommendations/refresh', summary='Refresh in-memory recommendation cache')
 async def refresh_post():
     return _refresh_cache()

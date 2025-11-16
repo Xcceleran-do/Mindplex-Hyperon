@@ -19,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .api.recommendations import router as recommendations_router
+from .api.strategy import router as strategy_router
 from .api.admin import router as admin_router
 from .services.neo4j_client import health_check
 
@@ -43,6 +44,7 @@ def health():  # simple synchronous endpoint
 
 # Mount routers
 app.include_router(recommendations_router, tags=["recommendations"])
+app.include_router(strategy_router, tags=["strategy"])
 app.include_router(admin_router, tags=["admin"])
 
 __all__ = ["app"]
