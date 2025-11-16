@@ -31,6 +31,7 @@ from backend.app.models.schemas import (
 )
 from backend.app.services.neo4j_client import run_read
 from backend.app.services.ranker import load_latest_model
+import math
 
 router = APIRouter()
 
@@ -142,7 +143,39 @@ def _filter_by_creator(creator_id: str) -> List[str]:
     return [r['contentId'] for r in rows]
 
 
+def _cosine(a: List[float], b: List[float]) -> float:
+    """Robust cosine similarity for list/array inputs (empty-safe)."""
+    if a is None or b is None:
+        return 0.0
+    # Convert numpy arrays to lists for uniform handling
+    if hasattr(a, 'tolist'):
+        a = a.tolist()
+    if hasattr(b, 'tolist'):
+        b = b.tolist()
+    if len(a) == 0 or len(b) == 0:
+        return 0.0
+    if len(a) != len(b):
+        m = min(len(a), len(b))
+        a = a[:m]
+        b = b[:m]
+    dot = 0.0
+    sum_a = 0.0
+    sum_b = 0.0
+    for x, y in zip(a, b):
+        dot += x * y
+        sum_a += x * x
+        sum_b += y * y
+    na = math.sqrt(sum_a) or 1.0
+    nb = math.sqrt(sum_b) or 1.0
+    return dot / (na * nb)
+
+
 def _compute_recommendations(creator_id: str, topK: int) -> RecommendationResponse:
+    """Compute recommendations, augmenting explanation with nearest examples + top features.
+
+    Top features are indexes of highest model feature importances (best-effort).
+    Nearest examples are top 3 other cached items by cosine similarity of feature vectors.
+    """
     _initialize_cache()
     if not _CACHE:
         raise HTTPException(status_code=503, detail='recommendation cache empty (no data)')
@@ -153,14 +186,48 @@ def _compute_recommendations(creator_id: str, topK: int) -> RecommendationRespon
         if filtered:
             items = filtered
     selected = items[: max(topK, 1)]
-    rec_items = [
-        RecommendationItem(
-            contentId=r['contentId'],
-            title=r['title'],
-            score=r['score'],
-            explanation={"score": r['score'], "model": _MODEL_META.get('version')}
-        ) for r in selected
-    ]
+
+    # feature importances (if available)
+    top_features: List[int] = []
+    if _MODEL is not None and hasattr(_MODEL, 'feature_importances_'):
+        importances = list(getattr(_MODEL, 'feature_importances_'))
+        if importances:
+            # take top 5 indices by importance
+            sorted_idx = sorted(range(len(importances)), key=lambda i: importances[i], reverse=True)
+            top_features = sorted_idx[:5]
+
+    # precompute nearest examples for each selected item
+    rec_items: List[RecommendationItem] = []
+    for r in selected:
+        feats = r['features']
+        # compute similarity to other cache items (exclude self)
+        sims = []
+        for other in _CACHE:
+            if other['contentId'] == r['contentId']:
+                continue
+            sim = _cosine(feats, other['features'])
+            sims.append({
+                'contentId': other['contentId'],
+                'title': other['title'],
+                'similarity': round(sim, 4),
+                'score': other['score'],
+            })
+        sims.sort(key=lambda d: d['similarity'], reverse=True)
+        nearest_examples = sims[:3]
+        explanation = {
+            'score': r['score'],
+            'model': _MODEL_META.get('version'),
+            'nearest_examples': nearest_examples,
+            'top_features': top_features,
+        }
+        rec_items.append(
+            RecommendationItem(
+                contentId=r['contentId'],
+                title=r['title'],
+                score=r['score'],
+                explanation=explanation,
+            )
+        )
     return RecommendationResponse(recommendations=rec_items, modelVersion=_MODEL_META.get('version'))
 
 @router.post('/recommendations', response_model=RecommendationResponse)

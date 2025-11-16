@@ -341,55 +341,7 @@ Prompt:
 
 ---
 
-# STEP 12 — Utilities: model registry & versioning
-
-Prompt:
-
-```
-# Create a small module backend/app/services/ranker.py that wraps model saving/loading:
-# - save_model(model, metrics, out_dir) -> writes model.joblib and metadata JSON with timestamp and metrics
-# - load_latest_model(out_dir) -> returns model and metadata
-# - list_models(out_dir) -> returns available versions
-# Add unit tests for these functions.
-
-```
-
----
-
-# STEP 13 — Observability & job scheduling (optional)
-
-Prompt:
-
-```
-# Create a simple scheduler script that:
-# - Reads CRON config from .env (DAILY_RETRAIN=true/false)
-# - If enabled, schedules a daily retrain by calling admin /admin/retrain
-# - Logs outputs to a file in logs/
-# Provide a systemd service file or a small README note on how to run in production.
-
-```
-
----
-
-# STEP 14 — Security and config (.env.sample)
-
-Prompt:
-
-```
-# Create a .env.sample file listing:
-# NEO4J_URI=bolt://localhost:7687
-# NEO4J_USER=neo4j
-# NEO4J_PASSWORD=yourpassword
-# ADMIN_TOKEN=changeme
-# MODEL_DIR=./models
-# FRONTEND_ORIGIN=http://localhost:5173
-# OTHER config defaults
-
-```
-
----
-
-# STEP 15 — Final acceptance tests & checklist
+# STEP 12 — Final acceptance tests & checklist
 
 Prompt (to paste in README or tests):
 
@@ -406,58 +358,4 @@ Prompt (to paste in README or tests):
 
 ```
 
----
-
-# Helpful Copilot prompt tips (to get better results)
-
-- When a file is long, paste the filename as a comment at the top and add: `# Use type hints, docstrings, and include a basic unit test.` Copilot responds better with explicit constraints.
-- For Neo4j GDS GraphSAGE, if Copilot produces `beta` or `alpha` API calls incompatible with your GDS version, manually replace with the correct call (I included the expected patterns in earlier messages).
-- If Copilot generates pseudocode for heavy compute (GraphSAGE training), insist on returning embeddings as lists of floats and persisting to node properties.
-
-Example meta-prompt to paste at top of a file before using Copilot:
-
-```
-# File: backend/app/services/embeddings.py
-# Goal: Production-ready Python functions to compute and persist text embeddings and assemble hybrid vectors.
-# Requirements: use sentence-transformers, numpy, pandas, neo4j driver. Include type hints and docstrings. Add a short __main__ demo that computes embeddings for two sample texts.
-
-```
-
----
-
-# Example tiny snippet you can paste as a Copilot seed to generate the GraphSAGE write call
-
-Prompt:
-
-```
-# Create a Python function `run_gds_graphsage(driver, graph_name='contentGraph_demo', write_property='gsage_embedding_v1')`
-# that executes the following Cypher on Neo4j via driver:
-# 1) drop existing graph if exists
-# 2) gds.graph.project(...)
-# 3) gds.beta.graphSage.write(...) or gds.graphSage.write depending on GDS version
-# Return a dict summary with node_count and embedding_property.
-# Include robust error handling.
-
-```
-
----
-
-# What I expect Copilot to generate (sanity checks)
-
-- `neo4j_client.run_cypher()` correctly uses `session.run(query, parameters)` and returns records.
-- GraphSAGE Cypher uses `gds.beta.graphSage.write` or `gds.graphSage.write` with `writeProperty`.
-- `embeddings.compute_text_embedding()` uses `SentenceTransformer` and returns numpy arrays.
-- Training script saves model + metadata JSON and prints validation metrics.
-- FastAPI `/recommendations` returns Pydantic-validated JSON and uses model registry to load the latest model.
-
----
-
-# Quick debugging tips
-
-- If GraphSAGE call errors: confirm GDS plugin is installed and check exact method name with `CALL gds.version()` in Neo4j Browser.
-- If text embeddings are slow on CPU, switch to smaller model `paraphrase-MiniLM-L3-v2` or run on a machine with GPU.
-- If Neo4j connection refused: check docker-compose logs and that bolt port 7687 is bound.
-
----
-
-#
+-

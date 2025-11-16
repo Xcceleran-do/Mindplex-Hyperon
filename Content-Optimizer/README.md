@@ -127,3 +127,91 @@ Do not commit secrets (`.env`). Use environment variable management for producti
 Contact / Links
 
 See `step_by_step_guide.md` for a complete implementation plan and file-by-file prompts.
+
+## Final Acceptance Checklist (Step 12)
+
+Use this checklist to validate the full end-to-end functionality before tagging a release.
+
+### 1. Infrastructure & Data
+1. `docker-compose -f infra/docker-compose.yml up -d` starts Neo4j (verify container healthy).
+2. Run `neo4j/cypher/00_create_schema.cypher` then `01_sample_data.cypher` (constraints succeed; sample nodes appear).
+3. (Optional) Run `02_gds_project_and_gsage.cypher` to generate GraphSAGE embeddings; confirm `Content.embedding` (or `gsage_embedding`) is populated via:
+	```cypher
+	MATCH (c:Content) RETURN c.contentId, size(coalesce(c.embedding, c.gsage_embedding)) AS embDim LIMIT 5;
+	```
+
+### 2. Embeddings & Dataset
+4. If text embeddings missing, run notebook `backend/notebooks/00_pipeline_demo.ipynb` or a script to populate `c.text_embedding`.
+5. Run dataset prep:
+	```powershell
+	.\.venv\Scripts\Activate.ps1
+	python backend/train/prepare_dataset.py --output data/dataset.parquet --test_size 0.2
+	```
+	Expected: `data/dataset.parquet` written; columns include `contentId,title,features,target`.
+
+### 3. Model Training
+6. Train ranker:
+	```powershell
+	python backend/train/train_ranker.py --input data/dataset.parquet --out_dir models
+	```
+	Expected: `models/model_<timestamp>.joblib` + matching `.json` meta (contains version & metrics).
+
+### 4. API & Frontend
+7. Start backend:
+	```powershell
+	uvicorn backend.app.main:app --reload --port 8000
+	```
+	Health check: `curl http://localhost:8000/health` -> JSON with keys `status`, `neo4j_version`, `has_embeddings`.
+8. Start frontend:
+	```powershell
+	cd frontend
+	npm install
+	npm run dev
+	```
+	Open http://localhost:5173 and enter a sample `creatorId` (or leave blank) then request recommendations.
+
+### 5. Recommendations Verification
+9. Call recommendations endpoint directly:
+	```powershell
+	curl "http://localhost:8000/recommendations?topK=5"
+	```
+	Expected response structure:
+	```json
+	{
+	  "recommendations": [
+		 {
+			"contentId": "...",
+			"title": "...",
+			"score": 0.1234,
+			"explanation": {
+			  "score": 0.1234,
+			  "model": "model_<timestamp>",
+			  "nearest_examples": [{"contentId":"...","similarity":0.98,"score":0.12}, ...],
+			  "top_features": [12, 3, 57, 4, 1]
+			}
+		 }
+	  ],
+	  "modelVersion": "model_<timestamp>"
+	}
+	```
+	Acceptance: At least 3 recommendations returned (if sample dataset loaded) and each contains `explanation.nearest_examples` (<=3 items) and `explanation.top_features` (<=5 indices).
+
+### 6. Tests
+10. Run automated tests:
+	 ```powershell
+	 pytest -q
+	 ```
+	 Expected: All tests pass (including acceptance test if added) with no errors; minor warnings acceptable.
+
+### 7. Debugging Tips
+- Fewer than 3 recommendations? Verify sample data import and embeddings creation; ensure model artifacts exist (`models/`).
+- Empty `nearest_examples`? Happens when fewer than 2 content items or embeddings mismatch sizes.
+- All scores zero? Indicates model not loaded; check models directory and retrain.
+- Feature importances empty? LightGBM not used or model lacks `feature_importances_`; retrain with LightGBM.
+- Neo4j connection errors? Confirm env vars `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD` match running container.
+
+### 8. Ready to Ship
+Ship when: checklist items 1–10 succeed, recommendations stable across refreshes, and no critical errors in logs.
+
+---
+*This acceptance checklist is generated as part of Step 12.*

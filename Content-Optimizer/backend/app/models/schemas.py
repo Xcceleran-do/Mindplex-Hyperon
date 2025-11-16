@@ -40,7 +40,14 @@ class ContentMeta(BaseModel):
 class ScoreExplanation(BaseModel):
     score: float = Field(..., description="Raw model score for the item.")
     model: Optional[str] = Field(None, description="Model version identifier.")
-    # room for future fields (e.g., feature contributions)
+    nearest_examples: Optional[List[Dict[str, Any]]] = Field(
+        None,
+        description="Up to 3 structurally similar content items with similarity & score."
+    )
+    top_features: Optional[List[int]] = Field(
+        None,
+        description="Indices of top model feature importances (best-effort)."
+    )
 
 
 # ---------------------------------------------------------------------------
