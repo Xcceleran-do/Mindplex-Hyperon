@@ -15,6 +15,7 @@ Environment variables respected:
 from __future__ import annotations
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .api.recommendations import router as recommendations_router
@@ -22,6 +23,15 @@ from .api.admin import router as admin_router
 from .services.neo4j_client import health_check
 
 app = FastAPI(title="Content Optimizer API", version="0.1.0")
+
+# CORS (frontend dev origin)
+app.add_middleware(
+  CORSMiddleware,
+  allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+  allow_credentials=True,
+  allow_methods=["*"],
+  allow_headers=["*"],
+)
 
 @app.get("/health")
 def health():  # simple synchronous endpoint
