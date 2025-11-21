@@ -35,6 +35,7 @@ def run_test_file(test_file):
             capture_output=True,
             text=True,
             check=True,
+            shell=True
         )
         return result, test_file, False
     except subprocess.CalledProcessError as e:
@@ -46,9 +47,9 @@ def print_ascii_art(text):
            """
     print(CYAN + art + RESET)
 
-metta_run_command = "metta"
+metta_run_command = "cd PeTTa && ./run.sh"
 root = pathlib.Path("../")
-testMettaFiles = list(root.rglob("*test.metta"))
+testMettaFiles = list(root.rglob("*-test.metta"))
 total_files = len(testMettaFiles)
 results = []
 fails = 0

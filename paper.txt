@@ -1,0 +1,2087 @@
+Learning First-Order Rules with Differentiable Logic Program Semantics
+
+arXiv:2204.13570v1 [cs.AI] 28 Apr 2022
+
+Kun Gao1 , Katsumi Inoue2 , Yongzhi Cao1 and Hanpin Wang3,1∗
+1
+Key Laboratory of High Confidence Software Technologies (MOE), School of Computer Science,
+Peking University
+2
+National Institute of Informatics
+3
+School of Computer Science and Cyber Engineering, Guangzhou University
+kungao@pku.edu.cn, inoue@nii.ac.jp, {caoyz, whpxhy}@pku.edu.cn
+Abstract
+Learning first-order logic programs (LPs) from relational facts which yields intuitive insights into the
+data is a challenging topic in neuro-symbolic research. We introduce a novel differentiable inductive logic programming (ILP) model, called differentiable first-order rule learner (DFOL), which
+finds the correct LPs from relational facts by
+searching for the interpretable matrix representations of LPs. These interpretable matrices are
+deemed as trainable tensors in neural networks
+(NNs). The NNs are devised according to the
+differentiable semantics of LPs. Specifically, we
+first adopt a novel propositionalization method that
+transfers facts to NN-readable vector pairs representing interpretation pairs. We replace the immediate consequence operator with NN constraint
+functions consisting of algebraic operations and a
+sigmoid-like activation function. We map the symbolic forward-chained format of LPs into NN constraint functions consisting of operations between
+subsymbolic vector representations of atoms. By
+applying gradient descent, the trained well parameters of NNs can be decoded into precise symbolic
+LPs in forward-chained logic format. We demonstrate that DFOL can perform on several standard
+ILP datasets, knowledge bases, and probabilistic
+relation facts and outperform several well-known
+differentiable ILP models. Experimental results indicate that DFOL is a precise, robust, scalable, and
+computationally cheap differentiable ILP model.
+
+1
+
+Introduction
+
+Nowadays, knowledge discovery is an important technique
+for people acquiring knowledge from either large or complex
+realistic datasets. Relational data mining constructs a humanreadable representation from relational datasets. An explicit
+logic program (LP) can be a clear explanation to complex, incomplete, or noisy relational datasets due to the limitations of
+current techniques, especially in the datasets from business,
+biology, and medicine. However, learning high accuracy LPs
+∗
+
+Contact Author
+
+from realistic relational datasets is still a hardcore problem in
+the field of machine learning.
+Inductive logic programming (ILP) is firstly proposed by
+[Muggleton, 1991] as a combination of inductive learning and
+logic programming technique has contained several methods. The purely symbolic ILP methods [Muggleton et al.,
+2012] learning LPs typically support lifelong learning and
+have more explainability [Cropper et al., 2020]. However,
+some purely symbolic approaches fail in ambiguous realistic
+facts. By employing neural networks (NNs), differentiable
+ILP models generate explicit logic rules in a fast and precise manner from realistic relational facts. However, NNbased ILP models usually require many examples [Dong et
+al., 2019] to learn concepts, while symbolic ILP methods
+only need a few examples [Cropper et al., 2020].
+In this paper, we propose a differentiable ILP method
+called differentiable first-order rule learner (DFOL), which
+generates first-order LPs from positive examples and background assumptions without logic templates. In DFOL, a
+novel propositionalization method transfers relational facts
+into NN-readable data, i.e., vector pairs representing interpretation pairs. Besides, the matrix embeddings of LPs are
+regarded as the trainable parameters in NNs. Based on the differentiable immediate consequence operator and the forwardchained format of LPs, we design some differentiable constraint functions to guide the NNs to find the correct embeddings of LPs. Finally, DFOL demonstrates a high degree of
+interpretability as the parameters in NNs can be decoded to
+human-readable symbolic rules. Simultaneously, the correct
+symbolic rules can be encoded to the fixed parameters in NNs
+to facilitate the training process.
+The main contributions are summarized below: (1) A flexible, precise, fast, and robust differentiable first-order rule
+learning model is proposed. (2) The proposed model is interpretable. We can not only extract symbolic LPs from the
+model but also embed LPs into NNs. (3) We demonstrate
+that our method outperforms the baselines on most datasets,
+including small ILP datasets and large knowledge bases.
+Related Work. Neuro-symbolic models have been focused
+on over the past decades. For learning propositional LPs,
+d’Avila Garcez et al. [2001] and Lehmann et al. [2010] designed algorithms to extract propositional LPs from NNs.
+On the other hand, Gao et al. [2021] generated propositional LPs using NNs from input-output pairs of the im-
+
+mediate consequence operator of LPs by making the symbolic method proposed by Inoue et al. [2014] be differentiable. However, compared with first-order LPs, propositional LPs have less ability to describe relational facts. For
+first-order LPs, the similar work includes [Evans et al., 2021;
+Evans and Grefenstette, 2018; Rocktäschel and Riedel, 2017;
+Sourek et al., 2018]. In their models, the explicit LPs are
+learned based on the given templates. These models need to
+learn the weights given rules or fill the predicates in rule templates. However, we construct LPs without any explicit templates but follow the forward-chained format. Thus, DFOL is
+able to find the correct rules in a flexible way, which means
+that we do not need any prior knowledge about the tasks, and
+the generated LPs may have more diverse forms than those
+generated from strongly biased templates.
+From the perspective of the representations of LPs, Qu et
+al. [2021] regarded LPs as latent variables. They developed
+an EM-based algorithm for extracting LPs through a rule generator and a reasoning predictor. Kaur et al. [2019] regarded
+a rule as a lifted random walk. In contrast to them, DFOL
+uses small matrix embeddings to encode LPs. Hence, with
+the help of the differentiable semantics of LPs, NNs can be
+adopted in DFOL to search the embeddings fastly and robustly. When adopting NNs to get LPs, Yang et al. [2017]
+used differentiable operations to learn the embeddings of LPs.
+However, the embeddings of LPs in DFOL are more interpretable, and we do not need any algorithms to transfer subsymbolic matrices into symbolic LPs. CILP++ proposed by
+França et al. [2014] uses the bottom clauses propositionalization method and three-layer NNs to imitate the immediate consequence operator of LPs. However, CILP++ cannot
+be interpreted into symbolic LPs directly. Similarly, Teru et
+al. [2020] and Hohenecker and Lukasiewicz [2020] used embedding methods to perform relation prediction tasks, which
+are also induction tasks but do not generate explicit LPs as
+the results. Excepting these induction tasks, d’Avila Garcez
+and Zaverucha [1999] and Serafini and d’Avila Garcez [2016]
+considered deduction tasks with NNs and pre-defined LPs.
+
+2
+
+Preliminaries
+
+We recall the concepts of LPs, ILP, propositionalization
+methods, and differentiable semantics of LPs in this section.
+
+2.1
+
+Logic Programs
+
+A (definite) logic program P consists of several rules, and
+each rule r is described as: αh ← α1 ∧ α2 · · · ∧ αn (n ≥ 0),
+where αh is the head atom denoted as head(r); αi ’s (0 ≤ i ≤
+n) are the body atoms, and the conjunction α1 ∧ α2 · · · ∧ αn
+is the body of r. The set of all body atoms of a rule r is denoted as body(r). A set of rules with the same head atom αh
+called a same head logic program (SHLP): αh ← β1 , αh ←
+β2 , ..., αh ← βm , can be identified with a rule of the form:
+αh ← β1 ∨ β2 ∨ . . . ∨ βm , where each βi is the body of
+the i-th rule and β1 ∨ β2 ∨ . . . ∨βm is a disjunction of conjunctions of literals, i.e., a disjunction normal form formula.
+In first-order LPs, each atom α is a tuple p(t1 , t2 , . . . , tn ),
+where p indicates n-ary predicate and t1 , t2 . . . , tn are terms,
+and a term is either a variable or a constant. When an atom
+has no variable, the atom is a ground atom. A ground rule
+
+is derived based on substitutions, where all variables are replaced by constants. We use uppercase letters for variables
+and lowercase letters for constants. Let B be a Herbrand
+base, including all ground atoms, and an interpretation I is
+a subset of B. For an LP P and an interpretation I, the immediate consequence operator TP : 2B → 2B [Van Emden
+and Kowalski, 1976] describes the rules with interpretations:
+TP (I) = {head(r) | r ∈ g(P ), body(r) ⊆ I}, where g(P )
+is the ground LP based on P . Hence, given an interpretation
+I as the current state, TP (I) is regarded as an interpretation
+as the next state, which is the set of ground atoms that are derived from the rules of P under the condition that the atoms in
+I are true. A forward-chained format [Kaminski et al., 2018]
+usually governs the format of an LP, which specifies that the
+body of rules should satisfy that the variables in the head atom
+are connected by a binary atomic chain:
+pt (X, Y ) ← p1 (X, Z1 ) ∧ p2 (Z1 , Z2 ) ∧ · · · ∧ pn+1 (Zn , Y ). (1)
+
+The variable depth represents the number of variables that do
+not appear in the head atom; e.g., the variable depth is n in
+the rule (1).
+
+2.2
+
+Inductive Logic Programming and
+Propositionalization
+
+An ILP task aims at generating an LP P headed by a target atom αt given a tuple (B, P, N ). Let pt denote a target
+predicate; B is a set of ground atoms called background assumptions; P is a set of positive ground atoms, taken from
+the ground of the target atom; N is a set of negative ground
+atoms, taken outside the ground of the target atom. Formally,
+a solution P of an ILP task is:
+B, P |= e+ , e+ ∈ P; B, P 6|= e− , e− ∈ N .
+When learning first-order LPs, the propositionalization
+method [Kramer et al., 2001] is an effective way to transform relational data into attribute-valued data. After applying propositionalization methods, we can use NNs to process the attribute-valued data and learn LPs from the relational facts. In [França et al., 2014], the propositionalization method transfers relational facts to unground atoms with
+Boolean values. These unground atoms with values are called
+first-order features or features for short.
+
+2.3
+
+Differentiable Semantics of Logic Programs
+
+In this section, we show the matrix representations and differentiable semantics of LPs. Let P be an SHLP with a head
+atom αh , n different body atoms, and m different rules. Then
+P is represented by an SH matrix MP ∈ [0, 1]m×n . Each
+element akj in MP is defined as follows [Gao et al., 2021]:
+Pp
+1. akji = li , where li ∈ (0, 1) and s=1 ls = 1 (1 ≤
+i ≤ p, 1 ≤ ji ≤ n, 1 ≤ k ≤ m), if the k-th rule is
+αh ← αj1 ∧ · · · ∧ αjp ;
+2. akh = 1, if the k-th rule is αh ← αh ;
+3. akj = 0, otherwise.
+In fact, each row in MP corresponds to a rule in P , and each
+non-zero value in a row of MP corresponds to a body atom
+in the corresponding rule in P . Example 1 of Appendix A
+shows the SH matrix corresponding to an SHLP. Let M[k, ·]
+
+X Y
+<latexit sha1_base64="FlE3LMQGS9uBxRXAeaZjOz9lig8=">AAAB6XicbVBNS8NAEJ3Ur1q/qh69LBbBU0mkqMeiF49V7Ae0oWy2k3bpZhN2N0Ip/QdePCji1X/kzX/jps1BWx8MPN6bYWZekAiujet+O4W19Y3NreJ2aWd3b/+gfHjU0nGqGDZZLGLVCahGwSU2DTcCO4lCGgUC28H4NvPbT6g0j+WjmSToR3QoecgZNVZ66JT65Ypbdecgq8TLSQVyNPrlr94gZmmE0jBBte56bmL8KVWGM4GzUi/VmFA2pkPsWipphNqfzi+dkTOrDEgYK1vSkLn6e2JKI60nUWA7I2pGetnLxP+8bmrCa3/KZZIalGyxKEwFMTHJ3iYDrpAZMbGEMsXtrYSNqKLM2HCyELzll1dJ66LqXVZr97VK/SaPowgncArn4MEV1OEOGtAEBiE8wyu8OWPnxXl3PhatBSefOYY/cD5/AO0LjPk=</latexit>
+
+˜
+^
+<latexit sha1_base64="hX2ArZW2MrZcXgBowrEnYION7hA=">AAAB9HicbVBNS8NAEJ3Ur1q/qh69BIvgqSQi6rHoxWMF+wFNKJvNpF262cTdTaGE/g4vHhTx6o/x5r9x2+agrQ8GHu/NMDMvSDlT2nG+rdLa+sbmVnm7srO7t39QPTxqqySTFFs04YnsBkQhZwJbmmmO3VQiiQOOnWB0N/M7Y5SKJeJRT1L0YzIQLGKUaCP5nmY8xNzjRITTfrXm1J057FXiFqQGBZr96pcXJjSLUWjKiVI910m1nxOpGeU4rXiZwpTQERlgz1BBYlR+Pj96ap8ZJbSjRJoS2p6rvydyEis1iQPTGRM9VMveTPzP62U6uvFzJtJMo6CLRVHGbZ3YswTskEmkmk8MIVQyc6tNh0QSqk1OFROCu/zyKmlf1N2r+uXDZa1xW8RRhhM4hXNw4RoacA9NaAGFJ3iGV3izxtaL9W59LFpLVjFzDH9gff4ANeuSZg==</latexit>
+
+=)
+<latexit sha1_base64="bMZ1ABt4UMMZhZs4viv0DFZdE60=">AAAB73icbVBNS8NAEJ3Ur1q/qh69BIvgqSRS1GPRi8cK9gPaUDbbSbt0dxN3N0IJ/RNePCji1b/jzX/jts1BWx8MPN6bYWZemHCmjed9O4W19Y3NreJ2aWd3b/+gfHjU0nGqKDZpzGPVCYlGziQ2DTMcO4lCIkKO7XB8O/PbT6g0i+WDmSQYCDKULGKUGCt1ekzYLaj75YpX9eZwV4mfkwrkaPTLX71BTFOB0lBOtO76XmKCjCjDKMdpqZdqTAgdkyF2LZVEoA6y+b1T98wqAzeKlS1p3Ln6eyIjQuuJCG2nIGakl72Z+J/XTU10HWRMJqlBSReLopS7JnZnz7sDppAaPrGEUMXsrS4dEUWosRGVbAj+8surpHVR9S+rtftapX6Tx1GEEziFc/DhCupwBw1oAgUOz/AKb86j8+K8Ox+L1oKTzxzDHzifP0UZkCI=</latexit>
+
+<latexit sha1_base64="Wd1dvc+ZYoPmOD8zvlIjuR6t/P0=">AAACDXicbVDJSgNBEO2JW4zbqEcvjVGIIGFGgnoM5uJFiGAWyAxDT6cnadKz0F0jhiE/4MVf8eJBEa/evfk3dpaDJj4oeLxXRVU9PxFcgWV9G7ml5ZXVtfx6YWNza3vH3N1rqjiVlDVoLGLZ9oligkesARwEayeSkdAXrOUPamO/dc+k4nF0B8OEuSHpRTzglICWPPPIAfYAfpDdjLx6xz6tudgBHjKF/ZJDRNInXu3EM4tW2ZoALxJ7RopohrpnfjndmKYhi4AKolTHthJwMyKBU8FGBSdVLCF0QHqso2lE9EI3m3wzwsda6eIglroiwBP190RGQqWGoa87QwJ9Ne+Nxf+8TgrBpZvxKEmBRXS6KEgFhhiPo8FdLhkFMdSEUMn1rZj2iSQUdIAFHYI9//IiaZ6V7fNy5bZSrF7N4sijA3SISshGF6iKrlEdNRBFj+gZvaI348l4Md6Nj2lrzpjN7KM/MD5/ANeamsY=</latexit>
+
+LC
+
+LB
+<latexit sha1_base64="4r3kELf8DB5h8AIt3X7aLzGDvsU=">AAAB6nicdVBNSwMxEJ2tX7V+VT16CRbBU8mWUttbqRcPHiraD2iXkk3TNjSbXZKsUJb+BC8eFPHqL/LmvzHbVlDRBwOP92aYmedHgmuD8YeTWVvf2NzKbud2dvf2D/KHR20dxoqyFg1FqLo+0UxwyVqGG8G6kWIk8AXr+NPL1O/cM6V5KO/MLGJeQMaSjzglxkq314PGIF/ARWxRqaCUuFXsWlKrVUulGnIXFsYFWKE5yL/3hyGNAyYNFUTrnosj4yVEGU4Fm+f6sWYRoVMyZj1LJQmY9pLFqXN0ZpUhGoXKljRooX6fSEig9SzwbWdAzET/9lLxL68Xm1HVS7iMYsMkXS4axQKZEKV/oyFXjBoxs4RQxe2tiE6IItTYdHI2hK9P0f+kXSq6lWL5plyoN1ZxZOEETuEcXLiAOlxBE1pAYQwP8ATPjnAenRfnddmacVYzx/ADztsnPJ+Nyw==</latexit>
+
+1
+
+Basic embedding
+
+Z
+<latexit sha1_base64="SnYQS61M9QihKlqmdyE6xQ3C+Lw=">AAAB6HicbVDLTgJBEOzFF+IL9ehlIjHxRHYNUY9ELx4hkUeEDZkdemFkdnYzM2tCCF/gxYPGePWTvPk3DrAHBSvppFLVne6uIBFcG9f9dnJr6xubW/ntws7u3v5B8fCoqeNUMWywWMSqHVCNgktsGG4EthOFNAoEtoLR7cxvPaHSPJb3ZpygH9GB5CFn1Fip/tArltyyOwdZJV5GSpCh1it+dfsxSyOUhgmqdcdzE+NPqDKcCZwWuqnGhLIRHWDHUkkj1P5kfuiUnFmlT8JY2ZKGzNXfExMaaT2OAtsZUTPUy95M/M/rpCa89idcJqlByRaLwlQQE5PZ16TPFTIjxpZQpri9lbAhVZQZm03BhuAtv7xKmhdl77JcqVdK1ZssjjycwCmcgwdXUIU7qEEDGCA8wyu8OY/Oi/PufCxac042cwx/4Hz+ALuvjOc=</latexit>
+
+h1
+<latexit sha1_base64="Q69zUJ/7O7PPSb7TRfziid/XESo=">AAAB6nicbVBNS8NAEJ3Ur1q/qh69LBbBU0mkqMeiF48V7Qe0oWy2k3bpZhN2N0IJ/QlePCji1V/kzX/jts1BWx8MPN6bYWZekAiujet+O4W19Y3NreJ2aWd3b/+gfHjU0nGqGDZZLGLVCahGwSU2DTcCO4lCGgUC28H4dua3n1BpHstHM0nQj+hQ8pAzaqz0MOp7/XLFrbpzkFXi5aQCORr98ldvELM0QmmYoFp3PTcxfkaV4UzgtNRLNSaUjekQu5ZKGqH2s/mpU3JmlQEJY2VLGjJXf09kNNJ6EgW2M6JmpJe9mfif101NeO1nXCapQckWi8JUEBOT2d9kwBUyIyaWUKa4vZWwEVWUGZtOyYbgLb+8SloXVe+yWruvVeo3eRxFOIFTOAcPrqAOd9CAJjAYwjO8wpsjnBfn3flYtBacfOYY/sD5/AH2L42Z</latexit>
+
+vi [1]
+
+LS
+<latexit sha1_base64="oKGioyITgf5+ytv5DCNDKKbs1R4=">AAAB6nicdVBNSwMxEJ2tX7V+VT16CRbBU8mWUttb0YsHD5XaD2iXkk3TNjSbXZKsUJb+BC8eFPHqL/LmvzHbVlDRBwOP92aYmedHgmuD8YeTWVvf2NzKbud2dvf2D/KHR20dxoqyFg1FqLo+0UxwyVqGG8G6kWIk8AXr+NOr1O/cM6V5KO/MLGJeQMaSjzglxkrNm0FzkC/gIraoVFBK3Cp2LanVqqVSDbkLC+MCrNAY5N/7w5DGAZOGCqJ1z8WR8RKiDKeCzXP9WLOI0CkZs56lkgRMe8ni1Dk6s8oQjUJlSxq0UL9PJCTQehb4tjMgZqJ/e6n4l9eLzajqJVxGsWGSLheNYoFMiNK/0ZArRo2YWUKo4vZWRCdEEWpsOjkbwten6H/SLhXdSrF8Wy7UL1dxZOEETuEcXLiAOlxDA1pAYQwP8ATPjnAenRfnddmacVYzx/ADztsnVmON3A==</latexit>
+
+MS
+P
+
+MP [1, 1] ⇥ o(↵1 )
+<latexit sha1_base64="dpBxf/rIuL9II0LnibKDY/YFG/I=">AAACDXicbVDLSsNAFJ3UV62vqEs3g1WoICWRoi6LbtwIFewDkhAm00k7dPJg5kYsoT/gxl9x40IRt+7d+TdOHwutHrhwOOde7r0nSAVXYFlfRmFhcWl5pbhaWlvf2Nwyt3daKskkZU2aiER2AqKY4DFrAgfBOqlkJAoEaweDy7HfvmNS8SS+hWHKvIj0Yh5ySkBLvnngAruHIMyvR37DsY9tD7vAI6ZwUnGJSPvEt498s2xVrQnwX2LPSBnN0PDNT7eb0CxiMVBBlHJsKwUvJxI4FWxUcjPFUkIHpMccTWOiF3r55JsRPtRKF4eJ1BUDnqg/J3ISKTWMAt0ZEeireW8s/uc5GYTnXs7jNAMW0+miMBMYEjyOBne5ZBTEUBNCJde3YtonklDQAZZ0CPb8y39J66Rqn1ZrN7Vy/WIWRxHtoX1UQTY6Q3V0hRqoiSh6QE/oBb0aj8az8Wa8T1sLxmxmF/2C8fENs8aarw==</latexit>
+
+X
+
+<latexit sha1_base64="bMZ1ABt4UMMZhZs4viv0DFZdE60=">AAAB73icbVBNS8NAEJ3Ur1q/qh69BIvgqSRS1GPRi8cK9gPaUDbbSbt0dxN3N0IJ/RNePCji1b/jzX/jts1BWx8MPN6bYWZemHCmjed9O4W19Y3NreJ2aWd3b/+gfHjU0nGqKDZpzGPVCYlGziQ2DTMcO4lCIkKO7XB8O/PbT6g0i+WDmSQYCDKULGKUGCt1ekzYLaj75YpX9eZwV4mfkwrkaPTLX71BTFOB0lBOtO76XmKCjCjDKMdpqZdqTAgdkyF2LZVEoA6y+b1T98wqAzeKlS1p3Ln6eyIjQuuJCG2nIGakl72Z+J/XTU10HWRMJqlBSReLopS7JnZnz7sDppAaPrGEUMXsrS4dEUWosRGVbAj+8surpHVR9S+rtftapX6Tx1GEEziFc/DhCupwBw1oAgUOz/AKb86j8+K8Ox+L1oKTzxzDHzifP0UZkCI=</latexit>
+
+=)
+<latexit sha1_base64="bMZ1ABt4UMMZhZs4viv0DFZdE60=">AAAB73icbVBNS8NAEJ3Ur1q/qh69BIvgqSRS1GPRi8cK9gPaUDbbSbt0dxN3N0IJ/RNePCji1b/jzX/jts1BWx8MPN6bYWZemHCmjed9O4W19Y3NreJ2aWd3b/+gfHjU0nGqKDZpzGPVCYlGziQ2DTMcO4lCIkKO7XB8O/PbT6g0i+WDmSQYCDKULGKUGCt1ekzYLaj75YpX9eZwV4mfkwrkaPTLX71BTFOB0lBOtO76XmKCjCjDKMdpqZdqTAgdkyF2LZVEoA6y+b1T98wqAzeKlS1p3Ln6eyIjQuuJCG2nIGakl72Z+J/XTU10HWRMJqlBSReLopS7JnZnz7sDppAaPrGEUMXsrS4dEUWosRGVbAj+8surpHVR9S+rtftapX6Tx1GEEziFc/DhCupwBw1oAgUOz/AKb86j8+K8Ox+L1oKTzxzDHzifP0UZkCI=</latexit>
+
+LO
+Occurrence embedding
+
+<latexit sha1_base64="oKGioyITgf5+ytv5DCNDKKbs1R4=">AAAB6nicdVBNSwMxEJ2tX7V+VT16CRbBU8mWUttb0YsHD5XaD2iXkk3TNjSbXZKsUJb+BC8eFPHqL/LmvzHbVlDRBwOP92aYmedHgmuD8YeTWVvf2NzKbud2dvf2D/KHR20dxoqyFg1FqLo+0UxwyVqGG8G6kWIk8AXr+NOr1O/cM6V5KO/MLGJeQMaSjzglxkrNm0FzkC/gIraoVFBK3Cp2LanVqqVSDbkLC+MCrNAY5N/7w5DGAZOGCqJ1z8WR8RKiDKeCzXP9WLOI0CkZs56lkgRMe8ni1Dk6s8oQjUJlSxq0UL9PJCTQehb4tjMgZqJ/e6n4l9eLzajqJVxGsWGSLheNYoFMiNK/0ZArRo2YWUKo4vZWRCdEEWpsOjkbwten6H/SLhXdSrF8Wy7UL1dxZOEETuEcXLiAOlxDA1pAYQwP8ATPjnAenRfnddmacVYzx/ADztsnVmON3A==</latexit>
+
+MP [1, C] ⇥ o(↵C )
+<latexit sha1_base64="/hKXb+Zor+zNXc9FQCu/Ng6RHdY=">AAACDXicbVDJSgNBEO2JW4zbqEcvjVGIIGFGgnoM5uJFiGAWyAxDT6cnadKz0F0jhiE/4MVf8eJBEa/evfk3dpaDJj4oeLxXRVU9PxFcgWV9G7ml5ZXVtfx6YWNza3vH3N1rqjiVlDVoLGLZ9oligkesARwEayeSkdAXrOUPamO/dc+k4nF0B8OEuSHpRTzglICWPPPIAfYAfpDdjLx6xz6tudgBHjKF45JDRNInXu3EM4tW2ZoALxJ7RopohrpnfjndmKYhi4AKolTHthJwMyKBU8FGBSdVLCF0QHqso2lE9EI3m3wzwsda6eIglroiwBP190RGQqWGoa87QwJ9Ne+Nxf+8TgrBpZvxKEmBRXS6KEgFhhiPo8FdLhkFMdSEUMn1rZj2iSQUdIAFHYI9//IiaZ6V7fNy5bZSrF7N4sijA3SISshGF6iKrlEdNRBFj+gZvaI348l4Md6Nj2lrzpjN7KM/MD5/AOvQmtM=</latexit>
+
+hm 1
+
+F
+<latexit sha1_base64="UOUV/CpYy4PgVNs6bkvy1VPdoN4=">AAAB6HicbVDLSgNBEOyNrxhfUY9eBoPgKexKUI9BQTwmYB6QLGF20puMmZ1dZmaFEPIFXjwo4tVP8ubfOEn2oIkFDUVVN91dQSK4Nq777eTW1jc2t/LbhZ3dvf2D4uFRU8epYthgsYhVO6AaBZfYMNwIbCcKaRQIbAWj25nfekKleSwfzDhBP6IDyUPOqLFS/a5XLLlldw6ySryMlCBDrVf86vZjlkYoDRNU647nJsafUGU4EzgtdFONCWUjOsCOpZJGqP3J/NApObNKn4SxsiUNmau/JyY00nocBbYzomaol72Z+J/XSU147U+4TFKDki0WhakgJiazr0mfK2RGjC2hTHF7K2FDqigzNpuCDcFbfnmVNC/K3mW5Uq+UqjdZHHk4gVM4Bw+uoAr3UIMGMEB4hld4cx6dF+fd+Vi05pxs5hj+wPn8AZ1fjNM=</latexit>
+
+=)
+<latexit sha1_base64="iPWSRQ3IqAELlI5g1bfhCGtMoOg=">AAAB6nicdVDLSgNBEOyNrxhfUY9eBoPgKcyGEJNb0IsHwYjmAckSZiezyZDZ2WVmVghLPsGLB0W8+kXe/BsnD0FFCxqKqm66u/xYcG0w/nAyK6tr6xvZzdzW9s7uXn7/oKWjRFHWpJGIVMcnmgkuWdNwI1gnVoyEvmBtf3wx89v3TGkeyTsziZkXkqHkAafEWOn2qn/dzxdwEVtUKmhG3Cp2LanVqqVSDblzC+MCLNHo5997g4gmIZOGCqJ118Wx8VKiDKeCTXO9RLOY0DEZsq6lkoRMe+n81Ck6scoABZGyJQ2aq98nUhJqPQl92xkSM9K/vZn4l9dNTFD1Ui7jxDBJF4uCRCATodnfaMAVo0ZMLCFUcXsroiOiCDU2nZwN4etT9D9plYpupVi+KRfq58s4snAEx3AKLpxBHS6hAU2gMIQHeIJnRziPzovzumjNOMuZQ/gB5+0TUFON2A==</latexit>
+
+LS
+
+<latexit sha1_base64="HGHQqlpNMJeUQlP4tnbi+jPfKNU=">AAAB+HicbVBNS8NAEN3Ur1o/GvXoZbEInkoiRT0We/FYwX5AG8Jmu2mXbjZhd1Ksob/EiwdFvPpTvPlv3LY5aOuDgcd7M8zMCxLBNTjOt1XY2Nza3inulvb2Dw7L9tFxW8epoqxFYxGrbkA0E1yyFnAQrJsoRqJAsE4wbsz9zoQpzWP5ANOEeREZSh5ySsBIvl3uA3uEIMwmM5/3Gp5vV5yqswBeJ25OKihH07e/+oOYphGTQAXRuuc6CXgZUcCpYLNSP9UsIXRMhqxnqCQR0162OHyGz40ywGGsTEnAC/X3REYiradRYDojAiO96s3F/7xeCuGNl3GZpMAkXS4KU4EhxvMU8IArRkFMDSFUcXMrpiOiCAWTVcmE4K6+vE7al1X3qlq7r1Xqt3kcRXSKztAFctE1qqM71EQtRFGKntErerOerBfr3fpYthasfOYE/YH1+QMcgpNk</latexit>
+
+vi [C]
+
+0
+
+Merge operation
+
+MA
+P [m2 , 1, C]
+
+…
+
+MA
+P [m2 , na , C]
+
+MA
+P
+
+0
+
+LF
+
+vo Label
+<latexit sha1_base64="7vQT9xS8QJozansaAPMpgP2LTdE=">AAAB83icbVBNS8NAEN3Ur1q/qh69LBbBU0lE1GPRi8cK9gOaUjbbSbt0swm7k2IJ/RtePCji1T/jzX/jts1BWx8MPN6bYWZekEhh0HW/ncLa+sbmVnG7tLO7t39QPjxqmjjVHBo8lrFuB8yAFAoaKFBCO9HAokBCKxjdzfzWGLQRsXrESQLdiA2UCAVnaCXfR3jCIMzG017cK1fcqjsHXSVeTiokR71X/vL7MU8jUMglM6bjuQl2M6ZRcAnTkp8aSBgfsQF0LFUsAtPN5jdP6ZlV+jSMtS2FdK7+nshYZMwkCmxnxHBolr2Z+J/XSTG86WZCJSmC4otFYSopxnQWAO0LDRzlxBLGtbC3Uj5kmnG0MZVsCN7yy6ukeVH1rqqXD5eV2m0eR5GckFNyTjxyTWrkntRJg3CSkGfySt6c1Hlx3p2PRWvByWeOyR84nz+yApIg</latexit>
+
+h01
+<latexit sha1_base64="1/MgDstGls4LMVg6ywqSZ9vsmH8=">AAAB7XicbVBNSwMxEJ34WetX1aOXYBE9lV0p6rHoxWMF+wHtUrJpto3NJkuSFcrS/+DFgyJe/T/e/Dem7R609cHA470ZZuaFieDGet43WlldW9/YLGwVt3d29/ZLB4dNo1JNWYMqoXQ7JIYJLlnDcitYO9GMxKFgrXB0O/VbT0wbruSDHScsiMlA8ohTYp3UHJ71Mn/SK5W9ijcDXiZ+TsqQo94rfXX7iqYxk5YKYkzH9xIbZERbTgWbFLupYQmhIzJgHUcliZkJstm1E3zqlD6OlHYlLZ6pvycyEhszjkPXGRM7NIveVPzP66Q2ug4yLpPUMknni6JUYKvw9HXc55pRK8aOEKq5uxXTIdGEWhdQ0YXgL768TJoXFf+yUr2vlms3eRwFOIYTOAcfrqAGd1CHBlB4hGd4hTek0At6Rx/z1hWUzxzBH6DPHxvPjtY=</latexit>
+
+LS
+<latexit sha1_base64="oKGioyITgf5+ytv5DCNDKKbs1R4=">AAAB6nicdVBNSwMxEJ2tX7V+VT16CRbBU8mWUttb0YsHD5XaD2iXkk3TNjSbXZKsUJb+BC8eFPHqL/LmvzHbVlDRBwOP92aYmedHgmuD8YeTWVvf2NzKbud2dvf2D/KHR20dxoqyFg1FqLo+0UxwyVqGG8G6kWIk8AXr+NOr1O/cM6V5KO/MLGJeQMaSjzglxkrNm0FzkC/gIraoVFBK3Cp2LanVqqVSDbkLC+MCrNAY5N/7w5DGAZOGCqJ1z8WR8RKiDKeCzXP9WLOI0CkZs56lkgRMe8ni1Dk6s8oQjUJlSxq0UL9PJCTQehb4tjMgZqJ/e6n4l9eLzajqJVxGsWGSLheNYoFMiNK/0ZArRo2YWUKo4vZWRCdEEWpsOjkbwten6H/SLhXdSrF8Wy7UL1dxZOEETuEcXLiAOlxDA1pAYQwP8ATPjnAenRfnddmacVYzx/ADztsnVmON3A==</latexit>
+
+˜
+_
+
+v̄o Prediction
+<latexit sha1_base64="v1AbsxtBqfJu4L+aKvTN1KPDSYA=">AAAB+3icbVBNS8NAEN3Ur1q/Yj16WSyCp5KIqMeiF48V7Ac0oWy2m3bpZhN2J6Ul5K948aCIV/+IN/+N2zYHbX0w8Hhvhpl5QSK4Bsf5tkobm1vbO+Xdyt7+weGRfVxt6zhVlLVoLGLVDYhmgkvWAg6CdRPFSBQI1gnG93O/M2FK81g+wSxhfkSGkoecEjBS3656AVGZB2wKQZhN8rwf9+2aU3cWwOvELUgNFWj27S9vENM0YhKoIFr3XCcBPyMKOBUsr3ipZgmhYzJkPUMliZj2s8XtOT43ygCHsTIlAS/U3xMZibSeRYHpjAiM9Ko3F//zeimEt37GZZICk3S5KEwFhhjPg8ADrhgFMTOEUMXNrZiOiCIUTFwVE4K7+vI6aV/W3ev61eNVrXFXxFFGp+gMXSAX3aAGekBN1EIUTdEzekVvVm69WO/Wx7K1ZBUzJ+gPrM8fA8OVFg==</latexit>
+
+<latexit sha1_base64="R56Q+48QnzYNz7LUBVdH61wVKZc=">AAAB83icbVBNS8NAEN3Ur1q/qh69BIvgqSRS1GPRi8cK9gOaUDabSbt0swm7k0IJ/RtePCji1T/jzX/jts1BWx8MPN6bYWZekAqu0XG+rdLG5tb2Tnm3srd/cHhUPT7p6CRTDNosEYnqBVSD4BLayFFAL1VA40BANxjfz/3uBJTmiXzCaQp+TIeSR5xRNJLnIRch5N4EYDao1py6s4C9TtyC1EiB1qD65YUJy2KQyATVuu86Kfo5VciZgFnFyzSklI3pEPqGShqD9vPFzTP7wiihHSXKlER7of6eyGms9TQOTGdMcaRXvbn4n9fPMLr1cy7TDEGy5aIoEzYm9jwAO+QKGIqpIZQpbm612YgqytDEVDEhuKsvr5POVd29rjceG7XmXRFHmZyRc3JJXHJDmuSBtEibMJKSZ/JK3qzMerHerY9la8kqZk7JH1ifP3wfkf0=</latexit>
+
+…
+<latexit sha1_base64="a4UeNyEYI20h76QYRnus43yXFiA=">AAAB6nicdVDLSgNBEOyNrxhfUY9eBoPgKcyGEJNbUBAPHiKaByRLmJ3MJkNmZ5eZWSEs+QQvHhTx6hd582+cPAQVLWgoqrrp7vJjwbXB+MPJrKyurW9kN3Nb2zu7e/n9g5aOEkVZk0YiUh2faCa4ZE3DjWCdWDES+oK1/fHFzG/fM6V5JO/MJGZeSIaSB5wSY6Xb6/5lP1/ARWxRqaAZcavYtaRWq5ZKNeTOLYwLsESjn3/vDSKahEwaKojWXRfHxkuJMpwKNs31Es1iQsdkyLqWShIy7aXzU6foxCoDFETKljRorn6fSEmo9ST0bWdIzEj/9mbiX143MUHVS7mME8MkXSwKEoFMhGZ/owFXjBoxsYRQxe2tiI6IItTYdHI2hK9P0f+kVSq6lWL5plyony/jyMIRHMMpuHAGdbiCBjSBwhAe4AmeHeE8Oi/O66I14yxnDuEHnLdPQq+Nzw==</latexit>
+
+-1
+Bias
+
+LS
+<latexit sha1_base64="oKGioyITgf5+ytv5DCNDKKbs1R4=">AAAB6nicdVBNSwMxEJ2tX7V+VT16CRbBU8mWUttb0YsHD5XaD2iXkk3TNjSbXZKsUJb+BC8eFPHqL/LmvzHbVlDRBwOP92aYmedHgmuD8YeTWVvf2NzKbud2dvf2D/KHR20dxoqyFg1FqLo+0UxwyVqGG8G6kWIk8AXr+NOr1O/cM6V5KO/MLGJeQMaSjzglxkrNm0FzkC/gIraoVFBK3Cp2LanVqqVSDbkLC+MCrNAY5N/7w5DGAZOGCqJ1z8WR8RKiDKeCzXP9WLOI0CkZs56lkgRMe8ni1Dk6s8oQjUJlSxq0UL9PJCTQehb4tjMgZqJ/e6n4l9eLzajqJVxGsWGSLheNYoFMiNK/0ZArRo2YWUKo4vZWRCdEEWpsOjkbwten6H/SLhXdSrF8Wy7UL1dxZOEETuEcXLiAOlxDA1pAYQwP8ATPjnAenRfnddmacVYzx/ADztsnVmON3A==</latexit>
+
+LI
+<latexit sha1_base64="kbNAId/VK8VjpPWkNMM/7MlwkKI=">AAAB6nicdVDLSgNBEOyNrxhfUY9eBoPgKcyGEJNb0IuCh4jmAckSZiezyZDZ2WVmVghLPsGLB0W8+kXe/BsnD0FFCxqKqm66u/xYcG0w/nAyK6tr6xvZzdzW9s7uXn7/oKWjRFHWpJGIVMcnmgkuWdNwI1gnVoyEvmBtf3wx89v3TGkeyTsziZkXkqHkAafEWOn2un/VzxdwEVtUKmhG3Cp2LanVqqVSDblzC+MCLNHo5997g4gmIZOGCqJ118Wx8VKiDKeCTXO9RLOY0DEZsq6lkoRMe+n81Ck6scoABZGyJQ2aq98nUhJqPQl92xkSM9K/vZn4l9dNTFD1Ui7jxDBJF4uCRCATodnfaMAVo0ZMLCFUcXsroiOiCDU2nZwN4etT9D9plYpupVi+KRfq58s4snAEx3AKLpxBHS6hAU2gMIQHeIJnRziPzovzumjNOMuZQ/gB5+0TRzuN0g==</latexit>
+
+h0m2
+
+Activation function:
+
+<latexit sha1_base64="9Ly70cwPAOp4ZNVB5NfiiZruAf8=">AAAB7HicbVBNS8NAEJ3Ur1q/qh69LBbBU0lE1GPRi8cKpi20oWy2k3bpZhN2N0Ip/Q1ePCji1R/kzX/jps1BWx8MPN6bYWZemAqujet+O6W19Y3NrfJ2ZWd3b/+genjU0kmmGPosEYnqhFSj4BJ9w43ATqqQxqHAdji+y/32EyrNE/loJikGMR1KHnFGjZX8XjrilX615tbdOcgq8QpSgwLNfvWrN0hYFqM0TFCtu56bmmBKleFM4KzSyzSmlI3pELuWShqjDqbzY2fkzCoDEiXKljRkrv6emNJY60kc2s6YmpFe9nLxP6+bmegmmHKZZgYlWyyKMkFMQvLPyYArZEZMLKFMcXsrYSOqKDM2nzwEb/nlVdK6qHtX9cuHy1rjtoijDCdwCufgwTU04B6a4AMDDs/wCm+OdF6cd+dj0Vpyiplj+APn8wdMJY5c</latexit>
+
+Directly trained parameters
+
+Figure 1: The architecture of DFOL. The logic program, basic and
+occurence embeddings are instantiated under the grandparent task.
+
+amples and training background assumptions. We assume
+that each predicate in the task is either binary or unary. By
+scanning the dataset once, the number of binary predicates
+nb and the number of unary predicates nu can be determined.
+When the body of a rule includes the target atom, the rule
+is a tautology, which we discard when describing relational
+facts. For generating an SHLP P headed by a target atom,
+the set of possible body features PF includes all possible binary and unary atoms except the target atom. Then, we have
+|PF | = A(|V | , 2) × nb + |V | × nu − 1, where A(|V | , 2) is
+the number of arrangements of 2 items from |V | variables.
+After the propositionalization, the relational facts are transformed into pairs of interpretation vectors (vi , vo ). The features in each vi are considered as valid features, and let C
+represent |vi |. An input interpretation vector vi corresponds
+to Ii , which includes all the values of the valid body features
+in P . An output interpretation vector vo corresponds to Io ,
+which determines the value of the head feature in the SHLP
+P . Example 2 of Appendix A under the predecessor (pre)
+relation illustrates the proposed propositionalization method.
+We analyze the correctness of the propositionalization
+method as follows: In fact, if all the ground body atoms in the
+LP P describing a relational dataset are satisfied under a substitution θ, the Boolean value of the ground head atom under
+θ must be True. After applying all possible substitutions on
+all first-order features for a relation dataset, we can generate
+pairs of interpretations (Ii , Io ) that correspond to interpretation vectors (vi , vo ) and satisfy the relation Io = TP (Ii ).
+Therefore, with the help of the robustness of NNs, we can
+learn the most important body features when the target feature
+is True. Moreover, the complexity of the propositionalization
+method is O(|S| × |PF |), where S is defined in Algorithm 1.
+
+3.2
+In this section, we describe the propositionalization method
+in Algorithm 1. We follow the Closed-World Assumption
+that any example that does not appear in the set P is in the
+set N . The training fact set F includes training positive ex-
+
+<latexit sha1_base64="bMZ1ABt4UMMZhZs4viv0DFZdE60=">AAAB73icbVBNS8NAEJ3Ur1q/qh69BIvgqSRS1GPRi8cK9gPaUDbbSbt0dxN3N0IJ/RNePCji1b/jzX/jts1BWx8MPN6bYWZemHCmjed9O4W19Y3NreJ2aWd3b/+gfHjU0nGqKDZpzGPVCYlGziQ2DTMcO4lCIkKO7XB8O/PbT6g0i+WDmSQYCDKULGKUGCt1ekzYLaj75YpX9eZwV4mfkwrkaPTLX71BTFOB0lBOtO76XmKCjCjDKMdpqZdqTAgdkyF2LZVEoA6y+b1T98wqAzeKlS1p3Ln6eyIjQuuJCG2nIGakl72Z+J/XTU10HWRMJqlBSReLopS7JnZnz7sDppAaPrGEUMXsrS4dEUWosRGVbAj+8surpHVR9S+rtftapX6Tx1GEEziFc/DhCupwBw1oAgUOz/AKb86j8+K8Ox+L1oKTzxzDHzifP0UZkCI=</latexit>
+
+…
+
+Propositionalization
+
+<latexit sha1_base64="R56Q+48QnzYNz7LUBVdH61wVKZc=">AAAB83icbVBNS8NAEN3Ur1q/qh69BIvgqSRS1GPRi8cK9gOaUDabSbt0swm7k0IJ/RtePCji1T/jzX/jts1BWx8MPN6bYWZekAqu0XG+rdLG5tb2Tnm3srd/cHhUPT7p6CRTDNosEYnqBVSD4BLayFFAL1VA40BANxjfz/3uBJTmiXzCaQp+TIeSR5xRNJLnIRch5N4EYDao1py6s4C9TtyC1EiB1qD65YUJy2KQyATVuu86Kfo5VciZgFnFyzSklI3pEPqGShqD9vPFzTP7wiihHSXKlER7of6eyGms9TQOTGdMcaRXvbn4n9fPMLr1cy7TDEGy5aIoEzYm9jwAO+QKGIqpIZQpbm612YgqytDEVDEhuKsvr5POVd29rjceG7XmXRFHmZyRc3JJXHJDmuSBtEibMJKSZ/JK3qzMerHerY9la8kqZk7JH1ifP3wfkf0=</latexit>
+
+…
+
+3.1
+
+˜
+_
+
+=)
+
+MP [1, C] ⇥ b(↵C )
+
+<latexit sha1_base64="2J6vP4G68hicAqPbd3Zev5qMLwo=">AAAB83icbVDLSgMxFL1TX7W+qi7dBIvgqsyIqMuiGzdCBfuATimZNNOGZjJDckcsQ3/DjQtF3Poz7vwb03YW2nogcDjnXO7NCRIpDLrut1NYWV1b3yhulra2d3b3yvsHTROnmvEGi2Ws2wE1XArFGyhQ8naiOY0CyVvB6Gbqtx65NiJWDzhOeDeiAyVCwShayfeRP2EQZneTXr1XrrhVdwayTLycVCCHzX/5/ZilEVfIJDWm47kJdjOqUTDJJyU/NTyhbEQHvGOpohE33Wx284ScWKVPwljbp5DM1N8TGY2MGUeBTUYUh2bRm4r/eZ0Uw6tuJlSSIldsvihMJcGYTAsgfaE5Qzm2hDIt7K2EDammDG1NJVuCt/jlZdI8q3oX1fP780rtOq+jCEdwDKfgwSXU4Bbq0AAGCTzDK7w5qfPivDsf82jByWcO4Q+czx9EZ5HY</latexit>
+
+…
+
+A Neural Network-Based Rule Learner
+
+<latexit sha1_base64="9bURRg9yZUustE6OyeJROBRYrYw=">AAACDXicbVDLSsNAFJ3UV62vqEs3g1WoICWRoi6LbtwIFewDkhAm00k7dPJg5kYsoT/gxl9x40IRt+7d+TdOHwutHrhwOOde7r0nSAVXYFlfRmFhcWl5pbhaWlvf2Nwyt3daKskkZU2aiER2AqKY4DFrAgfBOqlkJAoEaweDy7HfvmNS8SS+hWHKvIj0Yh5ySkBLvnngAruHIMyvR37DsY9tD7vAI6ZwUHGJSPvEt498s2xVrQnwX2LPSBnN0PDNT7eb0CxiMVBBlHJsKwUvJxI4FWxUcjPFUkIHpMccTWOiF3r55JsRPtRKF4eJ1BUDnqg/J3ISKTWMAt0ZEeireW8s/uc5GYTnXs7jNAMW0+miMBMYEjyOBne5ZBTEUBNCJde3YtonklDQAZZ0CPb8y39J66Rqn1ZrN7Vy/WIWRxHtoX1UQTY6Q3V0hRqoiSh6QE/oBb0aj8az8Wa8T1sLxmxmF/2C8fENn5Caog==</latexit>
+
+…
+
+3
+
+MP [1, 1] ⇥ b(↵1 )
+
+Extract
+
+MP
+
+Mprior
+<latexit sha1_base64="9rRUzxuQXI+EQICHBX0/k5hdUQw=">AAACAnicbZDLSsNAFIYn9VbrLepK3ASL4KokUtRl0Y0boYK9QBvCZDpph04yYeZELCG48VXcuFDErU/hzrdxmmahrT8MfPznHM6c3485U2Db30ZpaXllda28XtnY3NreMXf32kokktAWEVzIro8V5SyiLWDAaTeWFIc+px1/fDWtd+6pVExEdzCJqRviYcQCRjBoyzMP+kAfwA/Sm8xLc05jyYTMMs+s2jU7l7UITgFVVKjpmV/9gSBJSCMgHCvVc+wY3BRLYITTrNJPFI0xGeMh7WmMcEiVm+YnZNaxdgZWIKR+EVi5+3sixaFSk9DXnSGGkZqvTc3/ar0Eggs3ZVGcAI3IbFGQcAuENc3DGjBJCfCJBkwk03+1yAhLTECnVtEhOPMnL0L7tOac1eq39WrjsoijjA7RETpBDjpHDXSNmqiFCHpEz+gVvRlPxovxbnzMWktGMbOP/sj4/AH9gJh4</latexit>
+
+<latexit sha1_base64="G2vT2zvEB4Z3LerPqOX7WDWvC3U=">AAAB6nicdVBNS8NAEJ3Ur1q/qh69LBbBU0kkmHor9uLBQ0X7AW0om+2mXbrZhN2NUEJ/ghcPinj1F3nz37htI6jog4HHezPMzAsSzpS27Q+rsLK6tr5R3Cxtbe/s7pX3D9oqTiWhLRLzWHYDrChngrY005x2E0lxFHDaCSaNud+5p1KxWNzpaUL9CI8ECxnB2ki314PGoFyxq7bj2BceMmQBQ7ya69Zs5ORKBXI0B+X3/jAmaUSFJhwr1XPsRPsZlpoRTmelfqpogskEj2jPUIEjqvxsceoMnRhliMJYmhIaLdTvExmOlJpGgemMsB6r395c/MvrpTqs+RkTSaqpIMtFYcqRjtH8bzRkkhLNp4ZgIpm5FZExlphok07JhPD1KfqftM+qznnVvXEr9cs8jiIcwTGcggMe1OEKmtACAiN4gCd4trj1aL1Yr8vWgpXPHMIPWG+fLUiNwA==</latexit>
+
+…
+
+1
+. (2b)
+1 + e−γx
+
+Embed
+
+…
+
+T
+vo = ∨m
+k=1 θ(MP [k, ·] × vi ), (2a) φ(x) =
+
+f ather(X, Z), mother(Z, Y )
+
+…
+
+and M0 [k, ·, ·] denote the k-th row in the matrix M and k-th
+matrix of the three-dimensional tensor M0 , respectively.
+Moreover, an interpretation vector v = {a1 , . . . , an }T represents an interpretation in the vector space. If the Boolean
+value of αk is True, then ak = 1; otherwise, ak = 0. We also
+use v[k] to denote the k-th element in the vector v. Then, the
+immediate consequence operator can be represented in the
+vector space by Equation (2a) [Sakama et al., 2021]. When
+x ≥ 1, then the threshold function θ(x) = 1; otherwise, θ(x)
+= 0. To employ an NN to learn the SH matrix of an LP,
+a differentiable logic semantics used in [Gao et al., 2021]
+replaces the logical or operator with the product t-norm
+and uses the differentiable function φ(x − 1) in Equation
+(2b) to replace the θ(x) function. The hyperparameter γ
+controls the slope similarity between the functions φ and θ.
+
+grandparent(X, Y )
+
+…
+
+Algorithm 1 The propositionalization method in DFOL
+Input: A variable set V = {X, Y, V1 , V2 , . . . , Vd } with
+the variable depth d; target atom αt , e.g., binary predicate
+pt (X, Y ) or unary predicate pt (X); body features set PF ;
+training positive examples P and training fact set F .
+Output: A trainable dataset T.
+1: (Preparation Process)
+2: Let X, Y, V1 , V2 , . . . , Vd represent the domains of variables X, Y, V1 , V2 , . . . , Vd .
+3: If the target predicate pt is binary, then for each positive
+example pt (o1 , o2 ) ∈ P, add o1 and o2 to the sets X and
+Y, respectively. Besides, add all entities in F to the sets
+V1 , V2 , . . . , Vd . If pt is unary, for each positive example
+pt (o1 ) ∈ P, add o1 to the set X. Besides, add all entities
+in F to the sets Y, V1 , V2 , . . . , Vd .
+4: (Generation Process)
+5: Calculate the set S with all substitutions: S = X × Y ×
+V1 × V2 × · · · × Vd .
+6: for each θk ={xk /X, yk /Y, v1k /V1 , . . . , vdk /Vd } ∈ S do
+7:
+Initialize that vki = 0 and vko = [0]. Under the current substitution θk , for each αj ∈ PF , vki [j] = 1 if
+g(αj ) ∈ F ; Then vko = [1] if g(αt ) ∈ P. Next, add
+the pair of interpretation vectors (vki , vko ) to T .
+8: end for
+9: (Examination Process)
+10: For each data in T , delete the data (vki , vko ) iff vki = 0.
+11: Discard the m-th body feature and the corresponding
+values in all input interpretation vectors iff for all k ∈
+[1, |T |], vki [m] = 0 (m ∈ [1, |PF |]) holds.
+12: return T
+
+The Neural Networks in DFOL
+
+In this section, we describe the proposed NNs and constraint
+functions depicted in Figure 1. Taking the training data (vi ,
+vo ) ∈ T as the input, an NN learns the SH matrix MP encoding an LP P . The LP P meets the forward-chained format
+described in the rule (1) and the immediate consequence op-
+
+erator Io = TP (Ii ), where Ii and Io correspond to vi and
+vo , respectively. First, we use a matrix MSP ∈ [0, 1]m1 ×C as
+a trainable tensor to encode P , where m1 is a hyperparameter describing the number of logic rules. Besides, we use
+m2 ×na ×C
+MA
+as another trainable tensor to encode
+P ∈ [0, 1]
+P , where m2 and na are hyperparameters. Then, we define
+the merge operation and concatenation operation as follows:
+na
+0
+0
+1 X
+MA
+MA [·, i, ·], MP = concat(MSP , MA
+P =
+P ),
+na i=1 P
+where tensors in the arguments of concat function are joined
+0
+m2 ×C
+along the vertical dimension. Besides, MA
+and
+P ∈ [0, 1]
+m×C
+MP ∈ [0, 1]
+, where m = m1 + m2 . We illustrate the
+merge and concat functions in Example 3 of Appendix A. We
+replace the immediate consequence operator of P with a differentiable inference and define an inference loss as follows:
+T
+em
+v̄o = ∨
+k=1 (φ(MP [k, ·] × vi − 1)), LI = H(v̄o , vo ),
+where the activation function φ is defined in Equation (2b).
+The function H denotes the binary cross-entropy function.
+˜ denotes the differentiable fuzzy or operation
+The symbol ∨
+[Hájek, 1998]. Compared with other fuzzy logic semantics,
+we use product t-norm as the fuzzy logic semantics in DFOL
+for avoiding a zero gradient [Evans and Grefenstette, 2018]:
+n
+n
+Y
+Y
+n
+n
+e
+e
+(1 − xi ), ∧i=1 xi =
+xi
+∨i=1 xi = 1 −
+i=1
+
+i=1
+
+Now, we analyze the roles of the tensor MA
+P . Compared
+has
+more
+parameters.
+Besides,
+the merge opwith MSP , MA
+P
+eration keeps the numbers of columns including the non-zero
+A0
+A0
+values from MA
+P [k, ·, ·] to MP [k, ·]. Thus, when MP [k, ·] encodes a correct rule rk headed by the target atom, the rows in
+the matrix MA
+P [k, ·, ·] have the opportunity to represent rules
+headed by auxiliary predicates [Muggleton et al., 2015]. The
+body of a rule headed by an auxiliary predicate may include
+a part of the body atoms that appear in the rule rk . Hence,
+the matrix MA
+P boosts the training process. Example 4 of Appendix A describes the process of auxiliary predicate invention. Hence, the parameters m2 and na indicate the number
+of rules headed by the target atom and the number of rules
+headed by auxiliary predicates, respectively.
+Then, we describe other essential constraint functions to
+generate precise LPs. Firstly, we use a sum loss function LS
+according to the property described in Section 2.3 that the
+sum of each row in an SH matrix is equal to one:
+LS =
+
+m
+X
+k=1
+
+MSE(
+
+C
+X
+
+MP [k, i], 1),
+
+i
+
+where MSE is the mean square error loss function. To make
+the rules extracted from MP meet the forward-chained format
+defined in the rule (1), we stipulate two spatial constraints:
+1. Basic constraint: The body of each rule in an LP contains all variables that appear in the head atom.
+2. Occurrence constraint: In the body of each rule, the
+number of occurrences of each variable that does not appear in the head atom is not one.
+
+Then, we give each body atom a basic embedding and an occurrence embedding, and devise basic loss function and occurrence loss function to implement the above spatial constraints. Suppose that the arity of the head atom in an LP P is
+t, then the variable depth is |V |−t. Let Vh and Vo be the variable sets with elements appearing in the head atom and not
+appearing in the head atom, respectively. Let b(α) ∈ {0, 1}t
+and o(α) ∈ {0, 1}|V |−t be the basic and occurrence embeddings corresponding to the body atom α, respectively. If the
+i-th variable in Vh (or Vo ) appears in α, then b(α)[i]=1 (or
+o(α)[i]=1); otherwise, b(α)[i]=0 (or o(α)[i]=0). Example 5
+of Appendix A illustrates a basic embedding and an occurrence embedding. Then, we devise the following functions to
+implement the basic constraint:
+Mkb = concat(MP [k, 1] × b(α1 ), MP [k, 2] × b(α2 ), . . . ,
+MP [k, C] × b(αC ))
+where αi is the i-th valid first-order feature. The matrix Mkb
+∈ [0, 1]C×t includes the occurrence information of all variables in Vh across all valid features for the k-th rule in an LP.
+Then, we use the fuzzy conjunction and disjunction operators
+to calculate the possibility that all variables in Vh appear in
+the k-th rule at once, and we define a basic loss function LB :
+m
+X
+k
+eC
+e tj=1 ∨
+MSE(basick , 1).
+[i,
+j],
+L
+=
+M
+basick = ∧
+B
+i=1 b
+k=1
+
+To implement the occurrence constraint, we use the following equation to concatenate all possibilistic occurrence embeddings across all valid features to Mko ∈ [0, 1]C×(|V |−t) :
+Mko = concat(MP [k, 1] × o(α1 ), MP [k, 2] × o(α2 ), . . . ,
+MP [k, C] × o(αC )).
+Then, the possibility for each variable in Vo across all the
+valid features
+PC in the k-th rule are summarized into the matrix
+Vko = i=1 Mko [i, ·]. Hence, Vko ∈ [0, 1]|V |−t includes the
+possibility of each variable in Vo in the k-th rule. Then, we
+set a measurement function F (x) : N → [0, a] to reflect the
+number of occurrences of each variable in Vo , and define an
+occurrence loss function LO as follows:
+m
+X
+2
+F (x) = a · eb−c(x−d) , LO =
+F (Vko ),
+k=1
+
+where a, b, c, and d are hyperparameters. As x gets closer to
+d, the value of F (x) gets larger; otherwise, F (x) gets closer
+to 0. Example 6 of Appendix A illustrates the operations related to a basic and occurrence embedding.
+u·v
+Next, we consider the cosine similarity, cos(u, v) = |u||v|
+,
+denoting the similarity between two vectors. When two vectors have greater dissimilarity, their cosine similarity is close
+to -1; otherwise, their cosine similarity is close to 1. Since the
+parameter na in the matrix MA
+P indicates the number of rules
+headed by auxiliary predicates, we reduce the cosine similarity of each 2-combinations of all rows in the matrix MA
+P [k, ·, ·]
+for generating more possible formats of rules headed by the
+auxiliary predicates. Then, we calculate the loss function LF :
+LF =
+
+m2
+X
+
+X
+
+A
+MSE(cos(MA
+P [k, i1 , ·], MP [k, i2 , ·]), −1),
+
+k=1 (i1 ,i2 )∈([1,na ])
+2
+
+0
+
+1.0
+i
+
+e
+
+f
+
+Grandparent
+Mother
+Father
+
+g
+h
+
+Figure 2: The
+background
+assumptions
+and the positive
+examples in the
+grandparent
+task.
+
+Numbering of rules
+4
+3
+2
+
+c
+
+0.6
+0.4
+0.2
+
+5
+
+d
+
+0.8
+
+1
+
+a
+b
+
+6
+
+
+a]
+where [1,n
+is the set of all 2-combinations of the in2
+teger set [1, na ]. To apply the curriculum learning: The
+system consolidates what it learns in one episode, storing
+it as background knowledge, and reusing it in subsequent
+episodes [Evans et al., 2021]. We devise a strategy to implement the curriculum learning that DFOL uses sound logic
+rules extracted in every few epochs as the prior knowledge to
+reduce the search space in the following epochs. We reduce
+the cosine similarity between the rows in the trainable matrix
+MP and a learned matrix Mprior ∈ [0, 1]mp ×C corresponding
+to the sound rules described in Section 3.3, where mp is the
+number of extracted sound rules. The loss function LC is
+defined as follows:
+X
+LC =
+MSE(cos(MP [k1 , ·], Mprior [k2 , ·]), −1).
+
+r(x,y) r(x,z) r(y,z) r(z,y) er(x,y) ther(x,z) ther(y,z) ther(z,x) ther(z,y) gp(x,z) gp(y,z) gp(z,x) gp(z,y)
+fa
+fa
+fa
+fa
+mothe mothe mothe mothe fath
+
+0.0
+
+Valid first-order features
+
+Figure 3: The learned matrix in the grandparent task.
+
+(k1 ,k2 )∈[1,m]×[1,mp ]
+
+In summary, the final loss is the weighted sum of the
+losses in L=[LI , LS , LB , LO , LF , LC ], i.e., loss = Θ · L,
+where Θ is a hyperparameter vector. We use the Adam algorithm [Kingma and Ba, 2015] to minimize the final loss.
+
+3.3
+
+Rule Extraction
+
+In this section, we describe how to extract LPs from a trained
+SH matrix and the definition of the precision of a rule.
+In a trained SH matrix MP , the element at the m-th row
+and n-th column represents the possibility of n-th valid body
+feature in the m-th rule rm in P . We use multiple thresholds
+called rule filters, denoted as τf , on MP to extract rules. Let
+rule filters range from 0 to 1 with step 0.05, and let T be the
+set with all rule filters. For a τf , we let the valid features in the
+k-th row of MP with values greater than τf be the elements
+in the body(rk ). We iteratively apply each τf on the trained
+matrix MP , and a rule set R̃ with m×|T| rules is generated.
+Next, we describe the definition of the precision of a rule.
+Let nr be the number of the substitutions that satisfy both the
+body and the head atom of a rule, and let nb be the number
+of the substitutions that satisfy only the body of a rule, where
+the substitutions are computed based on the Datalog and seen
+facts. Then, we regard the ratio nnrb as the precision of the rule
+r. A rule is correct with the precision value 1, and a rule is incorrect with the precision value 0. If a precision value floats
+within the interval (0, 1), then the rule may also be correct
+due to the incompleteness of the seen facts. Therefore, we set
+another threshold called soundness filter τs . Rules with precision values no lower than τs are called sound rules and are
+added to P from the set R̃. To use the curriculum learning
+strategy, we concentrate the trained rows in MP corresponding to the sound rules into Mprior after every few epochs. The
+matrix Mprior is considered as the prior knowledge to boost
+the training process in the following training epochs. When
+all training epochs are finished, the sound LP is stored in P .
+
+4
+
+Experimental Evaluation
+
+In this section, we present the performance of DFOL and
+make comparisons with NTPλ [Rocktäschel and Riedel,
+2017], ∂ILP [Evans and Grefenstette, 2018], and NeuralLP
+[Yang et al., 2017]. The ratio of positive test examples covered by an LP P to all positive test examples is used as the
+
+accuracy of P , which is also the recall value of P in the test
+dataset. Due to the small size of trainable matrices in DFOL
+and to demonstrate the efficiency of DFOL, all experiments
+are executed on 24GB of memory and an 8-core Intel i7-6700
+CPU. We limited the running time to one hour when generating an SHLP. Besides, the variable depth in each task does
+not exceed two.
+
+4.1
+
+Learning from ILP Datasets
+
+In this section, we present the results of DFOL on 20 classifications of ILP datasets [Evans and Grefenstette, 2018].
+Most of the ILP datasets have small numbers of data. In these
+benchmarks, we set τs = 1. Hence, the precision value of
+each generated rule is 1. The accuracy values of all the generated LPs are 100% in this section. The task definitions and
+generated solutions are shown in Appendix C. We use the
+grandparent (g) relation as an example to show the results.
+The background assumptions include the facts with mother
+(m) and father (f ) relations, and the positive examples include
+the facts with g relation. The training facts are presented in
+Figure 2. The learned matrix MP is presented in Figure 3 and
+the extracted LP P with 100% accuracy is shown as follows:
+g(X, Y ) ← m(X, Z) ∧ m(Z, Y ), g(X, Y ) ← f (X, Z) ∧ f (Z, Y )
+g(X, Y ) ← m(X, Z) ∧ f (Z, Y ), g(X, Y ) ← f (X, Z) ∧ m(Z, Y )
+
+Based on the comparison with ∂ILP and NeuralLP, DFOL
+completes 20 of the 22 benchmarks and outperforms NeuralLP in 19 of all benchmarks. Since ∂ILP is a memory expensive model [Evans and Grefenstette, 2018], ∂ILP cannot
+generate correct LPs in the case of a large number of objects, e.g., in the even number (20), graph coloring (10) tasks,
+and knowledge base dataset considered in the paper. Besides,
+∂ILP requires a logical template, a more specific prior knowledge than the forward chain format. Hence, DFOL is a precise rule learner for smaller ILP datasets. However, DFOL
+runs over the memory limit when producing all substitutions
+in the propositionalization on the husband and uncle tasks.
+
+4.2
+
+Learning from Ambiguous Datasets
+
+In this section, we test the robustness of DFOL and consider
+two cases: (1) learning from probabilistic facts; (2) learning
+from mislabeled facts. We set the soundness filter τs to 1 to
+obtain rules with precision values of 1.
+
+Table 1: The results on ambiguous datasets. The notations Con and
+DE represent connectedness and directed edge tasks, respectively.
+
+Lt
+
+Pre
+
+Member
+
+Son
+
+Con
+
+DE
+
+σ
+
+3
+
+3
+
+3
+
+3
+
+2
+
+3
+
+µ
+
+0.95
+
+0.95
+
+0.90
+
+0.95
+
+0.95
+
+0.95
+
+Table 2: Comparison on knowledge bases. The results in bold indicate the highest accuracy on the corresponding test datasets. The
+ACC@Sn represent the accuracy of the generated LP on the Sn subset of Countries. The ACC@h represent the accuracy of LP with
+the head predicate h. Besides, blo, int, neg, and intw denote the
+relations of blockpositionindex, intergovorgs3, negativecomm, and
+interacts with.
+
+Dataset
+
+Metrics
+
+NTPλ
+
+NeuralLP
+
+DFOL
+
+Countries
+
+ACC@S1
+ACC@S2
+ACC@S3
+
+100.00
+100.00
+100.00
+
+100.00
+100.00
+−
+
+100.00
+100.00
+−
+
+Nations
+
+MRR
+HITS@1
+HITS@3
+HITS@10
+ACC@blo
+ACC@int
+ACC@neg
+
+41.79
+41.79
+41.79
+41.79
+100.00
+84.62
+37.50
+
+56.49
+52.49
+60.95
+61.19
+50.00
+84.62
+75.00
+
+78.88
+73.88
+84.58
+85.07
+100.00
+84.62
+75.00
+
+UMLS
+
+MRR
+HITS@1
+HITS@3
+HITS@10
+ACC@isa
+ACC@intw
+
+30.03
+29.95
+30.11
+30.11
+65.96
+83.67
+
+66.69
+61.27
+72.31
+72.31
+63.83
+86.67
+
+74.96
+71.41
+78.82
+78.97
+91.48
+100.00
+
+et al., 2015], Unified Medical Language System (UMLS),
+and Nations dataset [Kok and Domingos, 2007]. We set
+τs = 0.3 because the training facts are incomplete in the realistic scenario. Hence, we present each rule with the value
+of precision, nr and nb , i.e., ( nnrb , nr , nb ) in Appendix C. The
+descriptions of these datasets are presented in Table 3 of Appendix B. For the Countries dataset, training facts are split
+into S1, S2, and S3 sub-datasets. From the sub-datasets S1
+to S3, the learning difficulty is increasing because the related relations are missing corresponding to the test cities
+[Rocktäschel and Riedel, 2017]. For the Nations and UMLS
+datasets, we divide each dataset into 80% training facts, 10%
+development facts, and 10% test facts. We compare LPs generated by DFOL, NTPλ, and NeuralLP, through the indicators of accuracy, mean reciprocal rank (MRR), and HITS@m
+[Bordes et al., 2013] in Table 2.
+From the results in Table 2, we conclude that DFOL has
+better performance than other baselines in general. Thus, we
+show that DFOL guarantees the accuracy of the generated
+LPs, as well as the scalability and interpretability on larger
+relational datasets. In addition, in all sub-datasets of the
+Countries dataset, although facts with locatedIn and neighbor predicates related to the test countries are missing, these
+facts are still kept in the training facts that are not related to
+the test countries. Hence, we can extract the same LP from
+all tasks. The generated symbolic LP can describe all the test
+facts in both S1 and S2 sub-datasets. However, because of
+the missing related facts in the S3, the 100% accuracy logic
+rule needs at least four variables. DFOL runs out of memory when generating all substitutions for four variables in the
+propositionalization process on the S3 sub-dataset.
+
+5
+For the first case, each ground atom in the training fact
+set F and training negative example set N has a probability.
+Let  ∼ N (0, σ 2 ), then the probability of fact in F satisfies
+the distribution p+
+i = min(1 − , 1), and the probability of
+ground atom in N satisfies the distribution p−
+i = max(, 0).
+The standard deviation σ ranges from 0.5 to 3 with step 0.5.
+We present the distribution of the positive and negative examples on lessthan (lt) and pre tasks when σ = 3 in Figures 4
+and 5 of Appendix B. From the two distributions, we derive
+that the values of examples are sufficiently ambiguous when
+σ = 3. For the second case, both positive and negative training examples are mislabeled with the mutation rate µ ranging from 0.05 to 1 with step 0.05. In Table 1, we show the
+maximum standard deviation σ and mutation rate µ when the
+accuracy values of the generated LPs are 100%. From the
+results, we conclude that DFOL is robust when handling ambiguous data. When µ = 1, the semantics of head predicate
+in lt task is largethan relation, and the result is:
+lt(X, Y ) ← succ(Y, X), lt(X, Y ) ← lt(X, Z) ∧ lt(Z, Y ).
+
+4.3
+
+Learning from Knowledge Bases
+
+In this section, we test DFOL on three real knowledge bases
+with large data sizes, including Countries dataset [Bouchard
+
+Conclusion and Future Work
+
+In this paper, we proposed differentiable first-order rule
+learner (DFOL), which learns first-order logic programs in
+the forward-chained format from relational facts without
+logic templates. Through the proposed propositionalization method, DFOL translates relational data to the neural
+network-readable data. By applying the proposed constraint
+functions, DFOL can learn correct first-order logic programs
+with a few trainable parameters. We extract symbolic logic
+programs from the trainable matrices directly and apply prior
+knowledge as constraints to implement curriculum learning.
+Experimental results indicate that DFOL can learn first-order
+logic programs with both high accuracy and precision from
+several standard inductive logic programming tasks, probabilistic relational facts, and knowledge bases. Hence, DFOL
+can learn rules from relational facts in a flexible, precise, robust, scalable, and computationally cheap manner.
+In the future, we will try a more efficient propositionalization method in order to learn relational tasks with larger entities. Besides, we will extend DFOL to an explainable deep
+neural network framework to generate logic programs with
+more variables. We also plan to support the function in the
+term and the negation in the body of a rule.
+
+References
+[Bordes et al., 2013] Antoine Bordes, Nicolas Usunier,
+Alberto Garcı́a-Durán, Jason Weston, and Oksana
+Yakhnenko.
+Translating embeddings for modeling
+multi-relational data. In NeurIPS, pages 2787–2795,
+2013.
+[Bouchard et al., 2015] Guillaume Bouchard, Sameer Singh,
+and Théo Trouillon. On approximate reasoning capabilities of low-rank vector spaces. In AAAI, 2015.
+[Cropper et al., 2020] Andrew Cropper, Sebastijan Dumancic, and Stephen H. Muggleton. Turning 30: New ideas in
+inductive logic programming. In IJCAI, pages 4833–4839,
+2020.
+[d’Avila Garcez and Zaverucha, 1999] Artur S. d’Avila
+Garcez and Gerson Zaverucha. The connectionist inductive learning and logic programming system. Appl. Intell.,
+11(1):59–77, 1999.
+[d’Avila Garcez et al., 2001] Artur S. d’Avila Garcez,
+Krysia Broda, and Dov M. Gabbay. Symbolic knowledge extraction from trained neural networks: A sound
+approach. Artif. Intell., 125(1-2):155–207, 2001.
+[Dong et al., 2019] Honghua Dong, Jiayuan Mao, Tian Lin,
+Chong Wang, Lihong Li, and Denny Zhou. Neural logic
+machines. In ICLR, 2019.
+[Evans and Grefenstette, 2018] Richard Evans and Edward
+Grefenstette. Learning explanatory rules from noisy data.
+J. Artif. Intell. Res., 61:1–64, 2018.
+[Evans et al., 2021] Richard Evans, José Hernández-Orallo,
+Johannes Welbl, Pushmeet Kohli, and Marek J. Sergot.
+Making sense of sensory input. Artif. Intell., 293:103438,
+2021.
+[França et al., 2014] Manoel V M França, Gerson Zaverucha, and Artur S d’Avila Garcez. Fast relational learning using bottom clause propositionalization with artificial
+neural networks. Mach. Learn., 94(1):81–104, 2014.
+[Gao et al., 2021] Kun Gao, Hanpin Wang, Yongzhi Cao,
+and Katsumi Inoue. Learning from interpretation transition using differentiable logic programming semantics.
+Mach. Learn., 2021.
+[Hájek, 1998] Petr Hájek. Metamathematics of fuzzy logic,
+volume 4 of Trends in Logic. Kluwer, 1998.
+[Hohenecker and Lukasiewicz, 2020] Patrick Hohenecker
+and Thomas Lukasiewicz. Ontology reasoning with deep
+neural networks. J. Artif. Intell. Res., 68:503–540, 2020.
+[Inoue et al., 2014] Katsumi Inoue, Tony Ribeiro, and Chiaki Sakama. Learning from interpretation transition.
+Mach. Learn., 94(1):51–79, 2014.
+[Kaminski et al., 2018] Tobias Kaminski, Thomas Eiter, and
+Katsumi Inoue. Exploiting answer set programming with
+external sources for meta-interpretive learning. Theory
+Pract. Log. Program., 18(3-4):571–588, 2018.
+[Kaur et al., 2019] Navdeep Kaur, Gautam Kunapuli, Saket
+Joshi, Kristian Kersting, and Sriraam Natarajan. Neural
+
+networks for relational data. In ILP, volume 11770, pages
+62–71, 2019.
+[Kingma and Ba, 2015] Diederik P. Kingma and Jimmy Ba.
+Adam: A method for stochastic optimization. In ICLR,
+2015.
+[Kok and Domingos, 2007] Stanley Kok and Pedro M.
+Domingos. Statistical predicate invention. In ICML, volume 227, pages 433–440, 2007.
+[Kramer et al., 2001] Stefan Kramer, Nada Lavrač, and Peter Flach. Propositionalization approaches to relational
+data mining, pages 262–291. Springer, Berlin: Heidelberg, 2001.
+[Lehmann et al., 2010] Jens Lehmann, Sebastian Bader, and
+Pascal Hitzler. Extracting reduced logic programs from
+artificial neural networks. Appl. Intell., 32(3):249–266,
+2010.
+[Muggleton et al., 2012] Stephen Muggleton, Luc De Raedt,
+David Poole, Ivan Bratko, Peter Flach, Katsumi Inoue, and
+Ashwin Srinivasan. ILP turns 20. Mach. Learn., 86(1):3–
+23, 2012.
+[Muggleton et al., 2015] Stephen H Muggleton, Dianhuan
+Lin, and Alireza Tamaddoni-Nezhad. Meta-interpretive
+learning of higher-order dyadic datalog: Predicate invention revisited. Mach. Learn., 100(1):49–73, 2015.
+[Muggleton, 1991] Stephen Muggleton. Inductive logic programming. New Gener. Comput., 8(4):295–318, 1991.
+[Qu et al., 2021] Meng Qu, Junkun Chen, Louis-Pascal
+Xhonneux, Yoshua Bengio, and Jian Tang. RNNLogic:
+Learning logic rules for reasoning on knowledge graphs.
+In ICLR, 2021.
+[Rocktäschel and Riedel, 2017] Tim Rocktäschel and Sebastian Riedel.
+End-to-end differentiable proving.
+In
+NeurIPS, pages 3788–3800, 2017.
+[Sakama et al., 2021] Chiaki Sakama, Katsumi Inoue, and
+Taisuke Sato. Logic programming in tensor spaces. Ann.
+Math. Artif. Intell., 89(12):1133–1153, 2021.
+[Serafini and d’Avila Garcez, 2016] Luciano Serafini and
+Artur S. d’Avila Garcez. Logic tensor networks: deep
+learning and logical reasoning from data and knowledge.
+In NeSy@HLAI, volume 1768, 2016.
+[Sourek et al., 2018] Gustav Sourek, Vojtech Aschenbrenner, Filip Zelezný, Steven Schockaert, and Ondrej
+Kuzelka. Lifted relational neural networks: Efficient
+learning of latent relational structures. J. Artif. Intell. Res.,
+62:69–100, 2018.
+[Teru et al., 2020] Komal Teru, Etienne Denis, and Will
+Hamilton. Inductive relation prediction by subgraph reasoning. In ICML, pages 9448–9457, 2020.
+[Van Emden and Kowalski, 1976] M. H. Van Emden and
+R. A. Kowalski. The semantics of predicate logic as a programming language. J. ACM, 23(4):733–742, 1976.
+[Yang et al., 2017] Fan Yang, Zhilin Yang, and William W.
+Cohen. Differentiable learning of logical rules for knowledge base reasoning. In NeurIPS, pages 2319–2328, 2017.
+
+A
+
+Examples
+
+The examples mentioned in the paper are presented as follows:
+Example 1 (Same head matrix). Consider an SH program P
+with three rules and body(P ) = {p(X, Z), p(Y, X), p(Y, Z),
+p(Z, X), p(Z, Y )}, and the logic program P is:
+
+f ather(Z, Y ), . . . , grandparent(Z, Y )}. Then, one of SH
+matrix MP ∈ [0, 1]1×17 corresponding the program P is:
+
+Example 2 (The result after the propositionalization
+method). In the predecessor example, assume that
+entity set is E = {0, 1, 2}. The background assumptions B and the positive examples P are {succ(0, 1),
+succ(1, 2)} and {pre(1, 0), pre(2, 1)}, respectively. Assume that the variable set is V = {X, Y }, then the
+possible body feature set PF ={succ(X, Y ), succ(Y, X),
+pre(Y, X)}. According to the positive examples, the domians X={1, 2} and Y={0, 1}. Then, the substitution set
+is:{{1/X, 0/Y }, {1/X, 1/Y }, {2/X, 0/Y }, {2/X, 1/Y }}.
+Bofore the examination process, the trainable dataset T
+is:{([0, 1, 0], [1]), ([0, 0, 0], [0]), ([0, 0, 0], [0]), ([0, 1, 0], [1])}
+After the examination process, only the valid body predicate
+succ(Y, X) is kept, and T = {([1], [1])}.
+Example 3 (Merge operation and concat functions). Assume
+that the target atom is p(X, Y ). The variable set is {X, Y ,
+Z}, and the valid body feature set Pv is: {p(X, Z), p(Y, X),
+p(Y, Z), p(Z, X), p(Z, Y )}. Hence, the Vh = {X, Y } and
+1×2×5
+Vo ={Z}. Assume that the matrices MA
+and
+P ∈ [0, 1]
+S
+1×5
+MP ∈ [0, 1]
+are:
+
+
+0.01 0.90 0.00 0.04 0
+A
+MP [1, ·, ·] =
+,
+0.05 0.80 0.20 0.00 0
+MSP = [0
+
+0.95
+
+0
+
+0.03
+
+0.02] .
+
+0
+
+1×5
+Then, the matrices MA
+and MP ∈ [0, 1]2×5 are
+P ∈ [0, 1]
+presented as follows:
+
+f ather(Z, Y )
+..
+.
+
+0
+0.5
+..
+.
+.
+0.5
+..
+.
+
+grandparent(Z, Y )
+
+0
+
+(MP )T =
+
+p(X, Y ) ← p(Y, Z) ∧ p(Z, X).
+p(X, Y ) ← p(X, Z) ∧ p(Z, Y ).
+p(X, Y ) ← p(Y, X).
+Then, one of SH matrix MP of the logic program P is presented as follows:
+
+
+0 0 12 12 0
+MP =  21 0 0 0 12  .
+0 1 0 0 0
+
+mother(X, Y )
+mother(X, Z)
+..
+.
+
+If we do not consider the matrix MSP , then a possible MA
+P ∈
+[0, 1]1×2×17 is:
+mother(X, Y )
+mother(X, Z)
+..
+.
+
+T
+(MA
+P [1, ·, ·]) =
+
+0 0
+1 0
+.. ..
+. .
+.
+0 1
+.. ..
+. .
+
+f ather(Z, Y )
+..
+.
+grandparent(Z, Y )
+
+0
+
+0
+
+The logic programs encoded in the metrix MA
+P are interpreted
+as:
+parent(X, Z) ← mother(X, Z),
+parent(Z, Y ) ← f ather(Z, Y ).
+
+(3)
+(4)
+
+The rules (3) and (4) are regarded as rules headed by an auxiliary predicate parent.
+Example 5 (Basic embeddings and occurrence embeddings).
+We use the target atom, variable set, and valid body feature
+set in Example 3, the basic embeddings of all the body features are: b(Pv ) = {[1, 0], [1, 1], [0, 1], [1, 0], [0, 1]}, and
+the occurrence embeddings for all the body features are:
+o(Pv )= {[1], [0], [1], [1], [1]}.
+Example 6 (The operations related to basic and occurrence
+embeddings). We use the target atom, variable set, and valid
+body feature set in Example 3. Then, the matrices M1b and M2b
+are:
+
+
+
+
+0.03
+0
+0
+0
+0.95 0.95
+0.85 0.85
+
+
+
+
+0  , M2b =  0
+0.10 .
+M1b =  0
+
+
+0.03
+0
+0.02
+0 
+0
+0.02
+0
+0
+
+0
+
+MA
+P = [0.03 0.85 0.10 0.02 0] ,
+
+
+0
+0.95
+0
+0.03 0.02
+MP =
+.
+0.03 0.85 0.10 0.02
+0
+Example 4 (Auxiliary predicates invention). We consider the
+following logic program P describing the target predicate
+grandparent with the body predicates mother and father:
+grandparent(X, Y ) ← mother(X, Z), f ather(Z, Y ).
+Assume the valid body feature set is equal with all body
+feature set PF = {mother(X, Y ), mother(X, Z), . . . ,
+
+Hence, we get basic1 = (1−0.05×0.97)×(1−0.05×0.98) =
+0.90 and basic2 = (1 − 0.97 × 0.15 × 0.98) × (1 − 0.15 ×
+0.90) = 0.74.
+In addition, the matrices M1o and M2o are:
+M1o = [0
+
+T
+
+0
+
+0
+
+0.03
+
+0.02] ,
+
+M2o = [0.03
+
+0
+
+0.10
+
+0.02
+
+T
+
+0] .
+
+When the hyperparameters a = b = d = 1, and c = 10, then
+2
+2
+LO = [e1−10×(0.05−1) ]+[e1−10×(0.15−1) ] = [2.31×10−3 ].
+
+B
+
+Illustrations
+
+Figures 4 and 5 present the dirtributions of the background
+assumptions, positive examples, and negative examples when
+σ = 3 in the lessthan and predecessor tasks. Figures 6 and
+7 present the learning curves in the lessthan and predecessor
+tasks.
+
+1.0
+
+Density
+
+0.8
+
+Figure 6: Learning curve in the lessthan task.
+
+0.6
+Positive labels
+Negative labels
+0.4
+
+0.2
+
+0.0
+
+0.0
+
+0.2
+
+0.4
+
+0.6
+
+0.8
+
+Probabilistic values of examples
+
+1.0
+
+1.2
+
+1.4
+
+Figure 4: The distribution of examples in the lessthan task when
+σ = 3.
+
+Figure 7: Learning curve in the predecessor task.
+0.8
+0.7
+
+Table 3: The descriptions of the knowledge bases.
+
+Density
+
+0.6
+0.5
+
+Dataset
+Positive labels
+Negative labels
+
+0.4
+
+Countries
+Nations
+UMLS
+
+0.3
+
+#Object
+
+#Relation
+
+#Fact
+
+252
+14
+135
+
+2
+56
+49
+
+1158
+2565
+6529
+
+0.2
+0.1
+0.0
+
+C
+0.5
+
+0.0
+
+0.5
+
+Probabilistic values of examples
+
+1.0
+
+1.5
+
+Figure 5: The distribution of examples in the predecessor task when
+σ = 3.
+
+Experimental Results
+
+We present the results of comparing DFOL with the baselines in the classic ILP task in Section C.1. We also present
+symbolic logic programs generated by DFOL on classic ILP
+datasets and knowledge bases in Section C.2.
+
+C.1
+
+Comparison on Classic ILP Datasets
+
+Table 4: The results on ILP datasets. The symbols X, ∗ , and −
+indicate that the accuracy of the generated logic program is equal to
+100%, less than 100%, and equal to 0%, respectively.
+
+For the test data, we use positive and negative examples
+of the odd predicate on numbers greater than 9. The
+result is shown as follows:
+1) odd(X) :- zero(Y)& succ(Y,X).
+2) odd(X) :- succ(Z,X)& succ(Z,Y)& odd(Y).
+
+Domain
+
+Task
+
+Arithmetic
+
+Predecessor
+Odd
+Even / Succ2 (10)
+Even / Succ2 (20)
+Lessthan
+Fizz
+Buzz
+Member
+Length
+Son
+Grandparent
+Husband
+Uncle
+Relatedness
+Father
+Directed Edge
+Adjacent to Red
+Two Children
+Graph Coloring (6)
+Graph Coloring (10)
+Connectedness
+Cyclic
+
+Lists
+Family Tree
+
+Graphs
+
+∂ILP
+
+NeuralLP
+
+DFOL
+
+X
+X
+X
+−
+X
+X
+X
+X
+X
+X
+X
+X
+X
+X
+X
+X
+X
+X
+X
+−
+X
+X
+
+X
+−
+−
+−
+X
+−
+−
+∗
+−
+∗
+X
+−
+−
+∗
+−
+∗
+−
+−
+−
+−
+∗
+−
+
+X
+X
+X
+X
+X
+X
+X
+X
+X
+X
+X
+−
+−
+X
+X
+X
+X
+X
+X
+X
+X
+X
+
+3) odd(X) :- succ(X,Z)& succ(Z,Y)& odd(Y).
+
+3. The even (10) task: The entity set is:
+E = {0, 1, . . . , 8}
+The training background assumption set is:
+B = {succ(X, X + 1) | X ∈ E} ∪ zero(0)
+The training positive example set is:
+P = {even(X) | X mod 2 = 0, X ∈ E ∪ {9}}
+For the test data, we use positive and negative examples
+of the even predicate on numbers greater than 9. The
+result is shown as follows:
+1) even(X) :- zero(X).
+2) even(X) :- succ(X,Z)& succ(Z,Y)& even(Y).
+
+4. The even (20) task: The entity set is:
+E = {0, 1, . . . , 18}
+The training background assumption set is:
+
+C.2
+
+Generated Symbolic Logic Programs
+
+1. The predecessor task: The entity set is:
+E = {0, 1, . . . , 8}
+The training background assumption set is:
+B = {succ(X, X + 1) | X ∈ E} ∪ zero(0)
+
+B = {succ(X, X + 1) | X ∈ E} ∪ zero(0)
+The training positive example set is:
+P = {even(X) | X mod 2 = 0, X ∈ E ∪ {19}}
+For the test data, we use positive and negative examples
+of the even predicate on numbers greater than 19. The
+result is shown as follows:
+
+The training positive example set is:
+P = {pre(X + 1, X) | X ∈ E}
+For the test data, we use positive and negative examples
+of the pre predicate on numbers greater than 9. The result is shown as follows:
+1) pre(X,Y) :- succ(Y,X).
+
+2. The odd task: The entity set is:
+E = {0, 1, . . . , 8}
+The training background assumption set is:
+B = {succ(X, X + 1) | X ∈ E} ∪ zero(0)
+The training positive example set is:
+P = {odd(X) | X mod 2 = 1, X ∈ E ∪ {9}}
+
+1) even(X) :- zero(X).
+2) even(X) :- succ(X,Z)& succ(Z,Y)& even(Y).
+
+5. The succ2 task: The entity set is:
+E = {0, 1, . . . , 9}
+The training background assumption set is:
+B = {succ(X, X + 1) | X ∈ E − {9}} ∪ zero(0)
+The training positive example set is:
+P = {succ2(X, X + 2) | X ∈ E − {8, 9}}
+For the test data, we use positive and negative examples
+of the succ2 predicate on numbers greater than 9. The
+result is shown as follows:
+1) succ2(X,Y) :- succ(X,Z)& succ(Z,Y).
+
+6. The lessthan task: The entity set is:
+E = {0, 1, . . . , 9}
+The training background assumption set is:
+B = {succ(X, X + 1) | X ∈ E − {9}} ∪ zero(0)
+The training positive example set is:
+P = {lt(X, Y ) | X < Y, X ∈ E, Y ∈ E}
+For the test data, we use positive and negative examples
+of the lt predicate on numbers greater than 9. The result
+is shown as follows:
+1) lt(X,Y) :- succ(X,Y).
+2) lt(X,Y) :- lt(X,Z)& lt(Z,Y).
+
+7. The fizz task: The entity set is:
+E = {0, 1, 2, 3, 4, 5, 6}
+The training background assumption set is:
+
+9. The member task: The task is to learn the member relation on lists, where member(X, Y ) if X is an element
+in list Y . Besides, cons(X, Y ) if the node after X is
+node Y , and value(X, Y )if the value of node X is Y .
+The training background assumption set is:
+B = {cons([4, 3, 2, 1], [3, 2, 1]), cons([3, 2, 1], [2, 1]),
+cons([2, 1], [1]), value([4, 3, 2, 1], 4), value([1], 1),
+value([3, 2, 1], 3), value([2, 1], 2)}
+The positive example set is:
+P = {member(4, [4, 3, 2, 1]), member(3, [4, 3, 2, 1]),
+member(3, [3, 2, 1]), member(2, [4, 3, 2, 1]),
+member(2, [3, 2, 1]), member(2, [2, 1]),
+member(1, [4, 3, 2, 1]), member(1, [3, 2, 1]),
+member(1, [2, 1]), member(1, [1])}
+The result is shown as follows:
+1) member(X,Y) :- value(Y,X)& value(Y,Z)& member(Z,Y).
+2) member(X,Y) :- cons(Y,Z)& member(X,Z).
+3) member(X,Y) :- value(Y,X).
+
+B = {succ(X, X + 1) | X ∈ E − {6}} ∪ zero(0)
+The training positive example set is:
+P = {f izz(X) | X mod 3 = 0, X ∈ E}
+For the test data, we use positive and negative examples
+of the fizz predicate on numbers greater than 6. The result is shown as follows:
+1) fizz(X) :- zero(X).
+2) fizz(X) :- succ(X,Z)& succ(Y,Z)& fizz(Y).
+3) fizz(X) :- succ(Z,X)& succ(Z,Y)& fizz(Y).
+
+8. The buzz task: The entity set is:
+E = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+The training background assumption set is:
+B = {succ(X, X + 1) | X ∈ E − {9}} ∪ {zero(0)}∪
+{pred3(X, X + 3) | X ∈ E − {7, 8, 9}}∪
+{pred2(X, X + 2) | X ∈ E − {8, 9}}
+The training positive example set is:
+P = {buzz(X) | X mod 5 = 0, X ∈ E}
+For the test data, we use positive and negative examples
+of the buzz predicate on numbers greater than 9. The
+result is shown as follows:
+
+10. The length task: The task is to learn the length relation
+and length(X, Y ) is true if the length of list X is Y .
+The training background assumption set consists of con,
+succ, and zero relations.
+The background assumption set is:
+P = {succ(0, 1), succ(1, 2), succ(2, 3), cons([2, 1], [1],
+cons([4, 3, 2, 1], [3, 2, 1]), cons([3, 2, 1], [2, 1]))}
+The positive example set is:
+P = {length([4, 3, 2, 1], 4), length([3, 2, 1], 3),
+length([2, 1], 2)}
+The result is shown as follows:
+1) length(X,Y) :- succ(Z,Y)& cons(X,W)& length(W,Z).
+
+11. The son task: This task is to learn son relation based
+on f ather, sister, and brother relations.
+The background assumption set is:
+B = {f ather(a, b), f ather(a, c), f ather(d, e),
+f ather(d, f ), f ather(g, h), f ather(g, i),
+brother(b, c), brother(c, b), brother(e, f ),
+sister(f, e), sister(h, i), sister(i, h)}
+The positive example set is:
+P = {son(b, a), son(c, a), son(e, d)}
+The result is shown as follows:
+
+1) buzz(X) :- succ(X,W)& succ(Y,W)& buzz(Y).
+2) buzz(X) :- zero(X).
+
+1) son(X,Y) :- brother(X,Z)& son(Z,Y).
+
+3) buzz(X) :- buzz(Y)& pre_3(Z,X)& pre_3(Z,Y).
+
+2) son(X,Y) :- father(Y,X).
+
+12. The grandparent task: The correct generated logic
+program is presented in Section 4.1.
+13. The relatedness task: The task is to learn the
+relatedness relation from facts about family relations
+involving the parent relation.
+The background assumption set is:
+B = {parent(a, b), parent(a, c), parent(c, e),
+parent(c, f ), parent(d, c), parent(g, h)},
+The positive example set is:
+P = {relatedness(a, b), relatedness(a, c),
+relatedness(a, e), relatedness(a, f ),
+relatedness(f, a), relatedness(a, a),
+relatedness(d, b), relatedness(h, g)}
+
+The positive example set is:
+P = {d-edge(a, b), d-edge(b, a), d-edge(b, d),
+d-edge(d, b), d-edge(c, c)}
+The result is shown as follows:
+1) d-edge(X,Y) :- d-edge(Y,X).
+2) d-edge(X,Y) :- edge(X,Y).
+
+16. The adjacent to red (ared) task: The task is to learn
+the predicate is adjacent to a red node. The background
+assumption set is:
+B = {edge(a, b), edge(b, a), edge(c, d), edge(c, e),
+edge(d, e), color(a, red), color(b, green),
+color(c, red), color(d, red), color(e, green)},
+The positive example set is:
+
+The result is shown as follows:
+
+P = {ared(b), ared(c), ared(e)}
+1) relatedness(X,Y) :- relatedness(Y,X).
+
+The result is shown as follows:
+
+2) relatedness(X,Y) :- parent(Y,X).
+3) relatedness(X,Y) :- parent(X,Y).
+4) relatedness(X,Y) :- relatedness(X,Z)& relatedness(Z,Y).
+
+14. The father task: The task is to learn the f ather relation
+given background assumptions as follows:
+Dorothy
+Howard
+
+aunt-of
+
+aunt-of
+
+Henry
+Carey
+
+Anne
+Boleyn
+Henry
+VIII
+
+Margaret
+Tudor
+
+married to
+
+brother-of
+
+17. The two children (tc) task: The task is to learn the predicate has at least two children. The background assumption set is:
+B = {edge(a, b), edge(a, c), edge(b, d), edge(c, d),
+edge(c, e), edge(d, e)} ∪ {neq(X, Y ) | X 6= Y }
+The positive example set is:
+
+mother-of
+
+Elizabeh
+I
+
+brother-of
+
+Henry of
+Beauvais
+
+1) a-red(X) :- edge(Z,X)& isred(Z).
+
+P = {tc(a), tc(c)}
+The result is shown as follows:
+
+Louis
+VII
+
+mother-of
+
+married to
+
+Philip
+II
+
+1) tc(X) :- edge(X,Z)& edge(Z,Y)& neq(X,Y).
+
+Adele of
+Champagne
+
+brother-of
+
+Margaret
+of France
+
+Moreover, two positive examples are:
+P = {f ather(LouisV II, P hillipII),
+f ather(HenryV III, ElizabethI)}
+The result is shown as follows:
+1) father(X,Y) :- husband(X,Z)& mother(Z,Y).
+
+15. The directed edge (d-edge) task: The task is to learn
+the d − edge relation, which is true of X and Y if there
+is an edge, in either direction, between X and Y .
+The background assumption set is:
+B = {edge(a, b), edge(b, d), edge(c, c)},
+
+2) tc(X) :- edge(X,Y)& tc(Y).
+3) tc(X) :- edge(X,Y)& edge(X,Z)& tc(Y).
+
+18. The graph coloring (gc) (6) task: The task here is to
+learn the gc predicate that is true of a node X if X is
+adjacent to a node of the same color. There are six nodes
+in this task. The background assumption set is:
+B = {edge(a, b), edge(b, c), edge(b, d), edge(c, e),
+edge(e, f ), color(a, green), color(b, red),
+color(c, green), color(d, green),
+color(e, red), color(f, red)}
+The positive example set is:
+P = {gc(e)}
+The result is shown as follows:
+1) gc(X) :- edge(X,Y)& colour(X,Z)& colour(Y,Z).
+
+19. The gc (10) task: The task here is to learn the gc predicate that is true of a node X if X is adjacent to a node
+of the same color. There are 10 nodes in this task. The
+background assumption set is:
+B = {edge(a, b), edge(b, c), edge(b, d), edge(c, e),
+edge(e, f ), edge(a, g), edge(d, h), edge(b, i),
+edge(b, m), color(a, green), color(b, red),
+color(c, green), color(d, green), color(e, red),
+color(f, red), color(g, green), color(h, green),
+color(i, red), color(m, green), color(f, red)}
+
+22. The Countries S1 task: The logic program in the Countries S1 knowledge base is:
+
+1) locatedIn(X,Y) :- locatedIn(Z,Y)& neighborOf(X,Z)& neighborOf(Z,X). #(0.68, 714, 1053)
+2) locatedIn(X,Y) :- locatedIn(Z,Y)& neighborOf(X,Z). #(0.68, 723, 1067)
+3) locatedIn(X,Y) :- locatedIn(X,Z)& locatedIn(Z,Y). #(0.81, 187, 231)
+4) locatedIn(X,Y) :- locatedIn(Z,Y)& neighborOf(Z,X). #(0.68, 723, 1068)
+
+The positive example set is:
+23. The Countries S2 task: The logic program in the CounP = {gc(e), gc(f ), gc(a), gc(g), gc(d), gc(h), gc(i), gc(b)}
+tries S2 knowledge base is:
+The result is shown as follows:
+1) gc(X) :- edge(X,Y)& colour(X,Z)& colour(Y,Z).
+1) locatedIn(X,Y) :- locatedIn(Z,Y)& neighborOf(X,Z)& neighborOf(Z,X). #(0.68, 714,
+
+20. The connectedness task: The task is to learn the
+connected(X, Y ) relation that is true if there is some
+sequence of edge transitions connecting X and Y . The
+background assumption set is:
+B = {edge(a, b), edge(b, c), edge(c, d), edge(b, a)}
+The positive example set is:
+P = {connectedness(a, b), connectedness(b, c),
+connectedness(c, d), connectedness(b, a),
+connectedness(a, c), connectedness(a, d),
+connectedness(a, a), connectedness(b, d),
+connectedness(b, a), connectedness(b, b)}
+The result is shown as follows:
+1) connectness(X,Y) :- edge(Z,Y)& connectness(X,Z).
+2) connectness(X,Y) :- edge(X,Y).
+3) connectness(X,Y) :- edge(Y,X).
+
+1053)
+2) locatedIn(X,Y) :- locatedIn(Z,Y)& neighborOf(X,Z). #(0.68, 723, 1067)
+3) locatedIn(X,Y) :- locatedIn(X,Z)& locatedIn(Z,Y). #(0.81, 187, 231)
+4) locatedIn(X,Y) :- locatedIn(X,Z)& locatedIn(Y,Z)& locatedIn(Z,Y). #(1.0, 7, 7)
+5) locatedIn(X,Y) :- locatedIn(X,Z)& locatedIn(Z,X)& locatedIn(Z,Y). #(1.0, 2, 2)
+6) locatedIn(X,Y) :- locatedIn(X,Z)& locatedIn(Z,Y). #(1.0, 195, 195)
+7) locatedIn(X,Y) :- locatedIn(Z,Y)& neighborOf(Z,X). #(0.56, 502, 889)
+
+24. The Countries S3 task: The logic program in the Countries S3 knowledge base is:
+
+1) locatedIn(X,Y) :- locatedIn(Z,Y)& neighborOf(X,Z)& neighborOf(Z,X). #(0.68, 714, 1053)
+2) locatedIn(X,Y) :- locatedIn(X,Z)& locatedIn(Y,Z)& locatedIn(Z,Y). #(1.0, 7, 7)
+3) locatedIn(X,Y) :- locatedIn(Z,Y)& neighborOf(X,Z). #(0.57, 502, 887)
+4) locatedIn(X,Y) :- locatedIn(Z,Y)& neighborOf(Z,X). #(0.56, 502, 889)
+5) locatedIn(X,Y) :- locatedIn(X,Z)& locatedIn(Z,X)& locatedIn(Z,Y). #(1.0, 2, 2)
+6) locatedIn(X,Y) :- locatedIn(X,Z)& locatedIn(Z,Y). #(1.0, 195, 195)
+
+21. The cyclic task: The task is to learn the cyclic predicate. This predicate is true of a node if there is a path,
+a sequence of edge connections, from that node back to
+itself. The background assumption set is:
+B = {edge(a, b), edge(b, c), edge(c, a), edge(b, d),
+edge(d, e), edge(d, f ), edge(e, f ), edge(f, e)}
+The positive example set is:
+P = {cyclic(a, a), cyclic(b, b), cyclic(c, c), cyclic(e, e),
+cyclic(f, f ), }
+The result is shown as follows:
+
+25. The Nations-blockpositionindex task: The logic program in the Nations knowledge base with the target atom
+blockpositionindex(X, Y ) is shown as follows:
+
+1) blockpositionindex(X,Y) :- blockpositionindex(Y,X). #(0.92, 48, 52)
+2) blockpositionindex(X,Y) :- relemigrants(Y,X). #(0.6, 15, 25)
+3) blockpositionindex(X,Y) :- boycottembargo(Z,Y)& negativecomm(Z,X). #(0.32, 7, 22)
+
+1) cyclic(X) :- edge(X,Z)& edge(Y,X)& edge(Y,Z)& cyclic(Z).
+2) cyclic(X) :- edge(X,Y)& edge(X,Z)& edge(Y,X)& edge(Z,X)& cyclic(Z).
+3) cyclic(X) :- edge(X,Z)& edge(Y,Z)& edge(Z,X)& edge(Z,Y).
+4) cyclic(X) :- edge(X,Z)& edge(Y,Z)& edge(Z,X)& cyclic(Z).
+5) cyclic(X) :- edge(X,Y)& edge(X,Z)& edge(Z,X)& cyclic(Y).
+6) cyclic(X) :- edge(Y,X)& edge(Y,Z)& edge(Z,X).
+7) cyclic(X) :- edge(X,Y)& edge(Y,X).
+8) cyclic(X) :- edge(X,Y)& edge(Y,X)& edge(Y,Z)& edge(Z,Y)& cyclic(Y)& cyclic(Z).
+9) cyclic(X) :- edge(X,Z)& edge(Y,X)& edge(Z,Y).
+
+26. The Nations-negativecomm task: The logic program
+in the Nations knowledge base with the target atom
+negativecomm(X, Y ) is shown as follows:
+
+1) negativecomm(X,Y) :- negativebehavior(X,Y)& accusation(X,Y)&
+boycottembargo(Y,X). #(1.0, 6, 6)
+2) negativecomm(X,Y) :- negativebehavior(X,Y)& accusation(X,Y).
+#(0.88, 14, 16)
+3) negativecomm(X,Y) :- timesincewar(Y,X)& pprotests(X,Y). #(0.6, 3,
+5)
+4) negativecomm(X,Y) :- accusation(X,Y). #(0.75, 15, 20)
+5) negativecomm(X,Y) :- booktranslations(X,Y)& intergovorgs(Y,X)&
+ngo(Y,X)& timesinceally(Y,X). #(0.4, 6, 15)
+6) negativecomm(X,Y) :- negativebehavior(Y,X)& negativecomm(Y,X).
+#(0.61, 11, 18)
+7) negativecomm(X,Y) :- negativebehavior(Y,X)& accusation(Y,X)&
+duration(Y,X)& violentactions(Y,X). #(0.83, 5, 6)
+8) negativecomm(X,Y) :- negativebehavior(Y,X)& booktranslations(X,Y)&
+blockpositionindex(X,Y)& commonbloc0(X,Y)& commonbloc0(Y,X). #(1.0,
+4, 4)
+9) negativecomm(X,Y) :- negativebehavior(Y,X)& accusation(Y,X)&
+
+1) intergovorgs3(X,Y) :- ngoorgs3(X,Y)& intergovorgs(X,Y)& tourism3(Y,X).
+#(1.0, 9, 9)
+2) intergovorgs3(X,Y) :- exports3(Y,X)& timesinceally(X,Y). #(0.84, 16, 19)
+3) intergovorgs3(X,Y) :- ngoorgs3(X,Y)& intergovorgs(X,Y)& relngo(X,Y)&
+tourism3(Y,X). #(1.0, 6, 6)
+4) intergovorgs3(X,Y) :- intergovorgs(X,Y)& unoffialacts(X,Y). #(1.0, 4, 4)
+5) intergovorgs3(X,Y) :- relintergovorgs(X,Y)& ngoorgs3(Z,Y)&
+intergovorgs(Y,X)& ngo(Y,X). #(0.84, 280, 336)
+6) intergovorgs3(X,Y) :- exports3(X,Y)& intergovorgs(Y,X). #(0.84, 15, 18)
+7) intergovorgs3(X,Y) :- relintergovorgs(X,Y)& intergovorgs(Y,X)& ngo(Y,X).
+#(0.83, 29, 35)
+8) intergovorgs3(X,Y) :- independence(Y,X)& reltreaties(Y,X). #(0.72, 18, 25)
+9) intergovorgs3(X,Y) :- lostterritory(X,Y). #(0.5, 1, 2)
+10)intergovorgs3(X,Y) :- intergovorgs3(Z,Y)& relngo(X,Y)& timesinceally(Y,X).
+#(0.88, 350, 398)
+11)intergovorgs3(X,Y) :- relintergovorgs(Z,Y)& unweightedunvote(Y,X)&
+ngoorgs3(X,Y)& ngo(Y,X). #(0.86, 207, 242)
+12)intergovorgs3(X,Y) :- booktranslations(X,Y)& relexports(X,Y). #(0.87, 13,
+15)
+
+militaryactions(Y,X)& negativecomm(Y,X)& duration(Y,X)&
+
+13)intergovorgs3(X,Y) :- ngo(X,Y). #(0.75, 49, 65)
+
+violentactions(Y,X). #(0.75, 3, 4)
+
+14)intergovorgs3(X,Y) :- treaties(X,Y)& dependent(Y,X). #(0.8, 4, 5)
+
+10)negativecomm(X,Y) :- negativebehavior(Y,X)& duration(Y,X). #(0.83,
+5, 6)
+11)negativecomm(X,Y) :- militaryactions(X,Y)& violentactions(X,Y)&
+violentactions(Y,X)& warning(Y,X). #(1.0, 3, 3)
+12)negativecomm(X,Y) :- negativebehavior(X,Y)& commonbloc0(X,Y)&
+nonviolentbehavior(Y,X). #(1.0, 6, 6)
+13)negativecomm(X,Y) :- violentactions(X,Y)& warning(Y,X). #(1.0, 3,
+3)
+14)negativecomm(X,Y) :- timesincewar(X,Y)& duration(X,Y)&
+relemigrants(Z,Y). #(1.0, 5, 5)
+15)negativecomm(X,Y) :- negativebehavior(X,Y)&
+blockpositionindex(X,Y)& nonviolentbehavior(X,Y)&
+boycottembargo(X,Y). #(1.0, 2, 2)
+16)negativecomm(X,Y) :- accusation(Y,X)& relstudents(Z,Y)&
+commonbloc0(Y,X). #(0.82, 14, 17)
+17)negativecomm(X,Y) :- accusation(Y,X)& commonbloc0(Y,X)&
+nonviolentbehavior(Y,X)& pprotests(X,Y). #(1.0, 2, 2)
+18)negativecomm(X,Y) :- negativebehavior(X,Y)&
+blockpositionindex(X,Y)& negativecomm(Y,X). #(0.78, 7, 9)
+19)negativecomm(X,Y) :- relbooktranslations(X,Y)& unoffialacts(Y,X)&
+pprotests(X,Y). #(1.0, 1, 1)
+
+15)intergovorgs3(X,Y) :- weightedunvote(X,Y)& timesinceally(X,Y)&
+treaties(X,Y). #(0.8, 20, 25)
+16)intergovorgs3(X,Y) :- commonbloc2(Y,X)& eemigrants(Y,X). #(1.0, 4, 4)
+17)intergovorgs3(X,Y) :- commonbloc2(Y,X)& unoffialacts(X,Y)&
+unoffialacts(Y,X)& conferences(X,Y). #(1.0, 2, 2)
+18)intergovorgs3(X,Y) :- intergovorgs3(Z,Y)& embassy(X,Y)& intergovorgs(X,Y)&
+relngo(X,Y). #(0.93, 325, 349)
+19)intergovorgs3(X,Y) :- ngoorgs3(X,Y)& relemigrants(Z,X). #(0.75, 15, 20)
+20)intergovorgs3(X,Y) :- aidenemy(X,Y). #(0.5, 1, 2)
+21)intergovorgs3(X,Y) :- relintergovorgs(X,Y)& relngo(Z,Y)&
+timesinceally(X,Y)& timesinceally(Y,X)& treaties(Y,X). #(0.86, 139, 161)
+22)intergovorgs3(X,Y) :- ngoorgs3(Z,Y)& intergovorgs(X,Y)& ngo(Y,X)&
+relngo(X,Y). #(0.89, 345, 386)
+23)intergovorgs3(X,Y) :- weightedunvote(Z,Y)& officialvisits(Z,X)&
+expeldiplomats(Y,X)& students(Y,X)& exportbooks(X,Y)& severdiplomatic(Y,X).
+#(1.0, 1, 1)
+24)intergovorgs3(X,Y) :- relintergovorgs(X,Y)& ngoorgs3(X,Y)&
+reltreaties(Y,X)& blockpositionindex(Y,X)& relngo(X,Y)& conferences(X,Y).
+#(1.0, 2, 2)
+25)intergovorgs3(X,Y) :- negativebehavior(Y,Z)& boycottembargo(X,Z). #(0.34,
+11, 32)
+26)intergovorgs3(X,Y) :- commonbloc2(Z,Y)& ngo(X,Y). #(0.76, 163, 214)
+27)intergovorgs3(X,Y) :- ngo(Y,X). #(0.77, 50, 65)
+
+20)negativecomm(X,Y) :- officialvisits(Y,X)& expeldiplomats(X,Y)&
+boycottembargo(Y,X). #(1.0, 2, 2)
+21)negativecomm(X,Y) :- timesincewar(Y,X)& negativebehavior(X,Y)&
+negativebehavior(Y,X). #(0.8, 4, 5)
+22)negativecomm(X,Y) :- boycottembargo(X,Y)& pprotests(X,Y). #(1.0, 4,
+
+29. The UMLS-isa task: The logic program in the UMLS
+knowledge base with the target atom isa(X, Y ) is shown
+as follows:
+
+4)
+23)negativecomm(X,Y) :- accusation(X,Y)& students(Z,Y)&
+pprotests(Y,X)& violentactions(Y,X). #(1.0, 1, 1)
+24)negativecomm(X,Y) :- pprotests(Y,X)& violentactions(Y,X). #(0.75,
+3, 4)
+
+1) isa(X,Y) :- isa(Z,Y)& interacts_with(X,Z). #(0.74, 1364, 1831)
+2) isa(X,Y) :- interacts_with(X,Y). #(0.67, 649, 964)
+3) isa(X,Y) :- interacts_with(Y,X). #(0.48, 316, 653)
+4) isa(X,Y) :- result_of(Y,X). #(0.48, 518, 1076)
+5) isa(X,Y) :- result_of(X,Y)& result_of(Y,X)& process_of(Y,X). #(0.17, 25,
+145)
+6) isa(X,Y) :- isa(Z,Y)& interacts_with(Z,X). #(0.77, 1364, 1782)
+7) isa(X,Y) :- result_of(Y,X)& process_of(Y,X)& co_occurs_with(X,Y). #(0.39, 9,
+
+27. The UMLS-interacts with task: The logic program
+in the UMLS knowledge base with the target atom
+interacts with(X, Y ) is shown as follows:
+
+23)
+8) isa(X,Y) :- isa(X,Z)& isa(Z,Y). #(0.92, 647, 700)
+9) isa(X,Y) :- affects(Z,X)& interacts_with(Y,X). #(0.10, 191, 1864)
+10)isa(X,Y) :- interacts_with(Y,X)& causes(X,Z). #(0.10, 249, 2417)
+11)isa(X,Y) :- affects(X,Y)& affects(Y,X)& affects(Z,X)& affects(Z,Y)&
+result_of(X,Y)& result_of(Y,X)& process_of(X,Y)& process_of(Y,X)&
+
+1) interacts_with(X,Y) :- isa(X,Y)& interacts_with(Z,Y). #(0.64 617, 964)
+2) interacts_with(X,Y) :- isa(Y,Z)& interacts_with(X,Z). #(0.56, 544, 964)
+
+co_occurs_with(X,Y)& measures(Z,X)& measures(Z,Y)& assesses_effect_of(Z,Y).
+#(0.5, 4, 8)
+12)isa(X,Y) :- isa(Z,X)& isa(Z,Y). #(0.36, 647, 1797)
+
+28. The Nations-intergovorgs3 task: The logic program
+in the Nations knowledge base with the target atom
+intergovorgs3(X, Y ) is shown as follows:
+
+

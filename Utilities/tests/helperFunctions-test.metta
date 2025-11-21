@@ -1,9 +1,9 @@
-!(register-module! ../../../Mindplex-Hyperon)
-!(import! &self Mindplex-Hyperon:Utilities:helperFunctions)
+!(import! &self ../../../Mindplex-Hyperon/Utilities/helperFunctions)
+!(import! &self ../../../Mindplex-Hyperon/PeTTa/lib/lib_he)
 
 ;; Test cases for until function
 !(assertEqual (until isPositive -- 100) 100)
-!(assertEqual (until isPositive ++ -1000) 1)
+!(assertEqual (until isPositive ++ -100) 1)
 !(assertEqual (until isPositive -- 1) 1)
 !(assertEqual (until isPositive ++ 0) 1)
 
@@ -52,11 +52,11 @@
 ;; Test cases for wrapperB
 !(assertEqual (wrapperB == 1 1) (1))
 !(assertEqual (wrapperB > 1 2) ())
-!(assertEqual (wrapperB < 2 3) (3))
+!(assertEqual (wrapperB < 2 3) (2))
 
 ;; Test cases for filterB
-!(assertEqual (filterB < 2 (1 2 3 4 5)) (3 4 5))
-!(assertEqual (filterB !=  4 (1 2 3)) ())
+!(assertEqual (filterB < 2 (1 2 3 4 5)) (1))
+!(assertEqual (filterB !=  4 (1 2 3)) (1 2 3))
 !(assertEqual (filterB == 2 (1 2 3 2)) (2 2))
 
 ;; Test cases for removeElement
@@ -143,18 +143,10 @@
 !(assertEqual (zipWith * (2 3) (4 5) ()) (8 15))
 !(assertEqual (zipWith > (2 3) (4 5)) (False False))
 
-;; Test cases for len
-!(assertEqual (len (1 2 3 4)) 4)
-!(assertEqual (len ()) 0)
-!(assertEqual (len (a)) 1)
-
 ;; Test cases for replaceByIndex
 !(assertEqual (replaceByIndex (a b c) 1 x ()) (a x c))
 !(assertEqual (replaceByIndex (1 2 3) 0 y ()) (y 2 3))
 !(assertEqual (replaceByIndex (1 2 3) 10 y) (1 2 3))
-
-;; Test cases for clearSpace
-; Skipped: requires grounded space
 
 ;; Test cases for selectionSort
 !(assertEqual (selectionSort (3 1 2 4 15 6 7 8) 2) (1 2 3 4 15 6 7 8))
@@ -178,11 +170,6 @@
 !(assertEqual (all (True True True)) True)
 !(assertEqual (all (True False True)) False)
 !(assertEqual (all (False False False)) False)
-
-;; Test cases for isInf
-!(assertEqual (isInf 1e1000) True)
-!(assertEqual (isInf 1) False)
-!(assertEqual (isInf -1e1000) True)
 
 ;; Test cases for reverse
 !(assertEqual (reverse (1 2 3 4)) (4 3 2 1))

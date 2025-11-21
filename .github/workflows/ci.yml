@@ -17,6 +17,53 @@ jobs:
         with:
           python-version: '3.11.6'
 
+      - name: Install SWI-Prolog 9.2.6
+        run: |
+          # Install dependencies for building SWI-Prolog
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build \
+            libunwind-dev libgmp-dev libssl-dev \
+            unixodbc-dev zlib1g-dev libarchive-dev \
+            libossp-uuid-dev libxext-dev libice-dev libjpeg-dev \
+            libxinerama-dev libxft-dev libxpm-dev libxt-dev \
+            libdb-dev libpcre2-dev libyaml-dev pkg-config \
+            libreadline-dev libedit-dev libseccomp-dev
+
+          # Download and build SWI-Prolog 9.2.6
+          wget https://www.swi-prolog.org/download/stable/src/swipl-9.2.6.tar.gz
+          tar -xzf swipl-9.2.6.tar.gz
+          cd swipl-9.2.6
+          
+          # Configure and build with minimal profile for faster CI
+          mkdir build
+          cd build
+          # Unset conda-related variables to force system Python
+          unset PYTHON_ROOT || true
+          unset PYTHON_PATH || true
+          unset VSCODE_PYTHON_AUTOACTIVATE_GUARD || true
+          cmake -DCMAKE_INSTALL_PREFIX=/usr/local \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DSWIPL_PACKAGES_JAVA=OFF \
+                -DSWIPL_PACKAGES_X=OFF \
+                -DPython_EXECUTABLE=/usr/bin/python3 \
+                -DPython3_EXECUTABLE=/usr/bin/python3 \
+                -DPython_INCLUDE_DIR=/usr/include/python3.12 \
+                -DPython3_INCLUDE_DIR=/usr/include/python3.12 \
+                -DPython_LIBRARY=/usr/lib/x86_64-linux-gnu/libpython3.12.so \
+                -DPython3_LIBRARY=/usr/lib/x86_64-linux-gnu/libpython3.12.so \
+                -DPython_LIBRARY_DIR=/usr/lib/x86_64-linux-gnu \
+                -DPython3_LIBRARY_DIR=/usr/lib/x86_64-linux-gnu \
+                -DCMAKE_PREFIX_PATH="/usr" \
+                -G Ninja ..
+          ninja
+          sudo ninja install
+          
+          # Verify installation
+          swipl --version
+          
+          # Test Janus Python integration
+          swipl -q -t "use_module(library(janus)), py_call(print('Janus working in CI')), halt"
+
       - name: Install Python Dependencies
         run: |
           python -m pip install --upgrade pip==23.1.2
