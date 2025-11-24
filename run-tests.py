@@ -102,14 +102,14 @@ def print_ascii_art(text):
 
 # Define the command to run with the test files
 root = pathlib.Path(".")
-testPettaFiles = list(root.rglob("*test.metta"))
+testPettaFiles = list(root.rglob("*-test.metta"))
 total_files = len(testPettaFiles)
 results = []
 fails = 0
 failed_tests = []
 
 if total_files == 0:
-    print("⚠️  No test files found matching pattern '*test.metta'")
+    print("⚠️  No test files found matching pattern '*-test.metta'")
     sys.exit(0)
 
 # Print ASCII art title

@@ -1,10 +1,6 @@
 ;; Helper functions that are going to be useful for writing any metta code
 (= (!= $a $b) (not (== $a $b)))
 
-;; INFO: Uncomment for the use of MeTTaLog.
-;; (: >= (-> Number Number Bool))
-;; (= (>= $a $b) (or (== $a $b) (> $a $b)))
-
 ;Function to cocatinate two tuples (A B) (C D) ==> (A B C D)
 (: concatTuple (-> Expression Expression Expression))
 (= (concatTuple $x $y) (union-atom $x $y)) 
@@ -290,7 +286,7 @@
 (: randomAtom (-> Expression Atom)) 
 (= (randomAtom $expr)
     (let $size (size-atom $expr)
-        (let $randIdx (random-int &rng 0 $size)
+        (let $randIdx (random-int 0 $size)
         (let $rand (index-atom $expr $randIdx)
         ($rand $randIdx)))))
 
