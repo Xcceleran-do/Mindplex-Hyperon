@@ -15,16 +15,7 @@ Mindplex Hyperon sets a new standard for recommendation systems by focusing on t
 
 ## This Branch
 
-This branch is dedicated to the experimental implementation of neuro-symbolic research papers, specifically those focused on graph-based recommendation systems. The goal is to explore, prototype, and evaluate cutting-edge approaches that combine neural and symbolic reasoning within the Mindplex Hyperon framework.
-
-**Guidelines for contributors:**
-- Select a relevant neuro-symbolic, graph-based recommendation paper for implementation.
-- Document the chosen paper, your implementation approach, and analysis in the `docs` folder. This should include a summary of the paper, key algorithms or models, and how they are adapted or integrated into Mindplex Hyperon.
-- Should create a dedicated folder for the implementaion in the root directory
-- Ensure that your code is modular and follows the project's contribution standards.
-- Provide clear explanations and comments to facilitate understanding and future development.
-
-This branch serves as a collaborative space for advancing research and experimentation, helping to bridge the gap between academic innovation and practical, explainable AI systems.
+This branch is dedicated to porting the existing code to PeTTa.
 
 ## Testing
 
