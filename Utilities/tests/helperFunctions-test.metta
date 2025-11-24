@@ -1,5 +1,5 @@
-!(import! &self ../../../Mindplex-Hyperon/Utilities/helperFunctions)
 !(import! &self ../../../Mindplex-Hyperon/PeTTa/lib/lib_he)
+!(import! &self ../../../Mindplex-Hyperon/Utilities/helperFunctions)
 
 ;; Test cases for until function
 !(assertEqual (until isPositive -- 100) 100)

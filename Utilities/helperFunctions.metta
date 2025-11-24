@@ -256,10 +256,6 @@
 (= (all $expressions) (if (isMember False $expressions) False True))
 
 
-(: isInf (-> Number Bool))
-(= (isInf $x) (type-cast (isinf-math $x) Bool &self))
-
-
 ;; a function which generates an exper from the $min to $max
 (= (range $min $max) (range $min $max ()))
 (= (range $min $max $acc) 
