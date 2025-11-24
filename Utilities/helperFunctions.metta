@@ -1,5 +1,3 @@
-!(bind! random-int (py-atom random.randrange))
-
 ;; Helper functions that are going to be useful for writing any metta code
 (= (!= $a $b) (not (== $a $b)))
 
@@ -284,21 +282,17 @@
 ; A function which return true if the second atom of the first experation is greater than the second's
 (: bySecondAtom (-> ($a Number) ($b Number) Bool))
 (= (bySecondAtom $x $y) 
-    (function
-    (chain (eval (index-atom $x 1)) $xSecond
-    (chain (eval (index-atom $y 1)) $ySecond
-    (chain (eval (> $xSecond $ySecond)) $bool
-    (return $bool))))
-    ))
+    (let $xSecond (index-atom $x 1)
+    (let $ySecond (index-atom $y 1)
+    (> $xSecond $ySecond))))
 
 ;; A function to randomly pick an atom from a given expression
 (: randomAtom (-> Expression Atom)) 
 (= (randomAtom $expr)
-    (function 
-        (chain (eval (size-atom $expr)) $size
-        (chain (eval (random-int 0 $size)) $randIdx
-        (chain (eval (index-atom $expr $randIdx)) $rand
-        (return ($rand $randIdx)))))))
+    (let $size (size-atom $expr)
+        (let $randIdx (random-int &rng 0 $size)
+        (let $rand (index-atom $expr $randIdx)
+        ($rand $randIdx)))))
 
 ;; a function to compute the cartesian product
 (: cartesian (-> Expression Expression Expression))
