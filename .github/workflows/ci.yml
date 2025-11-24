@@ -3,10 +3,10 @@ name: PeTTa CI
 on:
   push:
     branches:
-      - ref/PeTTa
+      - PeTTa
   pull_request:
     branches:
-      - ref/PeTTa
+      - PeTTa
 
 jobs:
   setup-and-test:
