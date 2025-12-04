@@ -1,5 +1,3 @@
-!(bind! dict ((1 X) (2 Y) (7 Z) (3 A) (4 B) (5 C) (6 D))) ;; I don't know if it is better to pass the dict as a parameter. I'll use it as a global 'var' for the time being. I think this can also be constracted from the input in side the function. This is just a work around for unification problems in metta
-
 (= (propositionalization $X $Y $varList $targetAtom $featureSet $postiveExamples $traningFact)
     (let*(
         ($newList  (collapse (addToVarDom (superpose $varList) $traningFact)))
@@ -35,7 +33,7 @@
             (($pred $newSub) $example)
             (($X $Y) $comulative)
             )
-            ((cons-atom ($newSub 1) $X) (addToVarDom 2 $traningFact))) ; 1 refers to X and 2 refers to Y in the dict. TODO: avode the use of majic numbers
+            ((cons-atom ($newSub 1) $X) (addToVarDom 2 $traningFact))) ; 1 refers to X and 2 refers to Y in the ((1 X) (2 Y) (7 Z) (3 A) (4 B) (5 C) (6 D)). TODO: avode the use of majic numbers
             )
     )
 
@@ -80,7 +78,7 @@
     
     
 (= (getId $sub) 
-    (let $sup (superpose ((1 X) (2 Y) (7 Z) (3 A) (4 B) (5 C) (6 D))) (unify $sup ($id $sub) $id (empty))))
+    (let $sup (superpose ((1 X) (2 Y) (7 Z) (3 A) (4 B) (5 C) (6 D))) (unify $sup ($n $sub) $n (empty))))
 
 (= (getSub $id $curSub)
     (let ($sub $id) (superpose $curSub) $sub))
