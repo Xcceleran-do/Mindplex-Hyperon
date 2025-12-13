@@ -26,19 +26,17 @@ genai.configure(api_key=os.getenv("GEMINI_API_KEY4"))
 metta4Miner = MeTTa()
 
 metta4Miner.run("""
-    ! (register-module! experiments)
-
-    ! (import! &self experiments:pattern-miner:pattern-miner)
-    ! (import! &self experiments:utils:common-utils)
-    ! (import! &self experiments:frequent-pattern-miner:frequent-pattern-miner)
-    ! (import! &tempo experiments:atomspace_visualizer:public:data)
-    ! (import! &self experiments:chainer:main)
+    !(import! &self experiments/pattern-miner/pattern-miner)
+    !(import! &self experiments/utils/common-utils)
+    !(import! &self experiments/frequent-pattern-miner/frequent-pattern-miner)
+    !(import! &tempo experiments/atomspace_visualizer/public/data)
+    !(import! &self experiments/chainer/main)
                             
     !(bind! &res1 (new-space)) ;; space to hold the formatted miner result
     !(add-reduct &res1 (let $fact (get-atoms &tempo) (: (fact:- $fact) $fact)))
                 
-    ! (bind! purifiedDbSpace (new-space)) ; space to hold the database atoms
-    ! (add-reduct purifiedDbSpace (get-atoms &tempo))
+    !(bind! purifiedDbSpace (new-space)) ; space to hold the database atoms
+    !(add-reduct purifiedDbSpace (get-atoms &tempo))
 """)
 
 def mine_pattern(numberOfConjunction: int) -> dict:

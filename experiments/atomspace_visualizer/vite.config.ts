@@ -4,10 +4,16 @@ import solidPlugin from 'vite-plugin-solid';
 export default defineConfig({
   plugins: [solidPlugin()],
   server: {
-    port: 3000,  // Using port 3001 as it's currently running
+    port: 3000,
     host: '0.0.0.0',
+    proxy: {
+      '/api': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+      },
+    },
     hmr: {
-      port: 3000,
+      clientPort: 443,
     },
   },
   build: {

@@ -132,17 +132,29 @@ export const renderNode = (
   if (transform.scale > 0.4 && node.label) {
     ctx.fillStyle = isDimmed ? textDimmed : textPrimary;
     const fontSize = node.metadata.columnType === 'header' ? 14 : 12;
-    ctx.font = `${Math.max(fontSize, fontSize * transform.scale)}px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`;
+    // Scale font size but clamp it to reasonable limits
+    const scaledFontSize = Math.max(fontSize, Math.min(fontSize * 2, fontSize * transform.scale));
+    ctx.font = `${scaledFontSize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`;
     ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
     
-    // Truncate label if too long
     let displayLabel = node.label;
-    if (displayLabel.length > 20) {
-      displayLabel = displayLabel.substring(0, 18) + '...';
-    }
     
-    ctx.fillText(displayLabel, screenPos.x, screenPos.y);
+    if (node.metadata.columnType === 'header') {
+      ctx.textBaseline = 'middle';
+      if (displayLabel.length > 25) {
+        displayLabel = displayLabel.substring(0, 23) + '...';
+      }
+      ctx.fillText(displayLabel, screenPos.x, screenPos.y);
+    } else {
+      // Render label below the node to prevent overflow on the node itself
+      ctx.textBaseline = 'top';
+      // Truncate more aggressively to prevent overlap
+      if (displayLabel.length > 15) {
+        displayLabel = displayLabel.substring(0, 12) + '...';
+      }
+      // Position: y + radius + padding (increased padding)
+      ctx.fillText(displayLabel, screenPos.x, screenPos.y + currentRadius + 8);
+    }
   }
 };
 

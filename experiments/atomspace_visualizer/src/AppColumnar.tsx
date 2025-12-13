@@ -1,5 +1,5 @@
 import type { Component } from 'solid-js';
-import { createSignal, createEffect, createResource } from 'solid-js';
+import { createSignal, createEffect, createResource, Show } from 'solid-js';
 
 import ColumnarVisualizer from './components/ColumnarVisualizer/ColumnarVisualizer';
 import EnhancedLegend from './components/Legend/EnhancedLegend';
@@ -90,15 +90,44 @@ const App: Component = () => {
   };
 
   // Chat visibility & theme
-  const [isChatOpen, setIsChatOpen] = createSignal(false);
+  const [isChatOpen, setIsChatOpen] = createSignal(true); // Default to open since it's in sidebar
   const [theme, setTheme] = createSignal<string>(localStorage.getItem('theme') || 'auto');
+  
+  // Sidebar resizing
+  const [sidebarWidth, setSidebarWidth] = createSignal(320);
+  const [isResizing, setIsResizing] = createSignal(false);
+
+  const startResizing = (e: MouseEvent) => {
+    setIsResizing(true);
+    e.preventDefault();
+  };
+
+  const stopResizing = () => {
+    setIsResizing(false);
+  };
+
+  const resize = (e: MouseEvent) => {
+    if (isResizing()) {
+      const newWidth = Math.max(250, Math.min(600, e.clientX));
+      setSidebarWidth(newWidth);
+    }
+  };
+
+  createEffect(() => {
+    if (isResizing()) {
+      window.addEventListener('mousemove', resize);
+      window.addEventListener('mouseup', stopResizing);
+    } else {
+      window.removeEventListener('mousemove', resize);
+      window.removeEventListener('mouseup', stopResizing);
+    }
+  });
 
   const applyTheme = (t: string) => {
     if (t === 'dark') {
       document.documentElement.setAttribute('data-theme', 'dark');
     } else if (t === 'light') {
       document.documentElement.removeAttribute('data-theme');
-      document.documentElement.setAttribute('data-theme', 'light');
     } else {
       document.documentElement.removeAttribute('data-theme');
     }
@@ -151,18 +180,11 @@ const App: Component = () => {
     canvas.dispatchEvent(evt);
   };
 
-  const handleMiningStart = () => {
-    console.log('AppColumnar.tsx: Mining started, starting animation');
-    startMiningAnimation();
-  };
-
-  // Unified mining flow: called by either the mining button or the chat trigger
+  // Unified mining flow
   const startMiningUnified = async (conjunctSize: number) => {
-    console.log('AppColumnar.tsx: startMiningUnified called with', conjunctSize);
-    const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://animated-spoon-7vrp545w744vhq46-5000.app.github.dev';
+    const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
     try {
-      // Start the animation and visual indicator
       startMiningAnimation();
 
       const resp = await fetch(`${API_BASE}/api/mine`, {
@@ -177,7 +199,6 @@ const App: Component = () => {
 
       const job = await resp.json();
 
-      // Stop animation and set results so ChatInterface will analyze and render summaries
       stopMiningAnimation();
       setMiningResults(job.result || []);
       setCurrentConjunctSize(conjunctSize);
@@ -189,25 +210,18 @@ const App: Component = () => {
   };
 
   const handlePatternsFound = (patterns: Array<{ pattern: string; support: string }>, conjunctSize?: number) => {
-    console.log('AppColumnar.tsx handlePatternsFound called with:', { patterns, conjunctSize });
-    
-    // Stop animation when mining completes
     stopMiningAnimation();
-    
     setMiningResults(patterns);
     if (conjunctSize) {
-      console.log('AppColumnar.tsx setting currentConjunctSize to:', conjunctSize);
       setCurrentConjunctSize(conjunctSize);
     }
   };
 
   const startMiningAnimation = () => {
-    // Stop any existing animation
     if (animationInterval) {
       clearInterval(animationInterval);
     }
     
-    // Get all article nodes from graph data
     const articles: string[] = [];
     for (const node of graphData().nodes) {
       if (node.metadata.columnType === 'article') {
@@ -217,34 +231,26 @@ const App: Component = () => {
     
     if (articles.length === 0) return;
     
-    // Cycle through articles with time gap
     let currentIndex = 0;
-    const intervalTime = 1000; // 1000ms between highlights
+    const intervalTime = 1000;
     
     animationInterval = setInterval(() => {
-      // Loop back to start when reaching the end
       currentIndex = currentIndex % articles.length;
-      
-      // Highlight current article
       const currentArticle = articles[currentIndex];
       handleFilterChange({
         active: true,
         articleIds: [currentArticle],
         propertyFilters: []
       });
-      
       currentIndex++;
     }, intervalTime) as unknown as number;
   };
 
   const stopMiningAnimation = () => {
-    console.log('AppColumnar.tsx: Stopping mining animation');
     if (animationInterval) {
       clearInterval(animationInterval);
       animationInterval = undefined;
     }
-    
-    // Reset filter state
     handleFilterChange({
       active: false,
       articleIds: [],
@@ -254,7 +260,6 @@ const App: Component = () => {
 
   const handleVisualize = (filterState: FilterState | string) => {
     if (typeof filterState === 'string') {
-      // Parse the pattern to extract property filters
       const propertyFilters: Array<{ property: string; value: string }> = [];
       const regex = /\((\w+)\s+\$\w+\s+"([^"]+)"\)/g;
       let match;
@@ -272,136 +277,57 @@ const App: Component = () => {
         });
       }
     } else {
-      // Already a FilterState object
       handleFilterChange(filterState);
     }
   };
 
-  // Default to collapsed (closed) as requested
-  const [isRightPanelOpen, setIsRightPanelOpen] = createSignal(false);
-
-  // Draggable left panel position (persisted)
-  const getInitialPanelPos = (): { x: number; y: number } => {
-    try {
-      const raw = localStorage.getItem('leftPanelPos');
-      if (raw) return JSON.parse(raw);
-    } catch (e) {
-      // ignore parse errors
-    }
-    return { x: 20, y: 20 };
-  };
-  const [panelPos, setPanelPos] = createSignal<{ x: number; y: number }>(getInitialPanelPos());
-
-  // Drag state kept in closure
-  const dragState: {
-    dragging: boolean;
-    offsetX: number;
-    offsetY: number;
-  } = { dragging: false, offsetX: 0, offsetY: 0 };
-
-  const startPanelDrag = (e: PointerEvent) => {
-    // Only start drag for primary button
-    if ((e as any).button && (e as any).button !== 0) return;
-    e.preventDefault();
-    dragState.dragging = true;
-    const el = (e.currentTarget as HTMLElement) || null;
-    const rect = el?.getBoundingClientRect();
-    if (rect) {
-      dragState.offsetX = e.clientX - rect.left;
-      dragState.offsetY = e.clientY - rect.top;
-    } else {
-      dragState.offsetX = 0;
-      dragState.offsetY = 0;
-    }
-    window.addEventListener('pointermove', onPanelPointerMove);
-    window.addEventListener('pointerup', endPanelDrag);
-  };
-
-  const onPanelPointerMove = (e: PointerEvent) => {
-    if (!dragState.dragging) return;
-    let nx = e.clientX - dragState.offsetX;
-    let ny = e.clientY - dragState.offsetY;
-    // keep panel within viewport bounds (small margin)
-    const margin = 8;
-    nx = Math.max(margin, Math.min(nx, window.innerWidth - 120));
-    ny = Math.max(margin, Math.min(ny, window.innerHeight - 80));
-    setPanelPos({ x: nx, y: ny });
-  };
-
-  const endPanelDrag = () => {
-    if (!dragState.dragging) return;
-    dragState.dragging = false;
-    window.removeEventListener('pointermove', onPanelPointerMove);
-    window.removeEventListener('pointerup', endPanelDrag);
-    try {
-      localStorage.setItem('leftPanelPos', JSON.stringify(panelPos()));
-    } catch (e) {
-      // ignore
-    }
-  };
-
   return (
-    <div class={`${styles.app} ${isRightPanelOpen() ? styles.panelOpen : ''}`}>
-      {/* Scrollable graph container */}
-      <div class={styles.graphContainer}>
-        <div class={styles.graphCard}>
-          {/* Canvas Control Buttons - Top of Canvas */}
-          <div class={styles.canvasControls}>
-            <button
-              class={styles.controlBtn}
-              onClick={handleZoomIn}
-              title="Zoom in"
-              aria-label="Zoom in"
-            >
-              <span aria-hidden="true" class={styles.controlBtnIcon}>
-                <svg
-                  viewBox="0 0 24 24"
-                  role="presentation"
-                >
-                  <circle cx="11" cy="11" r="6" fill="none" stroke="currentColor" stroke-width="1.8" />
-                  <line x1="11" y1="8" x2="11" y2="14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-                  <line x1="8" y1="11" x2="14" y2="11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-                  <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-                </svg>
-              </span>
-            </button>
-            <button
-              class={styles.controlBtn}
-              onClick={handleZoomOut}
-              title="Zoom out"
-              aria-label="Zoom out"
-            >
-              <span aria-hidden="true" class={styles.controlBtnIcon}>
-                <svg
-                  viewBox="0 0 24 24"
-                  role="presentation"
-                >
-                  <circle cx="11" cy="11" r="6" fill="none" stroke="currentColor" stroke-width="1.8" />
-                  <line x1="8" y1="11" x2="14" y2="11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-                  <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-                </svg>
-              </span>
-            </button>
-            <button
-              class={styles.controlBtn}
-              onClick={() => applyTheme(theme() === 'dark' ? 'light' : 'dark')}
-              title="Toggle light and dark mode"
-              aria-label="Toggle light and dark mode"
-            >
-              <span aria-hidden="true" class={styles.controlBtnIcon}>
-                <svg
-                  viewBox="0 0 24 24"
-                  role="presentation"
-                >
-                  <path
-                    d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"
-                    fill="currentColor"
-                  />
-                </svg>
-              </span>
-            </button>
+    <div class={styles.app}>
+      {/* Header */}
+      <header class={styles.header}>
+        <div class={styles.logo}>
+          <span style={{ "font-size": "1.5em" }}>🧠</span>
+          Mindplex Hyperon
+        </div>
+        <div class={styles.headerControls}>
+          <div class={styles.miningWrapper}>
+            <MiningInterface onMiningStart={startMiningUnified} onPatternsFound={handlePatternsFound} />
           </div>
+          <button
+            class={styles.controlBtn}
+            onClick={() => setIsChatOpen(prev => !prev)}
+            title="Toggle AI Assistant"
+            style={{ "background-color": isChatOpen() ? "var(--bg-hover)" : "transparent" }}
+          >
+            🤖
+          </button>
+        </div>
+      </header>
 
+      {/* Sidebar */}
+      <aside class={styles.sidebar}>
+        <div class={styles.sidebarSection}>
+          <div class={styles.sectionTitle}>Legend</div>
+          <EnhancedLegend
+            graphData={graphData()}
+            onFilterChange={handleFilterChange}
+            filterState={filterState()}
+          />
+        </div>
+        
+        <div 
+          class={styles.themeToggle} 
+          onClick={() => applyTheme(theme() === 'dark' ? 'light' : 'dark')}
+        >
+          <Show when={theme() === 'dark'} fallback={<span>🌙 Dark Mode</span>}>
+            <span>☀️ Light Mode</span>
+          </Show>
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <main class={styles.mainContent}>
+        <div class={styles.graphContainer}>
           <ColumnarVisualizer
             graphData={graphData()}
             onNodeSelect={handleNodeSelect}
@@ -409,62 +335,38 @@ const App: Component = () => {
             onFilterChange={handleFilterChange}
           />
         </div>
-      </div>
 
-      {/* Left-side panel containing Legend, Filters and Mining controls */}
-      <div
-        class={`${styles.leftPanel} ${isRightPanelOpen() ? styles.open : styles.collapsed}`}
-        style={{ left: `${panelPos().x}px`, top: `${panelPos().y}px`, position: 'fixed' }}
-      >
-        {/* Drag handle - user can drag the panel by this bar */}
-        <div
-          class={styles.dragHandle}
-          onPointerDown={(e) => startPanelDrag(e as unknown as PointerEvent)}
-          title="Drag to reposition"
-        />
-        <button
-          class={styles.panelToggleBtn}
-          onClick={() => setIsRightPanelOpen(p => !p)}
-          onPointerDown={(e) => startPanelDrag(e as unknown as PointerEvent)}
-          aria-label={isRightPanelOpen() ? 'Close side panel' : 'Open side panel'}
-          title={isRightPanelOpen() ? 'Hide panel' : 'Show panel'}
-        >
-          {/* Flip chevron direction for left-side panel */}
-          {isRightPanelOpen() ? '❮' : '❯'}
-        </button>
-
-        <div class={styles.panelContent}>
-          <EnhancedLegend
-            graphData={graphData()}
-            onFilterChange={handleFilterChange}
-            filterState={filterState()}
-          />
+        {/* Canvas Controls */}
+        <div class={styles.canvasControls}>
+          <button class={styles.controlBtn} onClick={handleZoomIn} title="Zoom In">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              <line x1="11" y1="8" x2="11" y2="14" />
+              <line x1="8" y1="11" x2="14" y2="11" />
+            </svg>
+          </button>
+          <button class={styles.controlBtn} onClick={handleZoomOut} title="Zoom Out">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              <line x1="8" y1="11" x2="14" y2="11" />
+            </svg>
+          </button>
         </div>
-      </div>
+      </main>
 
-      {/* Floating bottom-center mining control (now using MiningInterface component) */}
-      <div style={{ position: 'fixed', left: '50%', transform: 'translateX(-50%)', bottom: '28px', 'z-index': '1150' }}>
-        <MiningInterface onMiningStart={startMiningUnified} onPatternsFound={handlePatternsFound} />
-      </div>
-
-      {/* Floating Chat Toggle Button */}
-      <button
-        class={styles.chatToggle}
-        onClick={() => setIsChatOpen(prev => !prev)}
-        aria-label="Toggle AI Assistant"
-      >
-        🤖
-      </button>
-
-      {/* Chat Interface - Opens when mining completes or user clicks the button */}
-      <ChatInterface
-        isOpen={isChatOpen()}
-        onClose={() => setIsChatOpen(false)}
-        conjunctSize={currentConjunctSize()}
-        onVisualize={handleVisualize}
-        miningResults={miningResults()}
-        onMiningStart={startMiningUnified}
-      />
+      {/* Right Panel (Chat) */}
+      <aside class={`${styles.rightPanel} ${!isChatOpen() ? styles.collapsed : ''}`}>
+        <ChatInterface
+          isOpen={isChatOpen()}
+          onClose={() => setIsChatOpen(false)}
+          conjunctSize={currentConjunctSize()}
+          onVisualize={handleVisualize}
+          miningResults={miningResults()}
+          onMiningStart={startMiningUnified}
+        />
+      </aside>
     </div>
   );
 };

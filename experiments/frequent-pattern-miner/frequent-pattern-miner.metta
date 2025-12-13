@@ -1,7 +1,11 @@
-! (import! &self freq-pat)
-! (import! &self conj-exp)
+!(import! &self "conj_exp.py")
+!(import! &self "freq-pat.py")
 
-
+(= (sup-eval $db $pattern $minSup) 
+    (let $matches (collapse (match $db $pattern $pattern)) 
+        (>= (size-atom $matches) $minSup)
+    )
+)
 ;; candidatePatternMaker
 ;; ---------------------------------
 ;; Filters specialized link templates using minimum support.
@@ -21,11 +25,11 @@
 ;; Output: the instantiated pattern with a variable on the open side, or Empty
 ; (:candidatePatternMaker (-> SpaceType (Specialized Pattern) Number Expression Expression))
 ( = (candidatePatternMaker $dbspace ($link left $rValue) $minsup)
-        (if (sup-eval $dbspace ($link $x $rValue) $minsup) ($link $x $rValue) Empty )
+        (if (sup-eval $dbspace ($link $x $rValue) $minsup) ($link $x $rValue) (empty))
 )
 
 ( = (candidatePatternMaker $dbspace ($link $lValue right) $minsup)
-    (if (sup-eval $dbspace ($link $lValue $y) $minsup) ($link $lValue $y) Empty )
+    (if (sup-eval $dbspace ($link $lValue $y) $minsup) ($link $lValue $y) (empty))
 )
 
 
@@ -53,13 +57,13 @@
 ;;  3:- Use candidatePatternMaker to instantiate open sides and keep only those
 ;;     meeting $minsup
 ( = (absSpeCan $dbspace $minsup)
-    (let $specializedPattern (unique (createSpecials (match $dbspace ($link $x $y) ($link $x $y))))
-        (candidatePatternMaker $dbspace $specializedPattern $minsup))
+    (let $specializedPattern (unique-atom (collapse (createSpecials (match $dbspace ($link $x $y) ($link $x $y)))))
+        (candidatePatternMaker $dbspace (superpose $specializedPattern) $minsup))
 )
 
---------------------------------------------
+; --------------------------------------------
 ;;  formatter
---------------------------------------------
+; --------------------------------------------
 ;; Formats conjunctions with deterministic ordering and support annotation.
 ;; 1:- Iterate over (conjunct ...) items
 ;; 2:- Compute support with sup-num; skip if < $minSup
@@ -67,15 +71,12 @@
 ;(: formatter (-> SpaceType SpaceType Number Atom ))
 
 (= (formatter (conjunct $conjunct) $dbspace $minSup) 
-        (function 
-            (chain (eval (counter $dbspace $conjunct)) $cnt 
-                    (return (if (>= $cnt $minSup)
-                        (chain (eval (sort_conj $conjunct)) $sorted 
+        (let $cnt (counter $dbspace $conjunct)
+                    (if (>= $cnt $minSup)
+                        (let $sorted (sort_conj $conjunct)
                                 (supportOf (cons-atom , $sorted) $cnt))
-                                Empty)))
-        )
-   
-)
+                                (empty))))
+        
 ; --------------------------------------------------------
 ;; frequency-pattern-miner
 ; ---------------------------------------------------------
@@ -85,16 +86,11 @@
 ;;  2:- Generate size-$depth conjunctions with unique_combinations_star (single hub var)
 ;;  3:- Format passing conjunctions as (supportOf (, ...) n) with sorted clauses
 ;(: frequency-pattern-miner (-> SpaceType SpaceType SpaceType SpaceType SpaceType Number Number Atoms))
+
 (= (frequency-pattern-miner $dbspace $minsup $depth)
-   (let* (
-           (() (println! "==== Frequent miner started ====="))
-           ($candidatePatterns (collapse (absSpeCan $dbspace $minsup))); get candidate patterns
-           (() (println! ("candidatePatterns ended and got" $candidatePatterns)))
-           ($conjuncts  (unique_combinations_star $candidatePatterns $depth))
-           (() (println! ("conjuncts we have got is "  $conjuncts)))
-           ($temp4 (collapse (formatter (superpose $conjuncts) $dbspace $minsup)))      
-           (() (println! (" conjuncts we have got is " $temp4)))
-        )  $temp4)
+   (let $candidatePatterns (collapse (absSpeCan $dbspace $minsup))
+        (let $conjuncts (unique_combinations_star $candidatePatterns $depth)
+        (collapse (formatter (superpose $conjuncts) $dbspace $minsup))))
 )
 
 ; !(unique_combinations_star ((length $x "high") (length $x "low") (length $x "medium") (tone $x "Conversational") (tone $x "Humorous") (tone $x "Motivational") (tone $x "Gentle") (tone $x "Educational") (tone $x "Analytical") (writing_style $x "Conversational") (writing_style $x "Descriptive") (writing_style $x "Informal") (writing_style $x "Narrative") (writing_style $x "Formal") ) 3)

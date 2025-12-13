@@ -29,10 +29,10 @@
 ;;      returns them in reverse).  
 ;;   3. Rebuilds the flattened conjunction using `cons-atom`.  
 ;; =============================================================================
-(= (flatten $cnj) (
-  let $flatten (reverse-list (get-conjuncts $cnj))  
-  (cons-atom , $flatten)  
-))
+;(= (flatten $cnj) (
+;let $flatten (reverse-list (get-conjuncts $cnj))  
+; (cons-atom , $flatten)  
+;))
 
 
 
@@ -682,10 +682,7 @@
  ;; Count the number of instances of a given pattern
 ;;(: counter (-> hyperon::space::DynSpace Atom Number))
 (= (counter $db $ptrn)
-    (function 
-        (chain (eval (collapse (match $db $ptrn 1))) $got (return (size-atom $got))) 
-    )
-)
+    (let $got (collapse (match $db $ptrn 1)) (size-atom $got))) 
 
  ; Count the number of instances of a given pattern
 (= (count $pattern $db)
@@ -697,12 +694,11 @@
  ;; Evaluate if the pattern has enough support
 ; (: sup-eval (-> hyperon::space::DynSpace Atom Number Boolean))
 
-(= (sup-eval $db $pattern $ms)
-    (function 
-        (chain (eval (counter $db $pattern)) $sup
-            (return (>= $sup $ms))))
+(= (sup-eval $db $pattern $minSup) 
+    (let $matches (collapse (match $db $pattern $pattern)) 
+        (>= (size-atom $matches) $minSup)
+    )
 )
-
 ;; returns the number of support of a pattern
 
 (= (sup-num $db $pattern)
@@ -848,14 +844,6 @@
 
 )
 
- ;Check if atom is member of list or not
-(= (is-member $y ()) False)
-(= (is-member $y ($x $xs))
-    (if (== $y $x)
-        True
-        (is-member $y $xs)
-    )
-)
 
 
  ;check if atom is variable or not

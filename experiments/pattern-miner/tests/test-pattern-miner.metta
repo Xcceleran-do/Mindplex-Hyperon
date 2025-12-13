@@ -1,9 +1,7 @@
-! (register-module! ../../../experiments)
-
-! (import! &self experiments:pattern-miner:pattern-miner)
-! (import! &self experiments:utils:common-utils)
-! (import! &self experiments:frequent-pattern-miner:frequent-pattern-miner)
-! (import! &db experiments:atomspace_visualizer:public:data)
+! (import! &self ../../pattern-miner/pattern-miner)
+! (import! &self ../../utils/common-utils)
+! (import! &self ../../frequent-pattern-miner/frequent-pattern-miner)
+! (import! &db ../../atomspace_visualizer/public/data)
 
 ! (bind! purifiedDbSpace (new-space)) ; space to hold the database atoms
 ! (add-reduct purifiedDbSpace (get-atoms &db))

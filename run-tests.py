@@ -70,6 +70,15 @@ def run_test_file(test_file):
         env = os.environ.copy()
         env["SHELL"] = "/bin/bash"
 
+        # Add workspace root and test directories to PYTHONPATH
+        python_path = env.get("PYTHONPATH", "")
+        workspace_root = os.getcwd()
+        test_dir = os.path.dirname(os.path.abspath(test_file))
+        parent_dir = os.path.dirname(test_dir)
+        
+        new_paths = [workspace_root, test_dir, parent_dir]
+        env["PYTHONPATH"] = os.pathsep.join(new_paths + ([python_path] if python_path else []))
+
         # Full path to the run.sh script
         run_sh_path = shutil.which("run.sh")
         if not os.path.isfile(run_sh_path):

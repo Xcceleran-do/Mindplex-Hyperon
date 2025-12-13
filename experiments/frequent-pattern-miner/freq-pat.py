@@ -219,5 +219,3 @@ def redundancy(metta):
     )
     
     return {r"redunpat": redundancyFreeAtom, r"replace": replace, r"replacev": replacev, r"sort_conj": sort_conj}
-
-

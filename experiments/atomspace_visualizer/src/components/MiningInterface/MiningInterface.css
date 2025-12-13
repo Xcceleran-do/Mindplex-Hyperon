@@ -1,16 +1,15 @@
 .mining-interface {
   position: relative;
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  background: var(--card-bg);
-  backdrop-filter: blur(8px);
-  border-radius: var(--border-radius, 12px);
-  padding: 8px 10px;
-  box-shadow: var(--shadow-md);
-  border: 1px solid var(--border-primary);
-  width: 100%;
-  box-sizing: border-box;
+  flex-direction: row; /* Changed to row for header compactness */
+  align-items: center;
+  gap: 12px;
+  background: transparent; /* Transparent for header integration */
+  border-radius: var(--border-radius, 8px);
+  padding: 4px;
+  border: none;
+  width: auto;
+  box-shadow: none;
 }
 
 .mining-controls {

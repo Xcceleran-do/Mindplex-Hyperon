@@ -174,26 +174,6 @@ export class ColumnarTransformer {
           }
         });
       });
-
-      // Add "None" node at the bottom
-      nodes.push({
-        id: `${column.name}-None`,
-        label: 'None',
-        type: 'value',
-        position: {
-          x: column.position,
-          y: this.HEADER_HEIGHT + values.length * this.NODE_SPACING
-        },
-        color: '#6b7280',
-        size: 40,
-        metadata: {
-          originalExpression: 'None',
-          occurrences: 1,
-          isGenerated: true,
-          columnType: 'property',
-          propertyName: column.name
-        }
-      });
     }
   }
 
@@ -205,33 +185,40 @@ export class ColumnarTransformer {
     for (const [articleId, article] of articlesMap) {
       for (const column of columns) {
         const value = article.properties.get(column.name);
-        const targetId = value 
-          ? `${column.name}-${value}`
-          : `${column.name}-None`;
+        
+        if (value) {
+          const targetId = `${column.name}-${value}`;
 
-        edges.push({
-          id: `edge-${articleId}-${column.name}`,
-          source: `article-${articleId}`,
-          target: targetId,
-          label: column.name,
-          directed: true,
-          type: 'relation',
-          color: 'rgba(107, 114, 128, 0.3)',
-          weight: 1
-        });
+          edges.push({
+            id: `edge-${articleId}-${column.name}`,
+            source: `article-${articleId}`,
+            target: targetId,
+            label: column.name,
+            directed: true,
+            type: 'relation',
+            color: 'rgba(107, 114, 128, 0.3)',
+            weight: 1
+          });
+        }
       }
     }
   }
 
   private getHeaderColor(propertyName: string): string {
     const colorMap: Record<string, string> = {
-      topic: '#059669',
-      length: '#d97706',
-      tone: '#dc2626',
-      writing_style: '#7c3aed',
-      format: '#2563eb',
-      audience: '#0f766e',
-      engagement_level: '#0284c7'
+      'length': '#f59e0b',           // Orange
+      'reading-time': '#d97706',     // Amber
+      'tone': '#ef4444',             // Red
+      'complexity': '#8b5cf6',       // Purple
+      'audience-expertise': '#14b8a6', // Teal
+      'content-type': '#3b82f6',     // Blue
+      'date-period': '#64748b',      // Slate
+      'primary-goal': '#ec4899',     // Pink
+      'popularity': '#10b981',       // Green
+      'engagement': '#0ea5e9',       // Sky
+      'audience-sentiment': '#6366f1', // Indigo
+      'authored-by': '#f43f5e',      // Rose
+      'title': '#374151'             // Gray
     };
 
     return colorMap[propertyName] || '#4b5563';
@@ -239,13 +226,19 @@ export class ColumnarTransformer {
 
   private getPropertyValueColor(propertyName: string): string {
     const colorMap: Record<string, string> = {
-      topic: '#34d399',
-      length: '#fbbf24',
-      tone: '#f87171',
-      writing_style: '#a78bfa',
-      format: '#60a5fa',
-      audience: '#2dd4bf',
-      engagement_level: '#38bdf8'
+      'length': '#fbbf24',           // Light Orange
+      'reading-time': '#fcd34d',     // Light Amber
+      'tone': '#f87171',             // Light Red
+      'complexity': '#a78bfa',       // Light Purple
+      'audience-expertise': '#2dd4bf', // Light Teal
+      'content-type': '#60a5fa',     // Light Blue
+      'date-period': '#94a3b8',      // Light Slate
+      'primary-goal': '#f472b6',     // Light Pink
+      'popularity': '#34d399',       // Light Green
+      'engagement': '#38bdf8',       // Light Sky
+      'audience-sentiment': '#818cf8', // Light Indigo
+      'authored-by': '#fb7185',      // Light Rose
+      'title': '#9ca3af'             // Light Gray
     };
 
     return colorMap[propertyName] || '#9ca3af';
