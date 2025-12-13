@@ -265,17 +265,18 @@ export const renderArticleConnections = (
   }
 };
 
-// Draw column separators
+// Draw column separators and backgrounds
 export const drawColumnSeparators = (
   ctx: CanvasRenderingContext2D,
   graphData: GraphData,
   transform: Transform,
   canvasHeight: number
 ) => {
-  const columns = new Set<number>();
+  const columns = new Map<number, boolean>(); // x -> isTarget
+  
   for (const node of graphData.nodes) {
     if (node.metadata.columnType === 'header') {
-      columns.add(node.position.x);
+      columns.set(node.position.x, !!node.metadata.isTarget);
     }
   }
 
@@ -283,11 +284,22 @@ export const drawColumnSeparators = (
   const computedStyle = getComputedStyle(document.documentElement);
   const separatorColor = computedStyle.getPropertyValue('--separator-color').trim() || 'rgba(0, 0, 0, 0.05)';
 
+  // Draw backgrounds for target columns first
+  for (const [columnX, isTarget] of columns) {
+    if (isTarget) {
+      const screenX = worldToScreen({ x: columnX, y: 0 }, transform).x;
+      const width = 250 * transform.scale; // Approximate column width
+      
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.03)'; // Subtle highlight
+      ctx.fillRect(screenX - width/2, 0, width, canvasHeight);
+    }
+  }
+
   ctx.strokeStyle = separatorColor;
   ctx.lineWidth = 1;
   ctx.setLineDash([5, 5]);
 
-  for (const columnX of columns) {
+  for (const [columnX] of columns) {
     const screenX = worldToScreen({ x: columnX, y: 0 }, transform).x;
     ctx.beginPath();
     ctx.moveTo(screenX, 0);

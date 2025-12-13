@@ -21,7 +21,7 @@ export interface Article {
 
 export class ColumnarTransformer {
   private readonly COLUMN_SPACING = 300;
-  private readonly NODE_SPACING = 80;
+  private readonly NODE_SPACING = 120;
   private readonly HEADER_HEIGHT = 100;
 
   transformToColumnar(triples: Triple[]): GraphData {
@@ -91,7 +91,23 @@ export class ColumnarTransformer {
     const columns: PropertyColumn[] = [];
     let columnIndex = 1; // Start at 1 because column 0 is for articles
 
-    for (const [name, values] of propertyValues) {
+    // Define priority columns that should appear first
+    const priorityColumns = ['audience-expertise', 'engagement'];
+    
+    // Sort properties: priority ones first, then alphabetical
+    const sortedProperties = Array.from(propertyValues.keys()).sort((a, b) => {
+      const indexA = priorityColumns.indexOf(a);
+      const indexB = priorityColumns.indexOf(b);
+      
+      if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+      if (indexA !== -1) return -1;
+      if (indexB !== -1) return 1;
+      
+      return a.localeCompare(b);
+    });
+
+    for (const name of sortedProperties) {
+      const values = propertyValues.get(name)!;
       columns.push({
         name,
         values,
@@ -133,22 +149,27 @@ export class ColumnarTransformer {
 
   private createPropertyNodes(columns: PropertyColumn[], nodes: GraphNode[]): void {
     for (const column of columns) {
+      const isTarget = ['audience-expertise', 'engagement'].includes(column.name);
+      
+      const label = column.name.replace(/_/g, ' ').toUpperCase() + (isTarget ? ' 🎯' : '');
+      
       // Add column header node with better color
       nodes.push({
         id: `header-${column.name}`,
-        label: column.name.replace(/_/g, ' ').toUpperCase(),
+        label: label,
         type: 'predicate',
         position: {
           x: column.position,
           y: 20
         },
         color: this.getHeaderColor(column.name),
-        size: 70,
+        size: isTarget ? 90 : 70, // Larger size for target columns
         metadata: {
           originalExpression: column.name,
           occurrences: 1,
           isGenerated: false,
-          columnType: 'header'
+          columnType: 'header',
+          isTarget: isTarget
         }
       });
 
@@ -164,7 +185,7 @@ export class ColumnarTransformer {
             y: this.HEADER_HEIGHT + index * this.NODE_SPACING
           },
           color: this.getPropertyValueColor(column.name),
-          size: 45,
+          size: isTarget ? 60 : 45, // Larger size for target values
           metadata: {
             originalExpression: value,
             occurrences: 1,
@@ -206,19 +227,22 @@ export class ColumnarTransformer {
 
   private getHeaderColor(propertyName: string): string {
     const colorMap: Record<string, string> = {
-      'length': '#f59e0b',           // Orange
-      'reading-time': '#d97706',     // Amber
-      'tone': '#ef4444',             // Red
-      'complexity': '#8b5cf6',       // Purple
-      'audience-expertise': '#14b8a6', // Teal
-      'content-type': '#3b82f6',     // Blue
-      'date-period': '#64748b',      // Slate
-      'primary-goal': '#ec4899',     // Pink
-      'popularity': '#10b981',       // Green
-      'engagement': '#0ea5e9',       // Sky
-      'audience-sentiment': '#6366f1', // Indigo
-      'authored-by': '#f43f5e',      // Rose
-      'title': '#374151'             // Gray
+      // Target Attributes (High Contrast / Neon)
+      'audience-expertise': '#059669', // Darker Emerald (better contrast with white text)
+      'engagement': '#be123c',         // Darker Rose (better contrast with white text)
+
+      // Other Attributes (Muted / Pastel)
+      'length': '#94a3b8',           // Slate
+      'reading-time': '#94a3b8',     // Slate
+      'tone': '#a78bfa',             // Soft Purple
+      'complexity': '#818cf8',       // Soft Indigo
+      'content-type': '#60a5fa',     // Soft Blue
+      'date-period': '#9ca3af',      // Gray
+      'primary-goal': '#f472b6',     // Soft Pink
+      'popularity': '#34d399',       // Soft Green
+      'audience-sentiment': '#fbbf24', // Soft Amber
+      'authored-by': '#fb7185',      // Soft Rose
+      'title': '#4b5563'             // Dark Gray
     };
 
     return colorMap[propertyName] || '#4b5563';
@@ -226,18 +250,21 @@ export class ColumnarTransformer {
 
   private getPropertyValueColor(propertyName: string): string {
     const colorMap: Record<string, string> = {
-      'length': '#fbbf24',           // Light Orange
-      'reading-time': '#fcd34d',     // Light Amber
-      'tone': '#f87171',             // Light Red
-      'complexity': '#a78bfa',       // Light Purple
-      'audience-expertise': '#2dd4bf', // Light Teal
-      'content-type': '#60a5fa',     // Light Blue
-      'date-period': '#94a3b8',      // Light Slate
-      'primary-goal': '#f472b6',     // Light Pink
-      'popularity': '#34d399',       // Light Green
-      'engagement': '#38bdf8',       // Light Sky
-      'audience-sentiment': '#818cf8', // Light Indigo
-      'authored-by': '#fb7185',      // Light Rose
+      // Target Attributes (Bright / Distinct)
+      'audience-expertise': '#10b981', // Emerald
+      'engagement': '#f43f5e',         // Rose
+
+      // Other Attributes (Lighter versions)
+      'length': '#cbd5e1',           // Light Slate
+      'reading-time': '#cbd5e1',     // Light Slate
+      'tone': '#c4b5fd',             // Light Purple
+      'complexity': '#a5b4fc',       // Light Indigo
+      'content-type': '#93c5fd',     // Light Blue
+      'date-period': '#d1d5db',      // Light Gray
+      'primary-goal': '#fbcfe8',     // Light Pink
+      'popularity': '#6ee7b7',       // Light Green
+      'audience-sentiment': '#fcd34d', // Light Amber
+      'authored-by': '#fda4af',      // Light Rose
       'title': '#9ca3af'             // Light Gray
     };
 

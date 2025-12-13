@@ -8,7 +8,6 @@
 (primary-goal A_15154 "Entertain")
 (popularity A_15154 "Low")
 (engagement A_15154 "Low")
-(audience-sentiment A_15154 "Positive")
 (authored-by A_15154 "hruy")
 (title A_15154 "Reputation Engine Joke")
 
@@ -22,7 +21,6 @@
 (primary-goal A_8358 "Entertain")
 (popularity A_8358 "Low")
 (engagement A_8358 "Low")
-(audience-sentiment A_8358 "Positive")
 (authored-by A_8358 "hruy")
 (title A_8358 "Programmer Meme")
 
@@ -36,7 +34,6 @@
 (primary-goal A_5417 "Inform")
 (popularity A_5417 "Medium")
 (engagement A_5417 "Medium")
-(audience-sentiment A_5417 "Positive")
 (authored-by A_5417 "hruy")
 (title A_5417 "Hosky and Mindplex")
 
@@ -50,7 +47,6 @@
 (primary-goal A_3802 "Inform")
 (popularity A_3802 "High")
 (engagement A_3802 "High")
-(audience-sentiment A_3802 "Neutral")
 (authored-by A_3802 "hruy")
 (title A_3802 "New User Guidelines")
 
@@ -64,7 +60,6 @@
 (primary-goal A_1048 "Persuade")
 (popularity A_1048 "Top_10")
 (engagement A_1048 "Very_High")
-(audience-sentiment A_1048 "Positive")
 (authored-by A_1048 "hruy")
 (title A_1048 "Storytellers and Mindplex")
 
@@ -78,7 +73,6 @@
 (primary-goal A_SYN_1 "Educate")
 (popularity A_SYN_1 "High")
 (engagement A_SYN_1 "High")
-(audience-sentiment A_SYN_1 "Positive")
 (authored-by A_SYN_1 "hruy")
 (title A_SYN_1 "AGI Architecture Deep Dive")
 
@@ -92,7 +86,6 @@
 (primary-goal A_SYN_2 "Educate")
 (popularity A_SYN_2 "Top_10")
 (engagement A_SYN_2 "Very_High")
-(audience-sentiment A_SYN_2 "Positive")
 (authored-by A_SYN_2 "hruy")
 (title A_SYN_2 "Hyperon Type System Analysis")
 
@@ -106,7 +99,6 @@
 (primary-goal A_SYN_3 "Analyze")
 (popularity A_SYN_3 "High")
 (engagement A_SYN_3 "High")
-(audience-sentiment A_SYN_3 "Neutral")
 (authored-by A_SYN_3 "hruy")
 (title A_SYN_3 "Blockchain Scalability Metrics")
 
@@ -120,7 +112,6 @@
 (primary-goal A_SYN_4 "Teach")
 (popularity A_SYN_4 "High")
 (engagement A_SYN_4 "High")
-(audience-sentiment A_SYN_4 "Positive")
 (authored-by A_SYN_4 "hruy")
 (title A_SYN_4 "Getting Started with MeTTa")
 
@@ -134,7 +125,6 @@
 (primary-goal A_SYN_5 "Teach")
 (popularity A_SYN_5 "Top_10")
 (engagement A_SYN_5 "Very_High")
-(audience-sentiment A_SYN_5 "Positive")
 (authored-by A_SYN_5 "hruy")
 (title A_SYN_5 "Wallet Setup Guide")
 
@@ -148,7 +138,6 @@
 (primary-goal A_SYN_6 "Teach")
 (popularity A_SYN_6 "Medium")
 (engagement A_SYN_6 "High")
-(audience-sentiment A_SYN_6 "Positive")
 (authored-by A_SYN_6 "hruy")
 (title A_SYN_6 "First Steps in AI")
 
@@ -162,7 +151,6 @@
 (primary-goal A_SYN_7 "Inform")
 (popularity A_SYN_7 "Medium")
 (engagement A_SYN_7 "Medium")
-(audience-sentiment A_SYN_7 "Neutral")
 (authored-by A_SYN_7 "hruy")
 (title A_SYN_7 "Weekly AI Roundup")
 
@@ -176,7 +164,6 @@
 (primary-goal A_SYN_8 "Discuss")
 (popularity A_SYN_8 "Medium")
 (engagement A_SYN_8 "Medium")
-(audience-sentiment A_SYN_8 "Mixed")
 (authored-by A_SYN_8 "hruy")
 (title A_SYN_8 "The Future of Decentralization")
 
@@ -190,7 +177,6 @@
 (primary-goal A_SYN_9 "Educate")
 (popularity A_SYN_9 "Low")
 (engagement A_SYN_9 "Low")
-(audience-sentiment A_SYN_9 "Confused")
 (authored-by A_SYN_9 "hruy")
 (title A_SYN_9 "Quantum Computing for Beginners")
 
@@ -204,6 +190,5 @@
 (primary-goal A_SYN_10 "Teach")
 (popularity A_SYN_10 "Low")
 (engagement A_SYN_10 "Low")
-(audience-sentiment A_SYN_10 "Bored")
 (authored-by A_SYN_10 "hruy")
 (title A_SYN_10 "What is a Computer?")
