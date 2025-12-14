@@ -1,17 +1,17 @@
-! (import! &self ../../pattern-miner/pattern-miner)
-! (import! &self ../../utils/common-utils)
-! (import! &self ../../frequent-pattern-miner/frequent-pattern-miner)
-! (import! &db ../../atomspace_visualizer/public/data)
+!(import! &self ../../pattern-miner/pattern-miner)
+!(import! &self ../../utils/common-utils)
+!(import! &self ../../frequent-pattern-miner/frequent-pattern-miner)
+!(import! &db ../../atomspace_visualizer/public/data)
 
-! (bind! purifiedDbSpace (new-space)) ; space to hold the database atoms
-! (add-reduct purifiedDbSpace (get-atoms &db))
+!(bind! purifiedDbSpace (new-space)) ; space to hold the database atoms
+!(add-reduct purifiedDbSpace (get-atoms &db))
 
 ;; space to hold the miner result
 !(bind! &res1 (new-space))
-; ! (memberChecker (engagement_level $x "high") () purifiedDbSpace 3)
+; !(memberChecker (engagement_level $x "high") () purifiedDbSpace 3)
 ; !(sup-eval purifiedDbSpace (engagement_level $x "high") 3)
-; ! (memberChecker (engagement_level $x "low") ( (engagement_level $x "low") (engagement_level $x "med")) purifiedDbSpace 3)
-; ! (let $ana (customUnique (match purifiedDbSpace ($link $x $y) (createSpecials ($link $x $y))) purifiedDbSpace 3) (--- :- --- (unique_combinations_star $ana)))
+; !(memberChecker (engagement_level $x "low") ( (engagement_level $x "low") (engagement_level $x "med")) purifiedDbSpace 3)
+; !(let $ana (customUnique (match purifiedDbSpace ($link $x $y) (createSpecials ($link $x $y))) purifiedDbSpace 3) (--- :- --- (unique_combinations_star $ana)))
 
 ---------------------------------------------------
 ;; mine frequent patterns without surprissingness 
