@@ -1,11 +1,13 @@
-!(import! &self "conj_exp.py")
-!(import! &self "freq-pat.py")
+;!(import! &self "conj_exp.py")
+; !(import! &self "freq-pat.py")
 
 (= (sup-eval $db $pattern $minSup) 
     (let $matches (collapse (match $db $pattern $pattern)) 
         (>= (size-atom $matches) $minSup)
     )
 )
+(= (counter $db $ptrn)
+    (let $got (collapse (match $db $ptrn 1)) (size-atom $got))) 
 ;; candidatePatternMaker
 ;; ---------------------------------
 ;; Filters specialized link templates using minimum support.
@@ -25,11 +27,11 @@
 ;; Output: the instantiated pattern with a variable on the open side, or Empty
 ; (:candidatePatternMaker (-> SpaceType (Specialized Pattern) Number Expression Expression))
 ( = (candidatePatternMaker $dbspace ($link left $rValue) $minsup)
-        (if (sup-eval $dbspace ($link $x $rValue) $minsup) ($link $x $rValue) (empty))
+        (if (sup-eval $dbspace ($link $x $rValue) $minsup) ($link (cut-first-char l$x) $rValue) (empty))
 )
 
 ( = (candidatePatternMaker $dbspace ($link $lValue right) $minsup)
-    (if (sup-eval $dbspace ($link $lValue $y) $minsup) ($link $lValue $y) (empty))
+    (if (sup-eval $dbspace ($link $lValue $y) $minsup) ($link $lValue (cut-first-char r$y)) (empty))
 )
 
 
@@ -43,7 +45,7 @@
 
 
 ( = (createSpecials ($link $shabx $shaby))
-    ( superpose (($link left $shaby) ($link $shabx right)) )
+    (superpose (($link left $shaby) ($link $shabx right)))
 )
 
 
@@ -74,7 +76,7 @@
         (let $cnt (counter $dbspace $conjunct)
                     (if (>= $cnt $minSup)
                         (let $sorted (sort_conj $conjunct)
-                                (supportOf (cons-atom , $sorted) $cnt))
+                                (supportOf $sorted $cnt))
                                 (empty))))
         
 ; --------------------------------------------------------

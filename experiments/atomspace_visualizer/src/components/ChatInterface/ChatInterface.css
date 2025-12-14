@@ -6,55 +6,24 @@
   flex-direction: column;
   background: var(--bg-secondary);
   overflow: hidden;
-  border-left: 1px solid var(--border-color);
+  position: relative;
 }
 
-/* Header */
-.chat-header {
-  padding: 16px;
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-color);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.chat-title {
-  font-weight: 600;
-  color: var(--text-primary);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.chat-controls {
-  display: flex;
-  gap: 8px;
-}
-
-.chat-control-btn {
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
-  transition: all 0.2s;
-}
-
-.chat-control-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
+.chat-header-actions-floating {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
 }
 
 /* Messages Area */
 .chat-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 16px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
   background: var(--bg-primary);
 }
 
@@ -62,7 +31,7 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-width: 85%;
+  max-width: 90%;
 }
 
 .message.user {
@@ -76,14 +45,14 @@
 }
 
 .message-content {
-  padding: 12px;
+  padding: 10px;
   border-radius: 12px;
-  font-size: 0.9rem;
-  line-height: 1.5;
+  font-size: 0.85rem;
+  line-height: 1.4;
 }
 
 .message.user .message-content {
-  background: #3b82f6;
+  background: #10b981;
   color: white;
   border-bottom-right-radius: 2px;
 }
@@ -97,37 +66,39 @@
 
 /* Input Area */
 .chat-input-area {
-  padding: 16px;
+  padding: 12px;
   background: var(--bg-secondary);
   border-top: 1px solid var(--border-color);
   display: flex;
   gap: 8px;
+  align-items: center;
 }
 
 .chat-input {
   flex: 1;
-  padding: 10px 12px;
-  border-radius: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
   border: 1px solid var(--border-color);
   background: var(--bg-primary);
   color: var(--text-primary);
   font-family: inherit;
   resize: none;
-  height: 44px;
+  height: 36px;
   line-height: 1.4;
+  font-size: 0.85rem;
 }
 
 .chat-input:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+  border-color: #10b981;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.1);
 }
 
 .send-btn {
-  width: 44px;
-  height: 44px;
-  border-radius: 8px;
-  background: #3b82f6;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  background: #10b981;
   color: white;
   border: none;
   cursor: pointer;
@@ -135,10 +106,11 @@
   align-items: center;
   justify-content: center;
   transition: background 0.2s;
+  font-size: 1rem;
 }
 
 .send-btn:hover {
-  background: #2563eb;
+  background: #059669;
 }
 
 .send-btn:disabled {
@@ -146,6 +118,77 @@
   color: var(--text-secondary);
   cursor: not-allowed;
 }
+
+/* Welcome Screen */
+.chat-welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 20px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.welcome-icon {
+  font-size: 2rem;
+  margin-bottom: 12px;
+}
+
+.chat-welcome h4 {
+  margin: 0 0 8px 0;
+  color: var(--text-primary);
+  font-size: 1rem;
+}
+
+.chat-welcome p {
+  margin: 0 0 20px 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.welcome-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.suggestion-btn {
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+}
+
+.suggestion-btn:hover {
+  border-color: #3b82f6;
+  background: var(--bg-hover);
+}
+
+/* Container overrides */
+.chat-container {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+}
+
+.chat-input-container {
+  padding: 12px;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  gap: 8px;
+}
+
 
 /* Mining Results Card */
 .mining-result-card {

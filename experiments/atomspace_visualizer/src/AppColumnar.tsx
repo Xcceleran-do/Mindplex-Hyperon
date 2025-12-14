@@ -282,7 +282,10 @@ const App: Component = () => {
   };
 
   return (
-    <div class={styles.app}>
+    <div 
+      class={styles.app}
+      style={{ "--sidebar-width": `${sidebarWidth()}px` } as any}
+    >
       {/* Header */}
       <header class={styles.header}>
         <div class={styles.logo}>
@@ -293,36 +296,50 @@ const App: Component = () => {
           <div class={styles.miningWrapper}>
             <MiningInterface onMiningStart={startMiningUnified} onPatternsFound={handlePatternsFound} />
           </div>
-          <button
-            class={styles.controlBtn}
-            onClick={() => setIsChatOpen(prev => !prev)}
-            title="Toggle AI Assistant"
-            style={{ "background-color": isChatOpen() ? "var(--bg-hover)" : "transparent" }}
-          >
-            🤖
-          </button>
         </div>
       </header>
 
       {/* Sidebar */}
       <aside class={styles.sidebar}>
-        <div class={styles.sidebarSection}>
-          <div class={styles.sectionTitle}>Legend</div>
-          <EnhancedLegend
-            graphData={graphData()}
-            onFilterChange={handleFilterChange}
-            filterState={filterState()}
-          />
+        <div class={styles.sidebarContent}>
+          <div class={styles.sidebarSection}>
+            <div class={styles.sectionHeader} onClick={() => setIsChatOpen(!isChatOpen())}>
+              <div class={styles.sectionTitle}>AI Assistant</div>
+              <span class={styles.collapseIcon}>{isChatOpen() ? '▼' : '▶'}</span>
+            </div>
+            <Show when={isChatOpen()}>
+              <div class={styles.chatContainer}>
+                <ChatInterface
+                  isOpen={true}
+                  onClose={() => {}}
+                  conjunctSize={currentConjunctSize()}
+                  onVisualize={handleVisualize}
+                  miningResults={miningResults()}
+                  onMiningStart={startMiningUnified}
+                />
+              </div>
+            </Show>
+          </div>
+
+          <div class={styles.sidebarSection}>
+            <div class={styles.sectionTitle}>Legend</div>
+            <EnhancedLegend
+              graphData={graphData()}
+              onFilterChange={handleFilterChange}
+              filterState={filterState()}
+            />
+          </div>
+          
+          <div 
+            class={styles.themeToggle} 
+            onClick={() => applyTheme(theme() === 'dark' ? 'light' : 'dark')}
+          >
+            <Show when={theme() === 'dark'} fallback={<span>🌙 Dark Mode</span>}>
+              <span>☀️ Light Mode</span>
+            </Show>
+          </div>
         </div>
-        
-        <div 
-          class={styles.themeToggle} 
-          onClick={() => applyTheme(theme() === 'dark' ? 'light' : 'dark')}
-        >
-          <Show when={theme() === 'dark'} fallback={<span>🌙 Dark Mode</span>}>
-            <span>☀️ Light Mode</span>
-          </Show>
-        </div>
+        <div class={styles.resizer} onMouseDown={startResizing}></div>
       </aside>
 
       {/* Main Content */}
@@ -355,18 +372,6 @@ const App: Component = () => {
           </button>
         </div>
       </main>
-
-      {/* Right Panel (Chat) */}
-      <aside class={`${styles.rightPanel} ${!isChatOpen() ? styles.collapsed : ''}`}>
-        <ChatInterface
-          isOpen={isChatOpen()}
-          onClose={() => setIsChatOpen(false)}
-          conjunctSize={currentConjunctSize()}
-          onVisualize={handleVisualize}
-          miningResults={miningResults()}
-          onMiningStart={startMiningUnified}
-        />
-      </aside>
     </div>
   );
 };
