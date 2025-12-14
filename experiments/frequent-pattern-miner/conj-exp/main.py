@@ -313,7 +313,60 @@ def _generate_star_join_combos(exprs: list[str], k: int) -> list[tuple[str, ...]
 
     return results
 
+# =========================
+# Post-generation combo filtering
+# =========================
 
+def _filter_combos_require_functors(
+    combos: list[tuple[str, ...]],
+    required_functors: set[str],
+    require_on_hub: bool = True,
+) -> list[tuple[str, ...]]:
+    """Filter combos, keeping only those that contain all required functors.
+
+    If require_on_hub is True, a functor is counted only if its clause contains
+    the hub variable (the single shared variable across all clauses). The hub
+    is determined as the intersection of variable sets per clause; if empty,
+    we fall back to counting functors across all clauses.
+
+    Args:
+        combos: list of combos (each combo is tuple of clause strings)
+        required_functors: functor names that must all appear (case-insensitive)
+        require_on_hub: restrict counting to hub-bearing clauses
+    Returns:
+        Filtered list of combos.
+    """
+    if not combos or not required_functors:
+        return combos
+
+    required_norm = {f.lower() for f in required_functors}
+    kept: list[tuple[str, ...]] = []
+
+    for combo in combos:
+        # Collect variable sets for each clause
+        clause_vars = [ _extract_vars_from_expr(cl) for cl in combo ]
+        # Hub variable: intersection of all var sets (generator enforces single hub)
+        if clause_vars:
+            hub_candidates = set.intersection(*clause_vars)
+        else:
+            hub_candidates = set()
+        hub_var = next(iter(hub_candidates)) if hub_candidates else None
+
+        present: set[str] = set()
+        for cl, vars_in_clause in zip(combo, clause_vars):
+            functor = _expr_functor(cl).lower()
+            if not functor:
+                continue
+            if require_on_hub and hub_var is not None and hub_var not in vars_in_clause:
+                # Skip clauses that don't involve hub when restriction enabled
+                continue
+            present.add(functor)
+
+        if required_norm.issubset(present):
+            kept.append(combo)
+
+    return kept
+    
 def unique_combinations_star_metta_op(metta, list_expr_atom, size_atom):
     """Star-join combinations: enforce a single hub variable during generation.
 
@@ -348,6 +401,15 @@ def unique_combinations_star_metta_op(metta, list_expr_atom, size_atom):
     
     print("combination making started in python")
     combos = _generate_star_join_combos(items, k)
+
+
+    # Filter combos to ensure they contain audience and engagement_level clauses
+    combos = _filter_combos_require_functors(
+        combos,
+        {"audience", "engagement_level"},
+        require_on_hub=True,
+    )
+
     print("combination making ended in python")
     conj_items = ["(conjunct (, {}) )".format(" ".join(combo)) for combo in combos]
     print("formatting making ended in python")

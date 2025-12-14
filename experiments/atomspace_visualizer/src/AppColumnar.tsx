@@ -159,7 +159,7 @@ const App: Component = () => {
   // Unified mining flow: called by either the mining button or the chat trigger
   const startMiningUnified = async (conjunctSize: number) => {
     console.log('AppColumnar.tsx: startMiningUnified called with', conjunctSize);
-    const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://animated-spoon-7vrp545w744vhq46-5000.app.github.dev';
+    const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://super-duper-winner-97q9rxp6vvx9hxq5q-5000.app.github.dev';
 
     try {
       // Start the animation and visual indicator

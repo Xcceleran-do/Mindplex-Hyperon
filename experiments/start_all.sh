@@ -12,6 +12,6 @@ npm run dev > frontend.log 2>&1 &
 echo "Frontend started on port 3000"
 sleep 2
 # Load URLs from config
-API_URL=$(python3 -c "from config import API_BASE_URL; print(API_BASE_URL)" 2>/dev/null || echo "http://localhost:5000")
-FRONTEND_URL=$(python3 -c "from config import FRONTEND_URL; print(FRONTEND_URL)" 2>/dev/null || echo "http://localhost:3000")
+API_URL=$(python3 -c "from config import API_BASE_URL; print(API_BASE_URL)" 2>/dev/null || echo "https://super-duper-winner-97q9rxp6vvx9hxq5q-5000.app.github.dev")
+FRONTEND_URL=$(python3 -c "from config import FRONTEND_URL; print(FRONTEND_URL)" 2>/dev/null || echo "https://super-duper-winner-97q9rxp6vvx9hxq5q-3000.app.github.dev/")
 echo "✅ Done! Backend: $API_URL, Frontend: $FRONTEND_URL"

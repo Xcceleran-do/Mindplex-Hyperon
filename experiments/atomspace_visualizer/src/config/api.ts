@@ -2,7 +2,7 @@
 // Centralized API endpoint configuration using environment variables
 
 export const API_CONFIG = {
-  BASE_URL: import.meta.env.VITE_API_BASE_URL || 'https://animated-spoon-7vrp545w744vhq46-5000.app.github.dev',
+  BASE_URL: import.meta.env.VITE_API_BASE_URL || 'https://super-duper-winner-97q9rxp6vvx9hxq5q-5000.app.github.dev',
   
   // API endpoints
   ENDPOINTS: {

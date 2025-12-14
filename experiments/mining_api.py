@@ -149,11 +149,11 @@ def make_json_safe(o):
 
 app = Flask(__name__)
 # Enable CORS for all domains on all routes with all methods
-CORS(app, resources={r"/api/*": {
+CORS(app, resources={r"/*": {
     "origins": "*",  # Allow all origins
     "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    "allow_headers": ["Content-Type", "Authorization"],
-    "expose_headers": ["Content-Type"],
+    "allow_headers": ["Content-Type", "Authorization", "Access-Control-Allow-Origin"],
+    "expose_headers": ["Content-Type", "Access-Control-Allow-Origin"],
     "supports_credentials": False,
     "max_age": 3600
 }})
@@ -769,15 +769,23 @@ def start_mining():
     run_mining_task(job_id, conjunction_count)
     print(f"🔍 DEBUG: Starting mining job {job_id} with conjunction count {conjunction_count}")
     result = mining_jobs[job_id].result
-    # Start formatting in background thread
-    print("🔍 DEBUG: Starting formatting thread")
-    print("🔍 DEBUG: Result before formatting =", result)
-    thread = threading.Thread(
-        target=formatter,
-        args=(f"{result['answer']}",),
-        daemon=True
-    )
-    thread.start()
+    print(f"result => {result}")
+    
+    # Start formatting in background thread only if we have a valid result with an answer
+    if isinstance(result, dict) and 'answer' in result:
+        print("🔍 DEBUG: Starting formatting thread")
+        print("🔍 DEBUG: Result before formatting =", result)
+        try:
+            thread = threading.Thread(
+                target=formatter,
+                args=(f"{result['answer']}",),
+                daemon=True
+            )
+            thread.start()
+        except Exception as e:
+            print(f"⚠️ Warning: Failed to start formatter thread: {e}")
+    else:
+        print(f"⚠️ Warning: Skipping formatter. Result is not valid or missing 'answer'. Result: {result}")
     
     print(f"🔍 DEBUG: result type = {type(result)}")
     print(f"🔍 DEBUG: result = {result}")
