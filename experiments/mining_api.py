@@ -627,7 +627,7 @@ available_functions = {
 
 # Initialize Gemini model with automatic function calling
 model = genai.GenerativeModel(
-    "gemini-2.0-flash-exp",
+    "gemini-2.5-flash",
     tools=[start_mining_job, mine_pattern, analyze_specific_pattern, get_pattern_statistics, visualize_pattern_request, getChainerResult],
     system_instruction="""You are a friendly and knowledgeable AI assistant with expertise in data mining patterns, knowledge graphs, and pattern analysis. 
 

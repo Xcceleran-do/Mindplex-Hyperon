@@ -406,7 +406,7 @@ def unique_combinations_star_metta_op(metta, list_expr_atom, size_atom):
     # Filter combos to ensure they contain audience and engagement_level clauses
     combos = _filter_combos_require_functors(
         combos,
-        {"audience", "engagement_level"},
+        {"audience-expertise", "engagement"},
         require_on_hub=True,
     )
 

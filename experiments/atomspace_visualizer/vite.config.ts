@@ -8,7 +8,7 @@ export default defineConfig({
     host: '0.0.0.0',
     proxy: {
       '/api': {
-        target: 'http://localhost:5000',
+        target: 'https://super-duper-winner-97q9rxp6vvx9hxq5q-5000.app.github.dev',
         changeOrigin: true,
       },
     },
