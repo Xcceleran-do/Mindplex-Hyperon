@@ -62,6 +62,7 @@ const App: Component = () => {
   // Mining and chat state
   const [miningResults, setMiningResults] = createSignal<Array<{ pattern: string; support: string }>>([]);
   const [currentConjunctSize, setCurrentConjunctSize] = createSignal<number | undefined>(undefined);
+  const [isRulesModalOpen, setIsRulesModalOpen] = createSignal(false);
   
   // Animation state
   let animationInterval: number | undefined;
@@ -261,7 +262,9 @@ const App: Component = () => {
   const handleVisualize = (filterState: FilterState | string) => {
     if (typeof filterState === 'string') {
       const propertyFilters: Array<{ property: string; value: string }> = [];
-      const regex = /\((\w+)\s+\$\w+\s+"([^"]+)"\)/g;
+      // Regex to match (Property $Variable "Value") pattern
+      // Handles variables with special chars (e.g. $x-1) and properties with hyphens
+      const regex = /\(([^\s()]+)\s+\$[^\s()]+\s+("[^"]+")\)/g;
       let match;
       while ((match = regex.exec(filterState)) !== null) {
         propertyFilters.push({
@@ -294,7 +297,11 @@ const App: Component = () => {
         </div>
         <div class={styles.headerControls}>
           <div class={styles.miningWrapper}>
-            <MiningInterface onMiningStart={startMiningUnified} onPatternsFound={handlePatternsFound} />
+            <MiningInterface 
+              onMiningStart={startMiningUnified} 
+              onPatternsFound={handlePatternsFound}
+              onShowRules={miningResults().length > 0 ? () => setIsRulesModalOpen(true) : undefined}
+            />
           </div>
         </div>
       </header>
@@ -372,6 +379,44 @@ const App: Component = () => {
           </button>
         </div>
       </main>
+
+      {/* Rules Modal */}
+      <Show when={isRulesModalOpen()}>
+        <div class={styles.modalOverlay} onClick={() => setIsRulesModalOpen(false)}>
+          <div class={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            <div class={styles.modalHeader}>
+              <h3>Mined Rules ({miningResults().length})</h3>
+              <button class={styles.closeBtn} onClick={() => setIsRulesModalOpen(false)}>×</button>
+            </div>
+            <div class={styles.modalBody}>
+              <Show when={miningResults().length > 0} fallback={<p>No rules mined yet.</p>}>
+                <div class={styles.rulesList}>
+                  <For each={miningResults()}>
+                    {(rule, index) => (
+                      <div class={styles.ruleItem}>
+                        <div class={styles.ruleHeader}>
+                          <span class={styles.ruleIndex}>Rule {index() + 1}</span>
+                          <span class={styles.ruleSupport}>Support: {rule.support}</span>
+                        </div>
+                        <pre class={styles.rulePattern}>{rule.pattern}</pre>
+                        <button 
+                          class={styles.visualizeBtn}
+                          onClick={() => {
+                            handleVisualize(rule.pattern);
+                            setIsRulesModalOpen(false);
+                          }}
+                        >
+                          Visualize
+                        </button>
+                      </div>
+                    )}
+                  </For>
+                </div>
+              </Show>
+            </div>
+          </div>
+        </div>
+      </Show>
     </div>
   );
 };

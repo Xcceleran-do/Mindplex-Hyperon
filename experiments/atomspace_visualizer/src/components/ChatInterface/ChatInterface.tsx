@@ -298,7 +298,8 @@ const ChatInterface = (props: ChatInterfaceProps) => {
         if (patternObj) {
           // Parse pattern string to extract property-value pairs
           // Example pattern: (length $x "low") (tone $x "Analytical")
-          const regex = /\((\w+)\s+\$\w+\s+("|'|)([^"')]+)\2\)/g;
+          // Updated regex to handle variables with special chars and properties with hyphens
+          const regex = /\(([^\s()]+)\s+\$[^\s()]+\s+("|'|)([^"')]+)\2\)/g;
           const propertyFilters: { property: string; value: string }[] = [];
           let match;
           while ((match = regex.exec(patternObj.pattern)) !== null) {

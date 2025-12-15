@@ -10,9 +10,9 @@
 
 ;; space to hold the miner result
 !(bind! &res1 (new-space))
-; ! (memberChecker (engagement_level $x "high") () purifiedDbSpace 3)
-; !(sup-eval purifiedDbSpace (engagement_level $x "high") 3)
-; ! (memberChecker (engagement_level $x "low") ( (engagement_level $x "low") (engagement_level $x "med")) purifiedDbSpace 3)
+; ! (memberChecker (engagement $x "high") () purifiedDbSpace 3)
+; !(sup-eval purifiedDbSpace (engagement $x "high") 3)
+; ! (memberChecker (engagement $x "low") ( (engagement $x "low") (engagement $x "med")) purifiedDbSpace 3)
 ; ! (let $ana (customUnique (match purifiedDbSpace ($link $x $y) (createSpecials ($link $x $y))) purifiedDbSpace 3) (--- :- --- (unique_combinations_star $ana)))
 
 ---------------------------------------------------

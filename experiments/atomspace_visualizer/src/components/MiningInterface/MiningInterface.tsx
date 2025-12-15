@@ -15,6 +15,7 @@ export interface MiningInterfaceProps {
   onMiningStart?: (conjunctSize: number) => void;
   onMiningComplete?: (result: MiningResult) => void;
   onPatternsFound?: (patterns: Array<{ pattern: string; support: string }>, conjunctSize?: number) => void;
+  onShowRules?: () => void;
 }
 
 const MiningInterface = (props: MiningInterfaceProps) => {
@@ -161,6 +162,16 @@ const MiningInterface = (props: MiningInterfaceProps) => {
             </div>
           </button>
         </div>
+
+        <Show when={props.onShowRules}>
+          <button 
+            class="show-rules-btn" 
+            onClick={props.onShowRules} 
+            title="Show Mined Rules"
+          >
+            📜
+          </button>
+        </Show>
       </div>
 
 

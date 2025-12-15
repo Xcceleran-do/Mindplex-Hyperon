@@ -391,4 +391,4 @@
 .mine-button.mining {
   background: linear-gradient(180deg, #ffd66b 0%, #ffb800 100%);
   box-shadow: 0 12px 36px rgba(148, 40, 255, 0.18);
-}
+}.show-rules-btn { padding: 6px 10px; font-size: 14px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: all 0.2s; color: var(--text-primary); display: flex; align-items: center; justify-content: center; } .show-rules-btn:hover { background: var(--bg-hover); transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }

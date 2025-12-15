@@ -403,7 +403,7 @@ def unique_combinations_star_metta_op(metta, list_expr_atom, size_atom):
     combos = _generate_star_join_combos(items, k)
 
 
-    # Filter combos to ensure they contain audience and engagement_level clauses
+    # Filter combos to ensure they contain audience and engagement clauses
     combos = _filter_combos_require_functors(
         combos,
         {"audience-expertise", "engagement"},

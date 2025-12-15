@@ -51,9 +51,9 @@ def main():
         enriched_articles.append(enriched)
         
         # Sleep to avoid hitting Gemini API rate limits (Free tier is ~15 RPM)
-        if i < len(articles) - 1:
-            print("   Sleeping 60s for rate limit...")
-            time.sleep(60)
+        # if i < len(articles) - 1:
+        #     print("   Sleeping 60s for rate limit...")
+        #     time.sleep(60)
 
     print("4. Converting to MeTTa...")
     converter = JsonToMetta()

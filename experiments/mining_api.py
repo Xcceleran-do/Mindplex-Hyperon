@@ -489,7 +489,8 @@ def formatter(mined_patterns):
 
 def backWardChainer(whatToCheck, depth=5):
     whatToCheck = metta4Miner.parse_single(whatToCheck)
-    answer = metta4Miner.run(f""" !(backward-chain &res1 (S (S Z)) (: $prf {whatToCheck})) """)
+    print("res1: ", metta4Miner.run(f"""!(get-atoms &res1)"""))
+    answer = metta4Miner.run(f""" !(backward-chain &res1 (S (S (S Z))) (: $prf {whatToCheck})) """)
     return answer
 
 def getChainerResult(whatToCheck, depth=5):

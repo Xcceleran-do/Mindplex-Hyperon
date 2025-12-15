@@ -33,6 +33,11 @@
   border-color: var(--node-hover);
 }
 
+.toggleIcon {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
 .legendContent {
   display: flex;
   flex-direction: column;
@@ -56,18 +61,31 @@
   background-color: var(--bg-hover);
 }
 
-.colorDot {
-  width: 10px;
-  height: 10px;
+.legendColor {
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   flex-shrink: 0;
+  border: 1px solid rgba(0,0,0,0.1);
 }
 
-.legendLabel {
+.colorLabel {
   flex: 1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.colorCode {
+  font-family: monospace;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  background: var(--bg-primary);
+  padding: 1px 4px;
+  border-radius: 3px;
 }
 
 .countBadge {
@@ -76,4 +94,130 @@
   background: var(--bg-hover);
   padding: 2px 6px;
   border-radius: 10px;
+}
+
+/* Filter Styles */
+.filterStatus {
+  background: var(--bg-secondary);
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  margin-bottom: 12px;
+  font-size: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.clearButton {
+  align-self: flex-end;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.clearButton:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.multiSelectHint {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.legendSection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.legendSection h4 {
+  margin: 0;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.categoryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 8px;
+}
+
+.categoryButton {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  padding: 8px;
+  border-radius: 6px;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.categoryButton:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent-color, #3b82f6);
+}
+
+.categoryButtonActive {
+  background: var(--accent-color, #3b82f6);
+  color: white;
+  border-color: var(--accent-color, #3b82f6);
+}
+
+.filterOptions {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.itemGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+  max-height: 300px; /* Limit height */
+  overflow-y: auto; /* Enable scrolling */
+  padding-right: 4px; /* Space for scrollbar */
+}
+
+.filterButton {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  padding: 6px 10px;
+  border-radius: 4px;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 0.85rem;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: all 0.2s;
+}
+
+.filterButton:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent-color, #3b82f6);
+}
+
+.filterButtonActive {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: var(--accent-color, #3b82f6);
+  color: var(--accent-color, #3b82f6);
+  font-weight: 500;
 }

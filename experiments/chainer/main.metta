@@ -23,7 +23,7 @@
 ; !(convertIncomingDataHelper ((engagement $p41 high) (length $p41 low) (reputation $r45 low)))
 
 (= (convertIncomingDataHelper $data)
-     (convertIncomingDataHelper2 (removeAnyMetricsAtom $data ((engagement_level $j $k) (reputation $_ $__) (popularity $___ $____))))
+     (convertIncomingDataHelper2 (removeAnyMetricsAtom $data ((engagement $j $k) (reputation $_ $__) (popularity $___ $____))))
 )
 ; !(convertIncomingDataHelper ((engagement $p41 high) (length $p41 low) (popularity $re45 low)))
      
@@ -66,5 +66,5 @@
 ;! (add-reduct &kb (main (collapse (get-atoms &rules))))
 
 ;!(get-atoms &kb)
-;!(backward-chain &kb (fromNumber 5) (: $prf (engagement_level 1 $what)))
-;[(: ((, (engagement_level 1 high) (topic 1 AI)) (topic 1 AI)) (engagement_level 1 high)),  (: ((, (engagement_level 1 high) (length 1 low)) (length 1 low)) (engagement_level 1 high))]
+;!(backward-chain &kb (fromNumber 5) (: $prf (engagement 1 $what)))
+;[(: ((, (engagement 1 high) (topic 1 AI)) (topic 1 AI)) (engagement 1 high)),  (: ((, (engagement 1 high) (length 1 low)) (length 1 low)) (engagement 1 high))]
