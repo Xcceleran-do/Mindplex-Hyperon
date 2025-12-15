@@ -5,6 +5,7 @@ import ColumnarVisualizer from './components/ColumnarVisualizer/ColumnarVisualiz
 import EnhancedLegend from './components/Legend/EnhancedLegend';
 import ChatInterface from './components/ChatInterface/ChatInterface';
 import MiningInterface from './components/MiningInterface/MiningInterface';
+import SimulationMode from './components/Simulation/SimulationMode';
 import { GraphData, GraphNode, FilterState } from './types';
 import { MettaParserImpl } from './services/parser/MettaParser';
 import { ColumnarTransformer } from './services/graph/ColumnarTransformer';
@@ -63,6 +64,7 @@ const App: Component = () => {
   const [miningResults, setMiningResults] = createSignal<Array<{ pattern: string; support: string }>>([]);
   const [currentConjunctSize, setCurrentConjunctSize] = createSignal<number | undefined>(undefined);
   const [isRulesModalOpen, setIsRulesModalOpen] = createSignal(false);
+  const [isSimulationMode, setIsSimulationMode] = createSignal(false);
   
   // Animation state
   let animationInterval: number | undefined;
@@ -296,6 +298,14 @@ const App: Component = () => {
           Mindplex Hyperon
         </div>
         <div class={styles.headerControls}>
+          <button 
+            class={styles.controlBtn} 
+            onClick={() => setIsSimulationMode(!isSimulationMode())}
+            title="Toggle Simulation Playground"
+            style={{ "margin-right": "16px", "background": isSimulationMode() ? "var(--accent-color)" : "transparent", "color": isSimulationMode() ? "white" : "var(--text-primary)" }}
+          >
+            🎮 Simulation
+          </button>
           <div class={styles.miningWrapper}>
             <MiningInterface 
               onMiningStart={startMiningUnified} 
@@ -352,32 +362,41 @@ const App: Component = () => {
       {/* Main Content */}
       <main class={styles.mainContent}>
         <div class={styles.graphContainer}>
-          <ColumnarVisualizer
-            graphData={graphData()}
-            onNodeSelect={handleNodeSelect}
-            filterState={filterState()}
-            onFilterChange={handleFilterChange}
-          />
+          <Show when={!isSimulationMode()} fallback={
+            <SimulationMode 
+              graphData={graphData()} 
+              onClose={() => setIsSimulationMode(false)} 
+            />
+          }>
+            <ColumnarVisualizer
+              graphData={graphData()}
+              onNodeSelect={handleNodeSelect}
+              filterState={filterState()}
+              onFilterChange={handleFilterChange}
+            />
+          </Show>
         </div>
 
         {/* Canvas Controls */}
-        <div class={styles.canvasControls}>
-          <button class={styles.controlBtn} onClick={handleZoomIn} title="Zoom In">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              <line x1="11" y1="8" x2="11" y2="14" />
-              <line x1="8" y1="11" x2="14" y2="11" />
-            </svg>
-          </button>
-          <button class={styles.controlBtn} onClick={handleZoomOut} title="Zoom Out">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              <line x1="8" y1="11" x2="14" y2="11" />
-            </svg>
-          </button>
-        </div>
+        <Show when={!isSimulationMode()}>
+          <div class={styles.canvasControls}>
+            <button class={styles.controlBtn} onClick={handleZoomIn} title="Zoom In">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                <line x1="11" y1="8" x2="11" y2="14" />
+                <line x1="8" y1="11" x2="14" y2="11" />
+              </svg>
+            </button>
+            <button class={styles.controlBtn} onClick={handleZoomOut} title="Zoom Out">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                <line x1="8" y1="11" x2="14" y2="11" />
+              </svg>
+            </button>
+          </div>
+        </Show>
       </main>
 
       {/* Rules Modal */}
