@@ -3,13 +3,14 @@ services:
   - type: web
     name: mindplex-backend
     runtime: python
+    rootDir: .
     buildCommand: pip install -r experiments/requirements.txt
-    startCommand: cd experiments && python mining_api.py
+    startCommand: python experiments/mining_api.py
     envVars:
       - key: GEMINI_API_KEY4
         sync: false
       - key: PYTHON_VERSION
-        value: 3.11.0
+        value: "3.11.9"
       - key: FLASK_DEBUG
         value: "False"
 

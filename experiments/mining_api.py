@@ -25,9 +25,20 @@ genai.configure(api_key=os.getenv("GEMINI_API_KEY4"))
 
 metta4Miner = MeTTa()
 
-metta4Miner.run("""
-    ! (register-module! experiments)
+# Get the absolute path to the experiments directory
+# This ensures imports work regardless of where the script is run from
+current_dir = os.path.dirname(os.path.abspath(__file__))
+# If running from root, current_dir is .../experiments
+# If running from experiments/, current_dir is .../experiments
 
+# We need to register the PARENT of experiments if we want to import 'experiments:...'
+# OR we register the experiments folder itself as the 'experiments' module.
+# Hyperon's register-module! typically takes a directory path.
+
+# Let's try to register the directory explicitly
+metta4Miner.run(f"! (register-module! {current_dir})")
+
+metta4Miner.run("""
     ! (import! &self experiments:pattern-miner:pattern-miner)
     ! (import! &self experiments:utils:common-utils)
     ! (import! &self experiments:frequent-pattern-miner:frequent-pattern-miner)
