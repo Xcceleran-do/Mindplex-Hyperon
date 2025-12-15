@@ -6,6 +6,7 @@
 (engagement A_19278 "Low")
 (authored-by A_19278 "Ben_G")
 (title A_19278 "The Spiritual Bliss Attractor: When AI Chats Reach For Cosmic Harmony")
+
 (length A_14219 "Short")
 (reading-time A_14219 "Long")
 (date-period A_14219 "Archived")
@@ -14,6 +15,7 @@
 (engagement A_14219 "Low")
 (authored-by A_14219 "mindplex")
 (title A_14219 "What Happens When Two Bens Meet and Change the Course of Robotics?")
+
 (length A_13014 "Short")
 (reading-time A_13014 "Long")
 (date-period A_13014 "Archived")
@@ -21,7 +23,8 @@
 (popularity A_13014 "Top_10")
 (engagement A_13014 "Low")
 (authored-by A_13014 "mindplex")
-(title A_13014 "Meditation &amp; Enlightenment with Daniel M. Ingram | Mindplex Podcast S2EP25")
+(title A_13014 "Meditation &amp; Enlightenment with Daniel M. Ingram | Mindplex Podcast 
+S2EP25")
 (length A_12759 "Short")
 (reading-time A_12759 "Long")
 (date-period A_12759 "Archived")
@@ -30,6 +33,7 @@
 (engagement A_12759 "Low")
 (authored-by A_12759 "mindplex")
 (title A_12759 "Artificial Superintelligence Alliance | Mindplex Podcast S2EP24")
+
 (length A_3554 "Medium")
 (reading-time A_3554 "Long")
 (date-period A_3554 "Archived")
@@ -38,6 +42,7 @@
 (engagement A_3554 "Low")
 (authored-by A_3554 "Ben_G")
 (title A_3554 "Evil LLM: ChatGPT Excels at Emulating Anti-Morality and Ethical Fakery")
+
 (length A_3404 "Long")
 (reading-time A_3404 "Long")
 (date-period A_3404 "Archived")
@@ -46,6 +51,7 @@
 (engagement A_3404 "Low")
 (authored-by A_3404 "Ben_G")
 (title A_3404 "AI Now Predicts Human Ethical Judgments Quite Well")
+
 (length A_2786 "Long")
 (reading-time A_2786 "Long")
 (date-period A_2786 "Archived")
@@ -54,6 +60,7 @@
 (engagement A_2786 "Low")
 (authored-by A_2786 "Ben_G")
 (title A_2786 "Don’t Shut Down AI Development — Open It Up For Real")
+
 (length A_1549 "Long")
 (reading-time A_1549 "Long")
 (date-period A_1549 "Archived")
@@ -62,6 +69,7 @@
 (engagement A_1549 "Low")
 (authored-by A_1549 "Ben_G")
 (title A_1549 "Large Language Models – From Banality to Originality")
+
 (length A_149 "Medium")
 (reading-time A_149 "Medium")
 (date-period A_149 "Archived")
