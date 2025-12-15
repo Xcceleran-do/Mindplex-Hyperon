@@ -9,19 +9,24 @@ import sys
 import time
 import traceback
 import re
+import json
+import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import threading
 import uuid
 from dataclasses import dataclass
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from hyperon import MeTTa
-import google.generativeai as genai
 from dotenv import load_dotenv
 load_dotenv()
 
-# Configure Gemini API
-genai.configure(api_key=os.getenv("GEMINI_API_KEY4"))
+# Configure ASI1 API
+ASI_API_KEY = os.getenv("ASI_API_KEY")
+if not ASI_API_KEY:
+    print("WARNING: ASI_API_KEY environment variable is not set. AI features will fail.")
+ASI_BASE_URL = "https://api.asi1.ai/v1/chat/completions"
+ASI_MODEL = "asi1-mini" # Using asi1-mini as per documentation example, can be switched to asi1-graph
 
 metta4Miner = MeTTa()
 
@@ -40,6 +45,149 @@ metta4Miner.run("""
     ! (bind! purifiedDbSpace (new-space)) ; space to hold the database atoms
     ! (add-reduct purifiedDbSpace (get-atoms &tempo))
 """)
+
+# Define tools for ASI1 API
+tools_schema = [
+    {
+        "type": "function",
+        "function": {
+            "name": "mine_pattern",
+            "description": "Mines patterns with a specified number of conjunctions.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "numberOfConjunction": {
+                        "type": "integer",
+                        "description": "The number of conjunctions to use in pattern mining."
+                    }
+                },
+                "required": ["numberOfConjunction"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "start_mining_job",
+            "description": "Starts a mining job with a specified number of conjunctions.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "conjunction_count": {
+                        "type": "integer",
+                        "description": "The number of conjunctions to use in pattern mining."
+                    }
+                },
+                "required": ["conjunction_count"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_mining_results",
+            "description": "Retrieves the latest pattern mining results from the system.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "analyze_specific_pattern",
+            "description": "Analyzes a specific pattern in detail, extracting properties and values.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "pattern": {
+                        "type": "string",
+                        "description": "The pattern string to analyze."
+                    }
+                },
+                "required": ["pattern"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_pattern_statistics",
+            "description": "Gets statistics about all mining results including total jobs and patterns.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "visualize_pattern_request",
+            "description": "Requests visualization of a specific pattern on the graph canvas.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "pattern": {
+                        "type": "string",
+                        "description": "The pattern string to visualize."
+                    }
+                },
+                "required": ["pattern"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "getChainerResult",
+            "description": "Get the result of backward chaining for a specific query.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "whatToCheck": {
+                        "type": "string",
+                        "description": "The query to check, e.g., '(reputation 0 \"High\")'"
+                    },
+                    "depth": {
+                        "type": "integer",
+                        "description": "The depth limit for backward chaining.",
+                        "default": 5
+                    }
+                },
+                "required": ["whatToCheck"]
+            }
+        }
+    }
+]
+
+def call_asi_api(messages: List[Dict[str, Any]], tools: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+    """Calls the ASI1 API with the given messages and tools."""
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {ASI_API_KEY}"
+    }
+    payload = {
+        "model": ASI_MODEL,
+        "messages": messages,
+        "temperature": 0.7
+    }
+    if tools:
+        payload["tools"] = tools
+        payload["tool_choice"] = "auto"
+
+    try:
+        response = requests.post(ASI_BASE_URL, headers=headers, json=payload)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        print(f"ASI API Error: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+            print(f"Response content: {e.response.text}")
+        return {"error": str(e)}
 
 def mine_pattern(numberOfConjunction: int) -> dict:
     """
@@ -535,9 +683,15 @@ def getChainerResult(whatToCheck, depth=5):
         """
 
     try:
-        # Use Gemini to analyze the results
-        response = model.generate_content(prompt)
-        justification = response.text if response.text else "Unable to generate justification analysis."
+        # Use ASI1 to analyze the results
+        messages = [
+            {"role": "system", "content": SYSTEM_INSTRUCTION},
+            {"role": "user", "content": prompt}
+        ]
+        response_data = call_asi_api(messages)
+        justification = "Unable to generate justification analysis."
+        if 'choices' in response_data and response_data['choices']:
+             justification = response_data['choices'][0]['message'].get('content', '')
         
         return {
             "query": whatToCheck,
@@ -593,8 +747,15 @@ def summarize_patterns(patterns: list) -> str:
     prompt = "\n\n".join(prompt_parts)
 
     try:
-        resp = model.generate_content(prompt)
-        text = resp.text if hasattr(resp, 'text') and resp.text else None
+        messages = [
+            {"role": "system", "content": SYSTEM_INSTRUCTION},
+            {"role": "user", "content": prompt}
+        ]
+        response_data = call_asi_api(messages)
+        text = None
+        if 'choices' in response_data and response_data['choices']:
+             text = response_data['choices'][0]['message'].get('content', '')
+
         if not text:
             # Try extracting from candidates-like structure
             try:
@@ -626,11 +787,7 @@ available_functions = {
     "getChainerResult": getChainerResult
 }
 
-# Initialize Gemini model with automatic function calling
-model = genai.GenerativeModel(
-    "gemini-2.5-flash",
-    tools=[start_mining_job, mine_pattern, analyze_specific_pattern, get_pattern_statistics, visualize_pattern_request, getChainerResult],
-    system_instruction="""You are a friendly and knowledgeable AI assistant with expertise in data mining patterns, knowledge graphs, and pattern analysis. 
+SYSTEM_INSTRUCTION = """You are a friendly and knowledgeable AI assistant with expertise in data mining patterns, knowledge graphs, and pattern analysis. 
 
         **Your Primary Specialty:**
         You excel at analyzing pattern mining results, explaining conjunctions, and providing insights about relationships in data.
@@ -721,7 +878,6 @@ model = genai.GenerativeModel(
         - Adapt your tone to match the user's style
 
         Remember: While your expertise is in pattern mining, you're a helpful general-purpose assistant who can discuss any topic!"""
-)
 # Store conversation history
 conversations = {}
 
@@ -1017,96 +1173,97 @@ def chat():
 
         conversations.setdefault(session_id, [])
 
-        # Build conversation history for Gemini
-        gemini_history = []
+        # Build conversation history for ASI1
+        asi_messages = [{"role": "system", "content": SYSTEM_INSTRUCTION}]
         for msg in history[-10:]:
-            if msg.get('role') == 'user':
-                gemini_history.append({'role': 'user', 'parts': [msg.get('content', '')]})
-            elif msg.get('role') == 'assistant':
-                gemini_history.append({'role': 'model', 'parts': [msg.get('content', '')]})
+            role = msg.get('role')
+            if role == 'assistant':
+                role = 'assistant'
+            elif role == 'user':
+                role = 'user'
+            asi_messages.append({'role': role, 'content': msg.get('content', '')})
+        
+        asi_messages.append({'role': 'user', 'content': message})
 
-        # Start chat with history and send the user message
-        chat_session = model.start_chat(history=gemini_history)
-        response = chat_session.send_message(message)
-
-        # Handle automatic function calling loop
+        # Call ASI1 API
+        response_data = call_asi_api(asi_messages, tools=tools_schema)
+        
+        # Handle function calling loop
         max_iterations = 5
         iteration = 0
         function_results = []
-
+        
         while iteration < max_iterations:
             iteration += 1
-
-            parts = getattr(response.candidates[0].content, 'parts', []) if response and response.candidates else []
-            if not parts:
+            
+            if 'error' in response_data:
+                print(f"ASI API Error: {response_data['error']}")
+                break
+                
+            if 'choices' not in response_data or not response_data['choices']:
                 break
 
-            part = parts[0]
-            if not (hasattr(part, 'function_call') and part.function_call):
-                break
-
-            function_call = part.function_call
-            function_name = getattr(function_call, 'name', None)
-            function_args = dict(getattr(function_call, 'args', {}) or {})
-
-            print(f"🔧 Function call: {function_name}({function_args})")
-
-            if function_name not in available_functions:
-                print(f"✗ Unknown function: {function_name}")
-                break
-
-            try:
-                # Normalize args (alias mapping and numeric normalization)
-                norm_args = {}
-                for k, v in function_args.items():
-                    key = k
-                    if k in ('conjunction_count', 'conjunctions', 'conjunctionCount', 'numberOfConjunction', 'n'):
-                        key = 'conjunction_count'
-
-                    if isinstance(v, str) and re.fullmatch(r"\d+", v):
-                        norm_args[key] = int(v)
-                    elif isinstance(v, float) and v.is_integer():
-                        norm_args[key] = int(v)
+            choice = response_data['choices'][0]
+            message_obj = choice['message']
+            
+            # Append assistant message to history
+            asi_messages.append(message_obj)
+            
+            if 'tool_calls' in message_obj and message_obj['tool_calls']:
+                tool_calls = message_obj['tool_calls']
+                
+                for tool_call in tool_calls:
+                    function_name = tool_call['function']['name']
+                    function_args_str = tool_call['function']['arguments']
+                    try:
+                        function_args = json.loads(function_args_str)
+                    except json.JSONDecodeError:
+                        function_args = {}
+                        
+                    print(f"🔧 Function call: {function_name}({function_args})")
+                    
+                    if function_name not in available_functions:
+                        print(f"✗ Unknown function: {function_name}")
+                        function_result = {"error": f"Unknown function {function_name}"}
                     else:
-                        norm_args[key] = v
+                        try:
+                            # Normalize args (alias mapping and numeric normalization)
+                            norm_args = {}
+                            for k, v in function_args.items():
+                                key = k
+                                if k in ('conjunction_count', 'conjunctions', 'conjunctionCount', 'numberOfConjunction', 'n'):
+                                    key = 'conjunction_count'
 
-                function_result = available_functions[function_name](**norm_args)
-                function_results.append({'name': function_name, 'args': norm_args, 'result': function_result})
+                                if isinstance(v, str) and re.fullmatch(r"\d+", v):
+                                    norm_args[key] = int(v)
+                                elif isinstance(v, float) and v.is_integer():
+                                    norm_args[key] = int(v)
+                                else:
+                                    norm_args[key] = v
 
-                # Send the function result back to the model
-                response = chat_session.send_message(
-                    genai.types.content_types.to_content({
-                        'role': 'function',
-                        'parts': [{
-                            'function_response': {
-                                'name': function_name,
-                                'response': function_result
-                            }
-                        }]
+                            function_result = available_functions[function_name](**norm_args)
+                            function_results.append({'name': function_name, 'args': norm_args, 'result': function_result})
+                        except Exception as func_error:
+                            print(f"✗ Function error: {func_error}")
+                            function_result = {'error': str(func_error)}
+
+                    # Append tool output to messages
+                    asi_messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call['id'],
+                        "content": json.dumps(function_result)
                     })
-                )
-
-            except Exception as func_error:
-                print(f"✗ Function error: {func_error}")
-                # Return an error response from the function back to the model
-                response = chat_session.send_message(
-                    genai.types.content_types.to_content({
-                        'role': 'function',
-                        'parts': [{
-                            'function_response': {
-                                'name': function_name,
-                                'response': {'error': str(func_error)}
-                            }
-                        }]
-                    })
-                )
-
+                
+                # Call API again with tool outputs
+                response_data = call_asi_api(asi_messages, tools=tools_schema)
+            else:
+                # No more tool calls, we have the final response
+                break
+        
         # Extract final text response
         response_text = ''
-        if response and response.candidates:
-            for part in getattr(response.candidates[0].content, 'parts', []):
-                if hasattr(part, 'text'):
-                    response_text += part.text
+        if 'choices' in response_data and response_data['choices']:
+             response_text = response_data['choices'][0]['message'].get('content', '')
 
         # If the model didn't generate text but mining results exist, synthesize a summary
         if not response_text:
