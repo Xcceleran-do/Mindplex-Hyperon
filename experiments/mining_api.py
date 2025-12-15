@@ -165,8 +165,8 @@ def getAllFactsAndRules():
     can rewrite a user's natural-language question into a canonical MeTTa
     query that matches predicates/constants present in the KB. Example:
     user: "What is article 1's engagement level?"
-    assistant: call getAllFactsAndRules(), notice atoms like `(engagement_level 1 "high")`,
-    rewrite as `(engagement_level 1 $whatIsIt)`, then call getChainerResult.
+    assistant: call getAllFactsAndRules(), notice atoms like `(engagement 1 "High")`,
+    rewrite as `(engagement 1 $whatIsIt)`, then call getChainerResult.
     """
     try:
         facts = metta4Miner.run("!(collapse (get-atoms &res1))")
@@ -231,7 +231,7 @@ def handle_backward_chain_for_message(message: str):
 
     # Ask the LLM to rewrite the user's question into a canonical MeTTa query
     # using the facts we retrieved. The model must output only a single MeTTa
-    # expression (e.g. (engagement_level 1 $what)).
+    # expression (e.g. (engagement 1 $what)).
     try:
         facts_text = "\n".join(facts[:200]) if isinstance(facts, list) else str(facts)
         rewrite_prompt = f"""
@@ -246,7 +246,7 @@ def handle_backward_chain_for_message(message: str):
             - If mapping is ambiguous, pick the most semantically likely predicate present in the KB.
             - If you cannot produce a valid MeTTa expression, output the single token NO_QUERY and NOTHING ELSE.
 
-            Example mapping (for clarity only, do not output this): facts contain (engagement_level 1 high) -> question "Why is article 1 high?" -> output: (engagement_level 1 $what)
+            Example mapping (for clarity only, do not output this): facts contain (engagement 1 "High") -> question "Why is article 1 high?" -> output: (engagement 1 $what)
 
             OUTPUT ONLY the MeTTa expression or NO_QUERY.
             """
@@ -355,7 +355,7 @@ def analyze_specific_pattern(pattern: str) -> dict:
     """Analyzes a specific pattern in detail, extracting properties and values.
     
     Args:
-        pattern: The pattern string to analyze, e.g., '((length $x "low") (engagement_level $x "high"))'
+        pattern: The pattern string to analyze, e.g., '((length $x "low") (engagement $x "High"))'
         
     Returns:
         A dictionary with pattern analysis including properties and their values.
@@ -495,7 +495,7 @@ def backWardChainer(whatToCheck, depth=5):
 def getChainerResult(whatToCheck, depth=5):
     """ Get the result of backward chaining for a specific query. 
     Args:
-        whatToCheck (str): The query to check, e.g., '(reputation 0 high)'
+        whatToCheck (str): The query to check, e.g., '(reputation 0 "High")'
         depth (int): The depth limit for backward chaining. (default 5)
     Returns:
         The justification of the backward chaining operation.
@@ -518,9 +518,9 @@ def getChainerResult(whatToCheck, depth=5):
         **Backward Chaining Results:** {chainAnswer}
 
         **Backward Chaining Example:**
-        When user asks "why is article 1 did get high engagement?", format query as "(engagement_level 1 high)" and call getChainerResult. 
+        When user asks "why is article 1 did get high engagement?", format query as "(engagement 1 "High")" and call getChainerResult. 
         
-        If backward chaining returns: [(: ((rule:- (, (engagement_level 1 high) (topic 1 AI))) (fact:- (topic 1 AI))) (engagement_level 1 high)), (: ((rule:- (, (engagement_level 1 high) (length 1 low))) (fact:- (length 1 low))) (engagement_level 1 high))]
+        If backward chaining returns: [(: ((rule:- (, (engagement 1 "High") (topic 1 AI))) (fact:- (topic 1 AI))) (engagement 1 "High")), (: ((rule:- (, (engagement 1 "High") (length 1 low))) (fact:- (length 1 low))) (engagement 1 "High"))]
         
         Analyze as: "I found 2 proofs for why article 1 has high engagement:
         
@@ -646,7 +646,7 @@ model = genai.GenerativeModel(
 
     Example:
     - User: "What is article 1's engagement level?"
-    - Assistant: call getChainerResult("(engagement_level 1 $whatIsIt)").
+    - Assistant: call getChainerResult("(engagement 1 $whatIsIt)").
     - This ensures the chainer is invoked with a query that matches KB atoms and returns useful proofs.
 
                 IMPORTANT: FOR ANY "WHY" / "EXPLAIN" / "PROVE" QUESTIONS (MANDATORY):

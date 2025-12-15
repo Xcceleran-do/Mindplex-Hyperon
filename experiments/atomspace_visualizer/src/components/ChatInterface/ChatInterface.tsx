@@ -445,8 +445,8 @@ const formatMessage = (content: string): string => {
     .replace(/`([^`]+)`/g, '<code>$1</code>')
     .replace(/```([^```]+)```/g, '<pre><code>$1</code></pre>');
   
-  // Convert [Pattern N] to clickable references
-  formatted = formatted.replace(/\[Rule (\d+)\]/g, '<span class="pattern-ref" data-pattern="$1" title="Click to visualize this pattern">[$1]</span>');
+  // Convert [Pattern N] or [N] to clickable references
+  formatted = formatted.replace(/\[(?:Rule )?(\d+)\]/g, '<span class="pattern-ref" data-pattern="$1" title="Click to visualize this pattern">[$1]</span>');
   
   formatted = formatted.replace(/\n/g, '<br/>');
   
