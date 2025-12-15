@@ -1,11 +1,11 @@
 # experiments/ingestion/config.py
 
 # API Configuration
-MINDPLEX_API_DOMAIN = "https://staging.mindplex.ai/wp-json"
+MINDPLEX_API_DOMAIN = "https://console.mindplex.ai/wp-json"
 # Endpoint pattern: /mp_gl/v1/posts/social/{username}/{page}
-USER_ARTICLES_ENDPOINT_TEMPLATE = "/mp_gl/v1/posts/social/{username}/{page}"
+USER_ARTICLES_ENDPOINT_TEMPLATE = "/mp_gl/v1/posts/publisher/{username}/{page}"
 
-DEFAULT_USERNAME = "hruy"
+DEFAULT_USERNAME = "ben_g"
 
 DEFAULT_HEADERS = {
     "User-Agent": "MindplexMiner/1.0",
