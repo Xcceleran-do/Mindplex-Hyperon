@@ -21,7 +21,4 @@ services:
     staticPublishPath: experiments/atomspace_visualizer/dist
     envVars:
       - key: VITE_API_BASE_URL
-        fromService:
-          type: web
-          name: mindplex-backend
-          property: url
+        sync: false
