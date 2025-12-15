@@ -2,7 +2,7 @@ services:
   # Backend Service (Python/Flask)
   - type: web
     name: mindplex-backend
-    env: python
+    runtime: python
     buildCommand: pip install -r experiments/requirements.txt
     startCommand: cd experiments && python mining_api.py
     envVars:
@@ -14,9 +14,9 @@ services:
         value: "False"
 
   # Frontend Service (SolidJS/Vite)
-  - type: static
+  - type: web
     name: mindplex-frontend
-    env: node
+    runtime: static
     buildCommand: cd experiments/atomspace_visualizer && npm install && npm run build
     staticPublishPath: experiments/atomspace_visualizer/dist
     envVars:
