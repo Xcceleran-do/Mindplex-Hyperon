@@ -26,31 +26,34 @@ genai.configure(api_key=os.getenv("GEMINI_API_KEY4"))
 metta4Miner = MeTTa()
 
 # Get the absolute path to the experiments directory
-# This ensures imports work regardless of where the script is run from
-current_dir = os.path.dirname(os.path.abspath(__file__))
-# If running from root, current_dir is .../experiments
-# If running from experiments/, current_dir is .../experiments
+script_dir = os.path.dirname(os.path.abspath(__file__))
+# Get the project root (parent of experiments)
+project_root = os.path.dirname(script_dir)
 
-# We need to register the PARENT of experiments if we want to import 'experiments:...'
-# OR we register the experiments folder itself as the 'experiments' module.
-# Hyperon's register-module! typically takes a directory path.
+print(f"Debug: Registering module path: {project_root}")
 
-# Let's try to register the directory explicitly
-metta4Miner.run(f"! (register-module! {current_dir})")
+# Register the project root so 'experiments' can be found as a module
+metta4Miner.run(f"! (register-module! {project_root})")
 
-metta4Miner.run("""
-    ! (import! &self experiments:pattern-miner:pattern-miner)
-    ! (import! &self experiments:utils:common-utils)
-    ! (import! &self experiments:frequent-pattern-miner:frequent-pattern-miner)
-    ! (import! &tempo experiments:atomspace_visualizer:public:data)
-    ! (import! &self experiments:chainer:main)
-                            
-    !(bind! &res1 (new-space)) ;; space to hold the formatted miner result
-    !(add-reduct &res1 (let $fact (get-atoms &tempo) (: (fact:- $fact) $fact)))
-                
-    ! (bind! purifiedDbSpace (new-space)) ; space to hold the database atoms
-    ! (add-reduct purifiedDbSpace (get-atoms &tempo))
-""")
+try:
+    result = metta4Miner.run("""
+        ! (import! &self experiments:pattern-miner:pattern-miner)
+        ! (import! &self experiments:utils:common-utils)
+        ! (import! &self experiments:frequent-pattern-miner:frequent-pattern-miner)
+        ! (import! &tempo experiments:atomspace_visualizer:public:data)
+        ! (import! &self experiments:chainer:main)
+                                
+        !(bind! &res1 (new-space)) ;; space to hold the formatted miner result
+        !(add-reduct &res1 (let $fact (get-atoms &tempo) (: (fact:- $fact) $fact)))
+                    
+        ! (bind! purifiedDbSpace (new-space)) ; space to hold the database atoms
+        ! (add-reduct purifiedDbSpace (get-atoms &tempo))
+    """)
+    print("Debug: MeTTa initialization successful")
+except Exception as e:
+    print(f"Error during MeTTa initialization: {e}")
+    # Don't exit, let Flask start so we can see logs, but maybe log a critical error
+
 
 def mine_pattern(numberOfConjunction: int) -> dict:
     """
@@ -756,12 +759,25 @@ def health_check():
     """Health check endpoint"""
     return jsonify({'status': 'healthy', 'service': 'mining-api'})
 
+@app.route('/')
+def index():
+    return "Mindplex Hyperon API is running!", 200
+
 @app.route('/api/mine', methods=['POST'])
 def start_mining():
     """Start a new mining job"""
     print("🔍 DEBUG: Received mining request")
+    sys.stdout.flush() # Force flush to ensure logs appear immediately
 
-    data = request.get_json() or {}
+    try:
+        data = request.get_json() or {}
+        print(f"🔍 DEBUG: Request data: {data}")
+        sys.stdout.flush()
+    except Exception as e:
+        print(f"🔍 DEBUG: Failed to parse JSON: {e}")
+        sys.stdout.flush()
+        return jsonify({'error': 'Invalid JSON'}), 400
+
     conjunction_count = data.get('conjunction_count', 2)
     
     # Validate conjunction count
@@ -778,10 +794,26 @@ def start_mining():
         conjunction_count=conjunction_count
     )
     mining_jobs[job_id] = job
-    run_mining_task(job_id, conjunction_count)
-    print(f"🔍 DEBUG: Starting mining job {job_id} with conjunction count {conjunction_count}")
+    
+    print(f"🔍 DEBUG: Starting mining task for job {job_id}")
+    sys.stdout.flush()
+    
+    # Run synchronously for now to debug 502 errors
+    # If this takes too long, Render will kill it.
+    try:
+        run_mining_task(job_id, conjunction_count)
+    except Exception as e:
+        print(f"🔍 DEBUG: Mining task crashed: {e}")
+        traceback.print_exc()
+        sys.stdout.flush()
+        return jsonify({'error': f'Mining crashed: {str(e)}'}), 500
+
+    print(f"🔍 DEBUG: Mining task finished for job {job_id}")
+    sys.stdout.flush()
+    
     result = mining_jobs[job_id].result
     print(f"result => {result}")
+    sys.stdout.flush()
     
     # Start formatting in background thread only if we have a valid result with an answer
     if isinstance(result, dict) and 'answer' in result:
