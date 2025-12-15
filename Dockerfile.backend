@@ -1,0 +1,23 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements first for caching
+COPY experiments/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the entire project to preserve structure for MeTTa imports
+COPY . .
+
+# Expose the port
+EXPOSE 5000
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+
+# Run the application
+# We change directory to experiments to match the local development environment behavior
+CMD ["sh", "-c", "cd experiments && python mining_api.py"]
