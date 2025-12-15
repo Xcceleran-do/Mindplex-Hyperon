@@ -1,22 +1,8 @@
 .legendContainer {
-  position: relative;
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-  width: 340px;
-  max-height: 50vh;
-  overflow-y: auto;
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  padding: 12px;
-}
-
-:root[data-theme='dark'] .legendContainer {
-  background: rgba(24, 28, 34, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  box-shadow: 0 6px 28px rgba(0, 0, 0, 0.6);
-  color: #e6eef8;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .toggleGroup {
@@ -30,267 +16,64 @@
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  padding: 14px 18px;
+  padding: 10px 12px;
   cursor: pointer;
   user-select: none;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border-radius: 10px;
-  transition: background 0.2s ease, transform 0.2s ease;
-  border: none;
-  font-size: 15px;
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  border: 1px solid var(--border-color);
+  font-size: 0.9rem;
   font-weight: 600;
-  box-shadow: 0 6px 18px rgba(102, 126, 234, 0.25);
 }
 
 .sectionToggle:hover {
-  background: linear-gradient(135deg, #5568d3 0%, #6a3f91 100%);
-  transform: translateY(-1px);
-}
-
-.sectionToggle:active {
-  transform: translateY(0);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
-}
-
-:root[data-theme='dark'] .sectionToggle {
-  background: linear-gradient(135deg, #2b2f3a 0%, #1a1d24 100%);
-  color: #e6eef8;
-  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.55);
-}
-
-.toggleIcon {
-  font-size: 14px;
-  opacity: 0.9;
+  background: var(--bg-secondary);
+  border-color: var(--node-hover);
 }
 
 .legendContent {
-  padding: 16px 20px;
-  animation: fadeIn 0.25s ease-in-out;
-  background: rgba(148, 163, 184, 0.08);
-  border-radius: 10px;
-  backdrop-filter: blur(6px);
-}
-
-:root[data-theme='dark'] .legendContent {
-  background: rgba(67, 71, 89, 0.3);
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.legendSection {
-  margin-bottom: 20px;
-}
-
-.legendSection:last-child {
-  margin-bottom: 0;
-}
-
-.legendSection h4 {
-  margin: 0 0 12px 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: #374151;
-  text-transform: capitalize;
-}
-
-:root[data-theme='dark'] .legendSection h4 {
-  color: #dbe9ff;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px;
 }
 
 .legendItem {
   display: flex;
   align-items: center;
-  margin-bottom: 8px;
-  font-size: 13px;
-  color: #4b5563;
-  transition: all 0.2s ease;
-}
-
-:root[data-theme='dark'] .legendItem {
-  color: #cfe6ff;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+  font-size: 0.85rem;
+  color: var(--text-primary);
 }
 
 .legendItem:hover {
-  color: #1f2937;
-  transform: translateX(4px);
+  background-color: var(--bg-hover);
 }
 
-.legendColor {
-  width: 16px;
-  height: 16px;
-  border-radius: 4px;
-  margin-right: 10px;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+.colorDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
-.colorLabel {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  text-transform: capitalize;
-}
-
-.colorCode {
-  font-family: 'Fira Code', 'Source Code Pro', Consolas, monospace;
-  background: rgba(148, 163, 184, 0.15);
-  border-radius: 4px;
-  padding: 2px 6px;
-  font-size: 12px;
-  text-transform: none;
-}
-
-.filterStatus {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: #fef3c7;
-  border: 1px solid #fbbf24;
-  border-radius: 8px;
-  padding: 10px 12px;
-  margin-bottom: 16px;
-  font-size: 13px;
-  color: #92400e;
-}
-
-:root[data-theme='dark'] .filterStatus {
-  background: rgba(60, 48, 24, 0.2);
-  border: 1px solid rgba(245, 158, 11, 0.15);
-  color: #ffd8a8;
-}
-
-.clearButton {
-  background: #f59e0b;
-  color: white;
-  border: none;
-  padding: 4px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 500;
-  transition: all 0.2s ease;
-}
-
-.clearButton:hover {
-  background: #d97706;
-  transform: scale(1.05);
-}
-
-.multiSelectHint {
-  display: block;
-  margin-top: 4px;
-  opacity: 0.7;
-  font-size: 12px;
-}
-
-.categoryGrid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.categoryButton {
-  background: #eef2ff;
-  border: 1px solid #c7d2fe;
-  padding: 6px 12px;
-  border-radius: 20px;
-  cursor: pointer;
-  font-size: 12px;
-  color: #312e81;
-  transition: all 0.2s ease;
-}
-
-.categoryButton:hover {
-  background: #dbe3ff;
-  transform: translateY(-1px);
-}
-
-.categoryButtonActive {
-  background: #6366f1;
-  color: white;
-  border-color: #6366f1;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
-}
-
-.filterOptions {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.itemGrid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.filterButton {
-  background: #f3f4f6;
-  border: 1px solid #d1d5db;
-  padding: 6px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 12px;
-  color: #374151;
-  transition: all 0.2s ease;
+.legendLabel {
+  flex: 1;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-:root[data-theme='dark'] .filterButton {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: #dbe9ff;
-}
-
-.filterButton:hover {
-  background: #e5e7eb;
-  border-color: #9ca3af;
-  transform: translateY(-2px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.filterButtonActive {
-  background: #f59e0b;
-  color: white;
-  border-color: #f59e0b;
-  font-weight: 500;
-  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
-}
-
-.legendContainer::-webkit-scrollbar {
-  width: 8px;
-}
-
-.legendContainer::-webkit-scrollbar-track {
-  background: rgba(241, 245, 249, 0.5);
-  border-radius: 4px;
-  margin: 4px 0;
-}
-
-.legendContainer::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
-  border-radius: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  box-shadow: 0 1px 4px rgba(102, 126, 234, 0.3);
-}
-
-.legendContainer::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, #5568d3 0%, #6a3f91 100%);
-  box-shadow: 0 2px 6px rgba(102, 126, 234, 0.5);
-  cursor: grab;
-}
-
-.legendContainer::-webkit-scrollbar-thumb:active {
-  cursor: grabbing;
-  background: linear-gradient(180deg, #4557c2 0%, #5a3580 100%);
+.countBadge {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+  padding: 2px 6px;
+  border-radius: 10px;
 }

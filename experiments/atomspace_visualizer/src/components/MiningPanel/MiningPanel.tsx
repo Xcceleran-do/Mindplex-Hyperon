@@ -57,7 +57,7 @@ const MiningPanel: Component<MiningPanelProps> = (props) => {
     setError(null);
     startLoadingAnimation();
 
-    const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://super-duper-winner-97q9rxp6vvx9hxq5q-5000.app.github.dev';
+    const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
     try {
       const response = await fetch(`${API_BASE}/api/mine`, {

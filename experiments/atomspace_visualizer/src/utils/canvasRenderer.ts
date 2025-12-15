@@ -132,17 +132,29 @@ export const renderNode = (
   if (transform.scale > 0.4 && node.label) {
     ctx.fillStyle = isDimmed ? textDimmed : textPrimary;
     const fontSize = node.metadata.columnType === 'header' ? 14 : 12;
-    ctx.font = `${Math.max(fontSize, fontSize * transform.scale)}px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`;
+    // Scale font size but clamp it to reasonable limits
+    const scaledFontSize = Math.max(fontSize, Math.min(fontSize * 2, fontSize * transform.scale));
+    ctx.font = `${scaledFontSize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`;
     ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
     
-    // Truncate label if too long
     let displayLabel = node.label;
-    if (displayLabel.length > 20) {
-      displayLabel = displayLabel.substring(0, 18) + '...';
-    }
     
-    ctx.fillText(displayLabel, screenPos.x, screenPos.y);
+    if (node.metadata.columnType === 'header') {
+      ctx.textBaseline = 'middle';
+      if (displayLabel.length > 25) {
+        displayLabel = displayLabel.substring(0, 23) + '...';
+      }
+      ctx.fillText(displayLabel, screenPos.x, screenPos.y);
+    } else {
+      // Render label below the node to prevent overflow on the node itself
+      ctx.textBaseline = 'top';
+      // Truncate more aggressively to prevent overlap
+      if (displayLabel.length > 15) {
+        displayLabel = displayLabel.substring(0, 12) + '...';
+      }
+      // Position: y + radius + padding (increased padding)
+      ctx.fillText(displayLabel, screenPos.x, screenPos.y + currentRadius + 8);
+    }
   }
 };
 
@@ -253,17 +265,18 @@ export const renderArticleConnections = (
   }
 };
 
-// Draw column separators
+// Draw column separators and backgrounds
 export const drawColumnSeparators = (
   ctx: CanvasRenderingContext2D,
   graphData: GraphData,
   transform: Transform,
   canvasHeight: number
 ) => {
-  const columns = new Set<number>();
+  const columns = new Map<number, boolean>(); // x -> isTarget
+  
   for (const node of graphData.nodes) {
     if (node.metadata.columnType === 'header') {
-      columns.add(node.position.x);
+      columns.set(node.position.x, !!node.metadata.isTarget);
     }
   }
 
@@ -271,11 +284,22 @@ export const drawColumnSeparators = (
   const computedStyle = getComputedStyle(document.documentElement);
   const separatorColor = computedStyle.getPropertyValue('--separator-color').trim() || 'rgba(0, 0, 0, 0.05)';
 
+  // Draw backgrounds for target columns first
+  for (const [columnX, isTarget] of columns) {
+    if (isTarget) {
+      const screenX = worldToScreen({ x: columnX, y: 0 }, transform).x;
+      const width = 250 * transform.scale; // Approximate column width
+      
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.03)'; // Subtle highlight
+      ctx.fillRect(screenX - width/2, 0, width, canvasHeight);
+    }
+  }
+
   ctx.strokeStyle = separatorColor;
   ctx.lineWidth = 1;
   ctx.setLineDash([5, 5]);
 
-  for (const columnX of columns) {
+  for (const [columnX] of columns) {
     const screenX = worldToScreen({ x: columnX, y: 0 }, transform).x;
     ctx.beginPath();
     ctx.moveTo(screenX, 0);

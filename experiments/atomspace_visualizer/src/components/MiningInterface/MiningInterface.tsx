@@ -39,7 +39,7 @@ const MiningInterface = (props: MiningInterfaceProps) => {
 
   // Fallback: if parent handler not provided, call API directly (legacy)
 
-    const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://super-duper-winner-97q9rxp6vvx9hxq5q-5000.app.github.dev/';
+    const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
     try {
       // Start mining job

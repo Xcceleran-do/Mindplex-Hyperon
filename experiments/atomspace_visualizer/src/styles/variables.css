@@ -1,31 +1,67 @@
 /* CSS Variables matching template.html design */
 :root {
   /* Color Palette - Light Theme */
-  --bg-primary: #fafafa;
-  --bg-secondary: rgba(255, 255, 255, 0.9);
-  --border-light: rgba(0, 0, 0, 0.1);
-  --text-primary: #374151;
-  --text-secondary: #6b7280;
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-hover: #f1f5f9;
+  --border-color: #e2e8f0;
+  
+  --text-primary: #0f172a;
+  --text-secondary: #64748b;
+  --text-dimmed: #94a3b8;
   
   /* Node Colors */
-  --node-default: rgba(59, 130, 246, 0.7);
-  --node-anchor: rgba(239, 68, 68, 0.8);
-  --node-border: rgba(0, 0, 0, 0.3);
+  --node-fill: #e2e8f0;
+  --node-stroke: #94a3b8;
+  --node-highlight: #f59e0b;
+  --node-hover: #10b981;
+  --node-selected: #059669;
   
   /* Edge Colors */
-  --edge-default: rgba(107, 114, 128, 0.6);
-  --edge-hover: rgba(59, 130, 246, 0.8);
+  --edge-default: #cbd5e1;
+  --edge-hover: #94a3b8;
   
   /* UI Elements */
-  --card-bg: rgba(255, 255, 255, 0.95);
+  --card-bg: #ffffff;
   --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  --card-border: rgba(0, 0, 0, 0.1);
+  --card-border: #e2e8f0;
   --border-radius: 8px;
   
   /* Grid Colors */
-  --grid-minor: rgba(0, 0, 0, 0.03);
-  --grid-major: rgba(0, 0, 0, 0.08);
-  --grid-axis: rgba(59, 130, 246, 0.15);
-  --grid-dots: rgba(0, 0, 0, 0.1);
-  --grid-center: rgba(59, 130, 246, 0.2);
+  --grid-minor: #f1f5f9;
+  --grid-major: #e2e8f0;
+  --grid-axis: #cbd5e1;
+}
+
+[data-theme="dark"] {
+  /* Color Palette - Dark Theme */
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-hover: #334155;
+  --border-color: #334155;
+  
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-dimmed: #64748b;
+  
+  /* Node Colors */
+  --node-fill: #334155;
+  --node-stroke: #475569;
+  --node-highlight: #fbbf24;
+  --node-hover: #60a5fa;
+  --node-selected: #34d399;
+  
+  /* Edge Colors */
+  --edge-default: #334155;
+  --edge-hover: #475569;
+  
+  /* UI Elements */
+  --card-bg: #1e293b;
+  --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+  --card-border: #334155;
+  
+  /* Grid Colors */
+  --grid-minor: #1e293b;
+  --grid-major: #334155;
+  --grid-axis: #475569;
 }

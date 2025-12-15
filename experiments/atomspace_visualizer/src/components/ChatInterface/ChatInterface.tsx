@@ -75,7 +75,7 @@ const ChatInterface = (props: ChatInterfaceProps) => {
       
       // Request a single summary for all patterns and display it
       (async () => {
-        const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://super-duper-winner-97q9rxp6vvx9hxq5q-5000.app.github.dev';
+        const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
         try {
           const resp = await fetch(`${API_BASE}/api/chat/summarize`, {
             method: 'POST',
@@ -113,7 +113,7 @@ const ChatInterface = (props: ChatInterfaceProps) => {
   });
 
   const analyzeConjunct = async (pattern: string, support: string) => {
-    const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://super-duper-winner-97q9rxp6vvx9hxq5q-5000.app.github.dev';
+    const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
     
     try {
       const response = await fetch(`${API_BASE}/api/chat/analyze`, {
@@ -157,7 +157,7 @@ const ChatInterface = (props: ChatInterfaceProps) => {
 
   // Send AI message (internal function)
   const sendAIMessage = async (text: string) => {
-    const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://super-duper-winner-97q9rxp6vvx9hxq5q-5000.app.github.dev';
+    const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
     
     // Show typing indicator
     const typingMsg: Message = {
@@ -343,22 +343,11 @@ const ChatInterface = (props: ChatInterfaceProps) => {
       {/* Chat Interface - Controlled visibility */}
       <Show when={visible()}>
         <div class={`chat-interface ${isMinimized() ? 'minimized' : ''}`}>
-          <div class="chat-header" onClick={() => setIsMinimized(!isMinimized())} style={{ cursor: 'pointer' }}>
-            <div class="chat-header-left">
-              <span class="chat-icon">🤖</span>
-              <div class="chat-title-info">
-                <h3>AI Assistant</h3>
-                <span class="chat-status">Online</span>
-              </div>
-            </div>
-            <div class="chat-header-actions" onClick={(e) => e.stopPropagation()}>
-              <button class="chat-action-btn" onClick={clearChat} title="Clear Chat">
+          {/* Header removed as it's now handled by the sidebar container */}
+          <div class="chat-header-actions-floating">
+             <button class="chat-action-btn" onClick={clearChat} title="Clear Chat">
                 🗑️
               </button>
-              <button class="chat-action-btn" onClick={() => setIsMinimized(!isMinimized())} title={isMinimized() ? 'Expand' : 'Collapse'}>
-                {isMinimized() ? '▼' : '▲'}
-              </button>
-            </div>
           </div>
 
           <Show when={!isMinimized()}>
@@ -389,7 +378,6 @@ const ChatInterface = (props: ChatInterfaceProps) => {
                 {(message) => (
                   message.role === 'user' ? (
                     <div class={`message user`}>
-                      <div class="message-avatar">👤</div>
                       <div class="message-content">
                         <div class="message-text" innerHTML={formatMessage(message.content)} />
                         <div class="message-time">
@@ -427,7 +415,7 @@ const ChatInterface = (props: ChatInterfaceProps) => {
               <textarea
                 ref={inputRef}
                 class="chat-input"
-                placeholder="Ask me anything about the patterns..."
+                placeholder="Ask me anything..."
                 value={inputText()}
                 onInput={(e) => setInputText(e.target.value)}
                 onKeyPress={handleKeyPress}
@@ -439,7 +427,7 @@ const ChatInterface = (props: ChatInterfaceProps) => {
                 onClick={sendMessage}
                 disabled={!inputText().trim() || isLoading()}
               >
-                {isLoading() ? '⏳' : '📤'}
+                {isLoading() ? '⏳' : '➤'}
               </button>
             </div>
           </Show>
