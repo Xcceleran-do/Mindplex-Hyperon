@@ -6,6 +6,10 @@ A Flask-based API server that exposes pattern mining and AI chat functionality
 
 import os
 import sys
+
+# Add workspace root to path to allow imports
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
+
 import time
 import traceback
 import re
@@ -19,6 +23,7 @@ from dataclasses import dataclass
 from typing import Dict, Any, Optional, List
 from hyperon import MeTTa
 from dotenv import load_dotenv
+from experiments.ingestion.pipeline import run_ingestion
 load_dotenv()
 
 # Configure ASI1 API
@@ -305,6 +310,38 @@ CORS(app, resources={r"/*": {
     "supports_credentials": False,
     "max_age": 3600
 }})
+
+@app.route('/api/ingest', methods=['POST'])
+def ingest_data():
+    """
+    Trigger the ingestion pipeline for a specific user.
+    Expects JSON: { "username": "some_user" }
+    """
+    try:
+        data = request.get_json()
+        username = data.get('username')
+        
+        if not username:
+            return jsonify({"status": "error", "message": "Username is required"}), 400
+            
+        # Run ingestion in a separate thread to avoid blocking, or run synchronously if preferred.
+        # For now, let's run synchronously to return the result immediately, 
+        # but be aware it might timeout if it takes too long.
+        # Given the user wants an animation, maybe async is better, but let's try sync first 
+        # as it's simpler to report success/failure.
+        
+        print(f"Received ingestion request for user: {username}")
+        result = run_ingestion(username=username)
+        
+        if result.get("status") == "error":
+             return jsonify(result), 500
+             
+        return jsonify(result)
+
+    except Exception as e:
+        print(f"Ingestion error: {e}")
+        traceback.print_exc()
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 def getAllFactsAndRules():
     """Return current facts and rules from the MeTTa knowledge base.
@@ -729,7 +766,7 @@ def getChainerResult(whatToCheck, depth=5):
 
 
 def summarize_patterns(patterns: list) -> str:
-    """Use the Gemini model to create a single comprehensive summary of the
+    """Use the ASI model to create a single comprehensive summary of the
     supplied mined patterns. The summary will reference patterns as [N]
     so the frontend can make them clickable for visualization.
     """
@@ -755,18 +792,6 @@ def summarize_patterns(patterns: list) -> str:
         text = None
         if 'choices' in response_data and response_data['choices']:
              text = response_data['choices'][0]['message'].get('content', '')
-
-        if not text:
-            # Try extracting from candidates-like structure
-            try:
-                parts = resp.candidates[0].content.parts
-                acc = ""
-                for part in parts:
-                    if hasattr(part, 'text'):
-                        acc += part.text
-                text = acc
-            except Exception:
-                text = None
 
         return text or "The model could not produce a summary."
     except Exception as e:

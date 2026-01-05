@@ -1,10 +1,11 @@
 import type { Component } from 'solid-js';
-import { createSignal, createEffect, createResource, Show } from 'solid-js';
+import { createSignal, createEffect, createResource, Show, For } from 'solid-js';
 
 import ColumnarVisualizer from './components/ColumnarVisualizer/ColumnarVisualizer';
 import EnhancedLegend from './components/Legend/EnhancedLegend';
 import ChatInterface from './components/ChatInterface/ChatInterface';
 import MiningInterface from './components/MiningInterface/MiningInterface';
+import IngestionForm from './components/IngestionForm/IngestionForm';
 import { GraphData, GraphNode, FilterState } from './types';
 import { MettaParserImpl } from './services/parser/MettaParser';
 import { ColumnarTransformer } from './services/graph/ColumnarTransformer';
@@ -15,10 +16,13 @@ import './styles/themes.css';
 import styles from './AppColumnar.module.css';
 
 const App: Component = () => {
+  const [showVisualizer, setShowVisualizer] = createSignal(false);
+
   // Load initial text from data.metta file
-  const [initialTextResource] = createResource(async () => {
+  const [initialTextResource, { refetch }] = createResource(async () => {
     try {
-      const response = await fetch('/data.metta');
+      // Add timestamp to prevent caching
+      const response = await fetch(`/data.metta?t=${Date.now()}`);
       if (!response.ok) {
         throw new Error('Failed to load file');
       }
@@ -29,6 +33,11 @@ const App: Component = () => {
       return '';
     }
   });
+
+  const handleIngestionComplete = () => {
+    refetch();
+    setShowVisualizer(true);
+  };
 
   // Core application state
   const [mettaText, setMettaText] = createSignal('');
@@ -285,10 +294,11 @@ const App: Component = () => {
   };
 
   return (
-    <div 
-      class={styles.app}
-      style={{ "--sidebar-width": `${sidebarWidth()}px` } as any}
-    >
+    <Show when={showVisualizer()} fallback={<IngestionForm onComplete={handleIngestionComplete} />}>
+      <div 
+        class={styles.app}
+        style={{ "--sidebar-width": `${sidebarWidth()}px` } as any}
+      >
       {/* Header */}
       <header class={styles.header}>
         <div class={styles.logo}>
@@ -418,6 +428,7 @@ const App: Component = () => {
         </div>
       </Show>
     </div>
+    </Show>
   );
 };
 

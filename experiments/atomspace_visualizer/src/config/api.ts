@@ -8,6 +8,7 @@ export const API_CONFIG = {
   ENDPOINTS: {
     HEALTH: '/api/health',
     MINE: '/api/mine',
+    INGEST: '/api/ingest',
     CHAT: '/api/chat',
     CHAT_ANALYZE: '/api/chat/analyze',
     CHAT_CLEAR: '/api/chat/clear',

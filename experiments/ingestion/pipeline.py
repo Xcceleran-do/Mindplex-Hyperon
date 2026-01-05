@@ -12,10 +12,12 @@ from experiments.ingestion.analyzer import ArticleAnalyzer
 from experiments.ingestion.converter import JsonToMetta
 from experiments.ingestion.config import DEFAULT_USERNAME
 
-def main():
+def run_ingestion(username=None):
     load_dotenv()
     
-    username = os.getenv("MINDPLEX_USERNAME", DEFAULT_USERNAME)
+    if not username:
+        username = os.getenv("MINDPLEX_USERNAME", DEFAULT_USERNAME)
+        
     print(f"Starting ingestion pipeline for user: {username}")
 
     print("1. Fetching articles...")
@@ -25,7 +27,7 @@ def main():
     
     if not articles:
         print("No articles found. Exiting.")
-        return
+        return {"status": "error", "message": "No articles found"}
 
     print("2. Calculating Rankings...")
     # Sort by views descending to determine popularity rank
@@ -40,8 +42,8 @@ def main():
     rank_map = {art.get('id'): i+1 for i, art in enumerate(articles)}
 
     print("3. Analyzing and Enriching (this may take time)...")
-    # Use GEMINI_API_KEY4 as per original file
-    api_key = os.getenv("GEMINI_API_KEY4")
+    # Use ASI_API_KEY as per new requirement
+    api_key = os.getenv("ASI_API_KEY")
     analyzer = ArticleAnalyzer(api_key=api_key)
     
     enriched_articles = []
@@ -50,10 +52,10 @@ def main():
         enriched = analyzer.process(art, rank_stats=rank_map)
         enriched_articles.append(enriched)
         
-        # Sleep to avoid hitting Gemini API rate limits (Free tier is ~15 RPM)
+        # Sleep to avoid hitting ASI API rate limits if necessary
         # if i < len(articles) - 1:
-        #     print("   Sleeping 60s for rate limit...")
-        #     time.sleep(60)
+        #     print("   Sleeping for rate limit...")
+        #     time.sleep(1)
 
     print("4. Converting to MeTTa...")
     converter = JsonToMetta()
@@ -69,6 +71,10 @@ def main():
         f.write(metta_output)
     
     print("Done!")
+    return {"status": "success", "message": f"Ingested {len(articles)} articles for user {username}"}
+
+def main():
+    run_ingestion()
 
 if __name__ == "__main__":
     main()

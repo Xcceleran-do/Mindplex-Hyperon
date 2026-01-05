@@ -19,7 +19,7 @@ class JsonToMetta:
             add_prop("length", meta.get('length'))
             add_prop("reading-time", meta.get('reading_time'))
             add_prop("tone", meta.get('tone'))
-            add_prop("complexity", meta.get('complexity'))
+            add_prop("audience-expertise", meta.get('audience_expertise'))
             add_prop("content-type", meta.get('content_type'))
             add_prop("date-period", meta.get('date_period'))
             add_prop("primary-goal", meta.get('primary_goal'))

@@ -3,9 +3,9 @@
 # API Configuration
 MINDPLEX_API_DOMAIN = "https://staging.mindplex.ai/wp-json"
 # Endpoint pattern: /mp_gl/v1/posts/social/{username}/{page}
-USER_ARTICLES_ENDPOINT_TEMPLATE = "/mp_gl/v1/posts/social/{username}/{page}"
+USER_ARTICLES_ENDPOINT_TEMPLATE = "/mp_gl/v1/posts/publisher/{username}/{page}"
 
-DEFAULT_USERNAME = "hruy"
+DEFAULT_USERNAME = "Ben_G"
 
 DEFAULT_HEADERS = {
     "User-Agent": "MindplexMiner/1.0",
@@ -29,10 +29,10 @@ READING_TIME_BUCKETS = {
 ENGAGEMENT_BUCKETS = {
     # Ratio of (Likes + Claps) / Views
     # Note: If views are 0, this metric might be misleading or undefined.
-    "Very_High": lambda x: x > 0.35,
-    "High": lambda x: 0.20 <= x <= 0.35,
-    "Medium": lambda x: 0.10 <= x < 0.20,
-    "Low": lambda x: x < 0.10
+    "Very_High": lambda x: x > 500,
+    "High": lambda x: 50 <= x <= 100,
+    "Medium": lambda x: 30 <= x < 50,
+    "Low": lambda x: x < 30
 }
 
 RETENTION_BUCKETS = {
@@ -45,15 +45,15 @@ RETENTION_BUCKETS = {
 # AI Prompts
 ANALYSIS_PROMPT_TEMPLATE = """
 Analyze the following article content and metadata to provide categorical classifications.
-Return ONLY a JSON object with the following keys: "tone", "complexity", "content_type", "primary_goal", "audience_sentiment".
+Return ONLY a JSON object with the following keys: "tone", "audience_expertise", "content_type", "primary_goal", "audience_sentiment".
 
 Article Title: {title}
 Content Snippet: {content_snippet}
 
 Classifications to use:
-- Tone: Formal, Casual, Instructional, Satirical, Reflective, Motivational
-- Complexity: Beginner, Intermediate, Advanced, Expert
-- Content Type: Listicle, Tutorial, Opinion, Case Study, News, Review, Interview
-- Primary Goal: Inform, Persuade, Entertain, Generate_Leads, Sell_Product
+- Tone: Formal, Casual, Instructional
+- Audience Expertise: Beginner, Intermediate, Advanced, Expert
+- Content Type: Tutorial, Opinion, Review, Interview
+- Primary Goal: Inform, Persuade, Entertain
 - Audience Sentiment (predicted based on content tone): Positive, Neutral, Negative, Mixed
 """

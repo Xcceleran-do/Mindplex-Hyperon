@@ -2,21 +2,39 @@
 import datetime
 import json
 import re
-import google.generativeai as genai
+import requests
+import os
 from .config import (
     LENGTH_BUCKETS, READING_TIME_BUCKETS, ENGAGEMENT_BUCKETS, 
     RETENTION_BUCKETS, ANALYSIS_PROMPT_TEMPLATE
 )
 
+ASI_BASE_URL = "https://api.asi1.ai/v1/chat/completions"
+ASI_MODEL = "asi1-mini"
+
 class ArticleAnalyzer:
     def __init__(self, api_key):
-        if not api_key:
-            print("Warning: No Gemini API key provided. AI enrichment will be skipped.")
-            self.model = None
-        else:
-            genai.configure(api_key=api_key)
-            # Updated model name to a currently supported version
-            self.model = genai.GenerativeModel('gemini-2.0-flash')
+        self.api_key = api_key
+        if not self.api_key:
+            print("Warning: No ASI API key provided. AI enrichment will be skipped.")
+
+    def call_asi_api(self, messages):
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}"
+        }
+        payload = {
+            "model": ASI_MODEL,
+            "messages": messages,
+            "temperature": 0.7
+        }
+        try:
+            response = requests.post(ASI_BASE_URL, headers=headers, json=payload)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            print(f"ASI API Error: {e}")
+            return {"error": str(e)}
 
     def discretize_value(self, value, buckets):
         if value is None:
@@ -56,10 +74,10 @@ class ArticleAnalyzer:
         return 0
 
     def enrich_with_ai(self, article):
-        """Uses Gemini to extract Tone, Complexity, etc."""
-        if not self.model:
+        """Uses ASI API to extract Tone, Audience Expertise, etc."""
+        if not self.api_key:
             return {
-                "tone": "Unknown", "complexity": "Unknown", 
+                "tone": "Unknown", "audience_expertise": "Unknown", 
                 "content_type": "Unknown", "primary_goal": "Unknown", 
                 "audience_sentiment": "Unknown"
             }
@@ -79,16 +97,29 @@ class ArticleAnalyzer:
             content_snippet=snippet
         )
 
+        messages = [
+            {"role": "system", "content": "You are a helpful assistant that analyzes articles and outputs JSON."},
+            {"role": "user", "content": prompt}
+        ]
+
         try:
-            response = self.model.generate_content(prompt)
+            response_data = self.call_asi_api(messages)
+            
+            text = None
+            if 'choices' in response_data and response_data['choices']:
+                 text = response_data['choices'][0]['message'].get('content', '')
+            
+            if not text:
+                raise Exception("No content in response")
+
             # Clean up json string if markdown is present
-            text = response.text.replace('```json', '').replace('```', '')
+            text = text.replace('```json', '').replace('```', '')
             ai_metadata = json.loads(text)
             return ai_metadata
         except Exception as e:
             print(f"AI Analysis failed for article {article.get('id')}: {e}")
             return {
-                "tone": "Unknown", "complexity": "Unknown", 
+                "tone": "Unknown", "audience-expertise": "Unknown", 
                 "content_type": "Unknown", "primary_goal": "Unknown", 
                 "audience_sentiment": "Unknown"
             }
@@ -117,8 +148,9 @@ class ArticleAnalyzer:
         # 2. Relational (Calculated)
         views = int(article.get('views', 0))
         likes = int(article.get('likes', 0))
+        comments = int(article.get('comments', 0))
         # Avoid division by zero
-        engagement_ratio = likes / views if views > 0 else 0
+        engagement_ratio = likes + views + comments
         
         metadata['engagement'] = self.discretize_value(engagement_ratio, ENGAGEMENT_BUCKETS)
         
