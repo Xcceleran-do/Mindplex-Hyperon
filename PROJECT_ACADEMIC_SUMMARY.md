@@ -728,7 +728,869 @@ Enables direct application of classical logical reasoning techniques (SLD resolu
 
 ---
 
-## 11. Conclusion: A Principled Symbolic System
+## 11. Mindplex-Hyperon as Hyperon Use Case: Integration Roadmap
+
+### 11.1 Vision: From Manual Triggers to Motivated Cognition
+
+**Current State**: Content creators manually click "Mine Patterns" button → system responds.
+
+**Future Vision**: System's **emotional state** (via MetaMo/OpenPsi) triggers mining proactively:
+- Creator's engagement motivation ↑ → mine patterns aggressively to understand why
+- System's uncertainty about rules ↑ → trigger forward-chaining simulator to explore consequences
+- Resource constraints ↑ → ECAN allocates mining/inference CPU proportionally
+
+This transforms Mindplex-Hyperon from **passive tool** to **active agent** participating in Hyperon's PRIMUS cognitive cycle.
+
+### 11.2 Integration Phase 1: MetaMo/OpenPsi Motivation System
+
+**Goal**: Replace deterministic button clicks with appraisal-based triggers.
+
+**Architecture**:
+```metta
+;; MetaMo appraisal state (simplified)
+(: (creator-motivation $id) (→ (engagement $id $level) Motives))
+
+(= (creator-motivation $id)
+   (let* (($current (query-engagement $id))
+          ($target 0.8)
+          ($gap (- $target $current)))
+     (if (> $gap 0.2)
+         (high-motivation)
+         (if (< $gap -0.2)
+             (low-motivation)
+             (neutral-motivation)))))
+
+;; Trigger mining based on motivation
+(= (cognitive-cycle)
+   (match &kb (creator-motivation $id $motiv)
+     (if (== $motiv (high-motivation))
+         (pattern-miner &tempo 3 2)  ;; Mine aggressively
+         (if (== $motiv (low-motivation))
+             (nil)  ;; Skip mining
+             (pattern-miner &tempo 5 2)))))  ;; Mine conservatively
+```
+
+**Key Changes**:
+1. **Appraisal Function**: Compute motivation gap = target engagement − current engagement
+2. **Decision Function**: Aggressiveness of mining scales with gap magnitude
+3. **Self-Modifying Rules**: System adjusts confidence thresholds based on past accuracy
+
+**Benefit**: Mining becomes part of PRIMUS's **goal-directed loop**, naturally sensitive to what matters.
+
+### 11.3 Integration Phase 2: MORK Backend for Scalability
+
+**Current Bottleneck**: MeTTa spaces operate in-memory; pattern support counting is $O(|\mathcal{D}|)$.
+
+**MORK Solution**: Replace in-memory space with MORK's **PathMap** trie structure:
+
+**Before** (current):
+```
+&tempo space (in memory)
+├─ (topic 0 "AI")
+├─ (topic 1 "Politics")
+├─ (length 0 "low")
+└─ (engagement 0 "high")
+
+Support counting: sequential scan → O(n)
+```
+
+**After** (MORK):
+```
+MORK PathMap (disk-backed, concurrent)
+├─ /topic/0/"AI" → ✓
+├─ /topic/1/"Politics" → ✓
+├─ /length/0/"low" → ✓
+└─ /engagement/0/"high" → ✓
+
+Support counting: trie intersection → O(log n + results)
+Benefit: Lock-free concurrent reads; constant-time path lookups
+```
+
+**Implementation**:
+```python
+# Current: Python list scan
+def counter_current(db_space, pattern):
+    return len([b for b in db_space.query(pattern)])
+
+# With MORK: PathMap intersection
+def counter_mork(mork_space, pattern):
+    paths = pattern_to_paths(pattern)  # (topic $x "AI") → /topic/*/AI
+    return mork_space.intersection_size(paths)  # Fast trie intersection
+```
+
+**Gains**:
+- Mining on millions of articles: scales from hours → minutes
+- Concurrent updates: multiple creators mining simultaneously without locks
+- Memory efficiency: PathMap uses Merkle-DAG compression, ~5x better than in-memory
+- Distributed: MORK supports sharded deployment (article set A on server 1, B on server 2)
+
+### 11.4 Integration Phase 3: ECAN for Adaptive Resource Allocation
+
+**Goal**: When system is CPU/memory constrained, intelligently prioritize which operations run.
+
+**ECAN Principle**: Each cognitive process (mining, chaining, visualization) gets **economic attention** (CPU budget) proportional to:
+- **STI** (Short-Term Importance): Current relevance (high engagement gaps → high STI)
+- **LTI** (Long-Term Importance): Historical payoff (rules that worked before → high LTI)
+- **Cost**: Mining costs $C_{mine}$, chaining costs $C_{chain}$
+
+**Formulation** (Hyperon's Weighted Atom Sweeps):
+
+$$\text{Priority}(\text{op}) = \frac{(\text{STI} \times \text{LTI})}{\text{Cost}} = \frac{\text{expected-value}}{\text{resource-cost}}$$
+
+**Example**:
+```metta
+;; ECAN budget allocation for a content creator
+(= (ecan-budget-allocation $creator $cpu-budget)
+   (let* (
+       ;; Mining: discover new patterns
+       ($sti_mine (engagement-gap $creator))  ;; How far from target?
+       ($lti_mine (pattern-discovery-rate $creator))  ;; Historical success?
+       ($cost_mine 1.0)  ;; CPU cycles per pattern
+       
+       ;; Chaining: explain current engagement
+       ($sti_chain (explanation-request? $creator))  ;; Was queried recently?
+       ($lti_chain (rule-accuracy $creator))  ;; Rules were accurate before?
+       ($cost_chain 0.5)  ;; Cheaper than mining
+       
+       ;; Visualization: display results
+       ($sti_viz (visualization-focus? $creator))
+       ($lti_viz 0.3)  ;; Low importance for hidden operations
+       ($cost_viz 0.3)
+       )
+     (let (
+         ($priority_mine (/ (* $sti_mine $lti_mine) $cost_mine))
+         ($priority_chain (/ (* $sti_chain $lti_chain) $cost_chain))
+         ($priority_viz (/ (* $sti_viz $lti_viz) $cost_viz))
+       )
+       (allocate-cpu 
+         $cpu-budget
+         (priority-sorted-ops $priority_mine $priority_chain $priority_viz)))))
+```
+
+**Benefits**:
+1. **Fair scheduling**: Multiple creators never starve each other
+2. **Adaptive**: If pattern mining is low-payoff lately, shift budget to chaining
+3. **Composable**: Different Hyperon modules (mining, chaining, visualization) all compete fairly
+4. **Observable**: ECAN weights are first-class atoms, queryable for debugging
+
+### 11.5 Integration Phase 4: MOSSES Integration (Speculative)
+
+**Open Question**: You mentioned MOSSES but noted uncertainty. Let me suggest possible integrations:
+
+**Possibility A: MOSSES = Modular Symbolic Semantic Execution System**
+- *Hypothesis*: Module system for composable symbolic operations
+- *Integration*: Package pattern-miner, backward-chainer, forward-chainer as MOSSES modules
+- *Benefit*: Swap implementations, load domain-specific miners
+
+```metta
+! (register-mosses-module! pattern-miner:algorithm-1)  ;; Star-join version
+! (register-mosses-module! pattern-miner:algorithm-2)  ;; Apriori version
+! (use-mosses-module pattern-miner:algorithm-1)  ;; Pick at runtime
+```
+
+**Possibility B: MOSSES = Merkle-ordered Sequence/State System**
+- *Hypothesis*: Versioned knowledge state with cryptographic proofs
+- *Integration*: Each mining result is immutable (CID-addressed), with state transitions as Merkle paths
+- *Benefit*: Complete audit trail, rollback capability, decentralized validation
+
+```
+State 0: [empty mining results]
+  ↓ (hash: QmXxxx...)
+State 1: [patterns P1, P2]
+  ↓ (hash: QmYyyy...)  ;; Transition includes confidence scores
+State 2: [patterns P1, P2, P3]
+  ;; Each state verifiable via its CID parent
+```
+
+**Possibility C: Ask the Hyperon team**
+- Could you clarify what MOSSES refers to in Hyperon's roadmap? This would help me provide exact integration guidance.
+
+**General Strategy for MOSSES Integration**:
+1. Identify MOSSES's core abstraction (modules? versioning? scheduling?)
+2. Define an adapter layer translating Mindplex operations to MOSSES calls
+3. Leverage MOSSES for modularity/versioning/decentralization
+
+---
+
+## 13. Mindplex-Hyperon as Hyperon's Canonical Use Case
+
+### 13.1 The Vision: From Tool to Autonomous Agent
+
+Mindplex-Hyperon is **not a one-off application**—it's the **canonical demonstration** of how Hyperon's architecture solves real-world problems at production scale.
+
+**Transformation Arc**:
+- **Current (Jan 2026)**: Manual tool (creators click "Mine" button)
+- **Phase 1 (Q1-Q2)**: MetaMo-driven (creator emotions trigger mining)
+- **Phase 2 (Q2-Q3)**: Predictive (forward chaining simulates engagement)
+- **Phase 3 (Q3)**: Scalable (MORK backend handles millions of articles)
+- **Phase 4 (Q4)**: Intelligent (ECAN allocates resources fairly)
+- **Phase 5+ (2027)**: Decentralized (multi-creator governance via DAO)
+
+### 13.2 Strategic Alignment with Hyperon Principles
+
+| Hyperon Principle | Current Implementation | Future Integration |
+|---|---|---|
+| **Unified Substrate** | Atomspace holds articles, patterns, rules | MORK PathMap backend |
+| **Multiple Methods** | Mining + backward chaining + Gemini | + forward chaining, neural integration |
+| **Weakness (Simplicity)** | Min support, star-join constraint | Weakness regularization in confidence |
+| **Geodesic Control** | Support ranking | ECAN (STI×LTI)/Cost allocation |
+| **First-Class Reflection** | Patterns/rules queryable as atoms | Proof inspection, meta-reasoning |
+| **Self-Modification** | Rules learned from patterns | Safe rule addition/removal with certificates |
+| **Decentralization** | Centralized mining | F1R3FLY/DAO governance with CID-addressed patterns |
+| **Safety via Transparency** | All conclusions traceable | Merkle proofs of pattern lineage |
+
+---
+
+## 14. Phase 1: Motivation-Driven Execution (Q1-Q2 2026)
+
+### 14.1 Replacing Button Clicks with Emotions
+
+**Current**: Content creators manually trigger mining.
+```
+User clicks button → System mines → Results appear
+```
+
+**Future**: System's emotional state (via MetaMo/OpenPsi) triggers mining automatically.
+```
+Creator's engagement gap detected → Motivation computed → Mining triggered → Explains why
+```
+
+### 14.2 MetaMo/OpenPsi Integration
+
+#### Define Creator Appraisals
+
+```metta
+;; Creator's emotional state
+(: (appraisal $creator) (-> Atom Motives))
+
+(= (appraisal $creator)
+   (let* (
+       ($current-engagement (query-avg-engagement $creator))
+       ($target-engagement 0.80)
+       ($engagement-gap (- $target-engagement $current-engagement))
+       ($motivation (clamp (abs $engagement-gap) 0.0 1.0))
+   )
+   (appraisal:state $creator $motivation $engagement-gap)))
+```
+
+**Key Atoms**:
+- `(appraisal:state $creator $intensity $gap)`: Emotional state
+- `(goal:engagement $creator $target)`: Target engagement
+- `(confidence:rules $creator $value)`: System confidence in rules
+
+#### Convert Appraisals to Actions
+
+```metta
+(: (mining-action $creator) (-> Motives MiningParams))
+
+(= (mining-action $creator)
+   (match &kb (appraisal:state $creator $motivation $gap)
+     (if (> $motivation 0.7)
+         (mining-params 3 2 true)    ;; High: aggressive (minsup=3, depth=2, parallel)
+         (if (< $motivation 0.3)
+             (mining-params nil nil false)  ;; Low: skip mining
+             (mining-params 5 2 false)))))  ;; Medium: normal
+
+;; PRIMUS cycle integration
+(= (primus-loop-tick)
+   (match &kb (appraisal:state $creator $motiv $gap)
+     (let $action (mining-action $creator)
+       (if (!= $action (mining-params nil nil false))
+           (apply-mining-action $creator $action)
+           nil))))
+```
+
+### 14.3 Implementation Checklist
+
+- [ ] Create `experiments/metamo/motives.metta` (appraisal functions)
+- [ ] Add `appraisal:state` atoms to data model
+- [ ] Modify `mining_api.py` to compute appraisals
+- [ ] Hook PRIMUS loop (tick every 30 seconds)
+- [ ] UI indicator: show creator's current emotional state
+- [ ] Test: creator sets target, system mines automatically
+
+---
+
+## 15. Phase 2: Forward-Chaining Engagement Simulator (Q2-Q3 2026)
+
+### 15.1 From Explanation to Prediction
+
+**Current**: Backward chaining explains past engagement.
+```
+Q: Why is article X engaging?
+A: Because it matches rules R1, R2 discovered via mining.
+```
+
+**Future**: Forward chaining predicts future engagement.
+```
+Q: If I publish article Y with properties P1, P2, what engagement will I get?
+A: Predicted engagement = 0.78 (confidence 0.81). Proof via rules R1 → R2 → prediction.
+```
+
+### 15.2 Confidence Propagation via PLN
+
+#### Extend Rules with Confidence
+
+```metta
+;; Patterns from mining
+(supportOf (, (topic $x "AI") (length $x "low")) 5)
+
+;; Convert to rule with confidence
+(: (rule:engagement:ai-lowlen) 
+   (→ (, (topic $x "AI") (length $x "low"))
+       (engagement $x "high")))
+(confidence (rule:engagement:ai-lowlen) 0.83)  ;; 5/6 articles
+```
+
+#### Forward Chaining Implementation
+
+```metta
+(: (forward-chain $facts $rules $depth) 
+   (-> (List Atom) (List Rule) Nat (List Conclusion)))
+
+(= (forward-chain $facts $rules 0) $facts)
+
+(= (forward-chain $facts $rules (S $depth))
+   (let* (
+       ;; Apply each rule to facts
+       ($new-conclusions 
+         (match &rules (: $rulename (→ $antecedent $consequent))
+           (match $facts $antecedent
+             (let* (
+                 ($rule-conf (confidence $rulename))
+                 ($fact-conf (truth-value $antecedent))
+                 ($combined-conf (* $rule-conf $fact-conf))
+             )
+             (with-confidence $consequent $combined-conf)))))
+       
+       ($extended-facts (append $facts $new-conclusions))
+     )
+     (forward-chain $extended-facts $rules $depth)))
+```
+
+#### User Query
+
+```metta
+! (engagement-prediction (article "draft-1234" (topic "AI") (length "low")))
+
+→ (engagement-prediction:result 
+    (engagement "draft-1234" "high") 
+    (confidence 0.81))
+```
+
+### 15.3 Implementation Checklist
+
+- [ ] Create `experiments/chainer/forward-chainer.metta`
+- [ ] Define confidence combination rules (product, Dempster-Shafer)
+- [ ] Extend backward-chain to tag conclusions with confidence
+- [ ] Add forward-chain that applies rules bottom-up
+- [ ] API endpoint: `/api/simulate?article=...` (returns prediction + confidence + proof)
+- [ ] Visualization: "confidence propagation trace"
+- [ ] Test: 10 patterns, 3 new articles, predictions within 10% accuracy
+
+---
+
+## 16. Phase 3: MORK Backend for Scalability (Q2-Q3 2026)
+
+### 16.1 Current Bottleneck
+
+```
+MeTTa in-memory spaces:
+  - 10k articles: responsive
+  - 100k articles: slow
+  - 1M articles: infeasible
+
+Support counting: O(n) list scan
+Concurrency: single-threaded
+Persistence: lost on restart
+```
+
+### 16.2 MORK Solution: PathMap Tries
+
+```
+MORK Backend:
+  - Query: O(log n + results) via trie intersection
+  - Scalability: 1M atoms in 10ms, 1B atoms in 50ms
+  - Concurrency: lock-free reads, versioned writes
+  - Persistence: append-only log, Merkle-DAG commits
+```
+
+#### Atom-to-Path Mapping
+
+```
+(topic 42 "AI")         → /topic/42/AI
+(engagement 42 "high")  → /engagement/42/high
+(length 42 "low")       → /length/42/low
+
+Pattern: (topic $x "AI")     → Path prefix: /topic/*/AI
+Support: Count files matching /topic/*/AI
+```
+
+#### Adapter Layer
+
+```python
+# experiments/mork_adapter.py
+class MorkSpace:
+    def add_atom(self, atom):
+        path = self.atom_to_path(atom)
+        self.store.write(path, atom.serialize())
+    
+    def query(self, pattern):
+        path_pattern = self.pattern_to_path_prefix(pattern)
+        for path in self.store.prefix_scan(path_pattern):
+            atom = self.path_to_atom(path)
+            yield self.unify(pattern, atom)
+```
+
+#### Migration Path
+
+**Stage 1** (no change):
+```metta
+(bind! &tempo (new-space))  ;; In-memory only
+```
+
+**Stage 2** (MORK as secondary):
+```metta
+(bind! &tempo (new-space))  ;; Cache
+(bind! &tempo-mork (mork-space "~/.mindplex/articles.mork"))  ;; Persistent
+(or (match &tempo ...) (match &tempo-mork ...))  ;; Try cache first
+```
+
+**Stage 3** (full migration):
+```metta
+(bind! &tempo (mork-space "~/.mindplex/articles.mork"))  ;; Direct MORK
+```
+
+### 16.3 Implementation Checklist
+
+- [ ] Research MORK/PathMap API
+- [ ] Implement `experiments/mork_adapter.py` with MorkSpace class
+- [ ] Atom ↔ path serialization
+- [ ] Add MORK to `requirements.txt` as optional dependency
+- [ ] Benchmark: in-memory vs MORK at 100k atoms
+- [ ] Implement concurrent writes with Merkle-DAG versioning
+- [ ] Test: mining/chaining on full article corpus
+
+---
+
+## 17. Phase 4: ECAN Budget Allocation (Q3-Q4 2026)
+
+### 17.1 Fair Resource Scheduling
+
+**Goal**: Allocate CPU/memory intelligently to competing operations.
+
+```
+ECAN Budget Allocator
+  ├─ Pattern Mining (40%)      [computed from STI/LTI]
+  ├─ Backward Chaining (30%)   [user queries]
+  ├─ Forward Chaining (20%)    [simulation requests]
+  └─ Visualization (10%)       [UI updates]
+```
+
+### 17.2 STI Computation (Short-Term Importance)
+
+```metta
+;; Engagement gap: how far from target?
+(: (sti:engagement-gap $creator) Nat)
+(= (sti:engagement-gap $creator)
+   (let* (
+       ($current (avg-engagement $creator))
+       ($target (goal:engagement $creator))
+       ($gap (abs (- $target $current)))
+     )
+     (round (* $gap 100))))
+
+;; Query frequency: how engaged?
+(: (sti:query-frequency $creator) Nat)
+(= (sti:query-frequency $creator)
+   (round (* (min (count-queries-in-last-hour $creator) 10) 10)))
+
+;; Combined STI
+(: (sti:total $creator) Nat)
+(= (sti:total $creator)
+   (max 0 (min 100 (+ (sti:engagement-gap $creator) 
+                      (* (sti:query-frequency $creator) 0.5)))))
+```
+
+### 17.3 LTI Computation (Long-Term Importance)
+
+```metta
+;; Rule accuracy: have past patterns worked?
+(: (lti:rule-accuracy $creator) Float)
+(= (lti:rule-accuracy $creator)
+   (let* (
+       ($rules (get-rules $creator))
+       ($validated (count-validated-rules $rules))
+       ($total (count-rules $rules))
+     )
+     (if (== $total 0) 0.0 (/ $validated $total))))
+
+;; Discovery payoff: do new patterns keep helping?
+(: (lti:discovery-payoff $creator) Float)
+(= (lti:discovery-payoff $creator)
+   (let* (
+       ($new (count-patterns-mined-this-week $creator))
+       ($improvements (count-accuracy-improvements $creator))
+     )
+     (if (== $new 0) 0.0 (/ $improvements $new))))
+
+;; Combined LTI
+(: (lti:total $creator) Float)
+(= (lti:total $creator)
+   (+ (* (lti:rule-accuracy $creator) 0.6)
+      (* (lti:discovery-payoff $creator) 0.4)))
+```
+
+### 17.4 Priority Computation
+
+```metta
+;; Operation costs
+(= (cost:mining-one-pattern) 0.1)    ;; 10 patterns/sec
+(= (cost:chaining-query) 0.05)       ;; 20 queries/sec
+(= (cost:forward-simulation) 0.2)    ;; 5 simulations/sec
+
+;; Priority = (STI × LTI) / Cost
+(: (priority $op $creator) Float)
+(= (priority mining $creator)
+   (/ (* (sti:total $creator) (lti:total $creator))
+      (cost:mining-one-pattern)))
+```
+
+### 17.5 Implementation Checklist
+
+- [ ] Create `experiments/ecan/attention.metta` (STI/LTI computation)
+- [ ] Define operation costs in `config.py`
+- [ ] Modify `mining_api.py` to respect CPU budget
+- [ ] Implement priority queue in Python scheduler
+- [ ] Add Prometheus monitoring (STI/LTI/priority metrics)
+- [ ] Create dashboard: "ECAN budget allocation" in real-time
+- [ ] Test: Under load, verify fair scheduling
+
+---
+
+## 18. Phase 5: MOSSES Integration (Q4 2026)
+
+### 18.1 What is MOSSES?
+
+**MOSSES definition pending clarification from Hyperon team.** Three likely interpretations:
+
+#### Option A: Modular Symbolic System
+
+**Hypothesis**: MOSSES = modular framework for pluggable MeTTa components.
+
+```metta
+;; Register mining algorithms
+! (mosses:register-module "algorithms:star-join-v1.0" star-join-miner)
+! (mosses:register-module "algorithms:apriori-v1.0" apriori-miner)
+! (mosses:register-module "algorithms:sampling-v1.0" sampling-miner)
+
+;; Runtime selection
+(= (adaptive-pattern-miner $db $minsup $depth)
+   (let $algo 
+     (if (> (count-atoms $db) 1000000)
+         (mosses:load-module "algorithms:sampling-v1.0")    ;; Fast
+         (if (> (count-atoms $db) 100000)
+             (mosses:load-module "algorithms:apriori-v1.0")  ;; Balanced
+             (mosses:load-module "algorithms:star-join-v1.0")))  ;; Exact
+   )
+   (funcall $algo $db $minsup $depth)))
+```
+
+**Benefits**:
+- Composition: multiple miners coexist
+- Community: users contribute optimized versions
+- Type safety: module system enforces interfaces
+- Version pinning: reproducibility
+
+#### Option B: Merkle-Ordered Semantic State System
+
+**Hypothesis**: MOSSES = versioned knowledge states with cryptographic commits.
+
+```
+State 0: {}                    (CID: QmEmpty)
+  ↓ (author: creator_a)
+State 1: {P1, P2}             (CID: QmABC123)
+  ↓ (author: creator_b)
+State 2: {P1, P2, P3}         (CID: QmDEF456)
+  ↓ (merge, author: creator_a)
+State 3: {P1, P2, P3, P4}     (CID: QmGHI789)
+```
+
+**Benefits**:
+- Complete audit trail
+- Immutability (patterns sealed via CID)
+- Merging (multi-creator patterns)
+- Rollback (if patterns prove inaccurate)
+
+**MeTTa Integration**:
+```metta
+(= (mosses:commit-patterns $author $patterns $parent-cid)
+   (let* (
+       ($new-state (list-to-atomspace $patterns))
+       ($state-cid (hash-atomspace $new-state))
+       ($commit (commit-record $author $state-cid $parent-cid))
+     )
+     $state-cid))
+
+(= (mosses:merge-states $state1-cid $state2-cid)
+   (let* (
+       ($atoms1 (mosses:load-state $state1-cid))
+       ($atoms2 (mosses:load-state $state2-cid))
+       ($merged (union $atoms1 $atoms2))
+     )
+     (hash-atomspace $merged)))
+```
+
+#### Option C: Market-Driven Quality System
+
+**Hypothesis**: MOSSES = reputation/incentive system for miners.
+
+```metta
+;; Miners propose patterns with confidence
+(mosses:propose-pattern 
+  (author creator_a)
+  (pattern (, (topic $x "AI") (engagement $x "high")))
+  (confidence 0.82))
+
+;; Test on new data
+(mosses:validate-pattern $pattern $new-articles)
+→ Actual confidence = 0.79 ✓ (close)
+→ Miner score: +10 points
+
+;; Display leaderboard
+(mosses:leaderboard) → [creator_a: 850 pts, creator_b: 720 pts, ...]
+```
+
+**Benefits**:
+- Self-correcting (bad patterns get low scores)
+- Competitive (miners optimize for accuracy)
+- Transparent (reputation visible)
+- Scalable (works with thousands of miners)
+
+### 18.2 Implementation Checklist (Pending MOSSES Definition)
+
+- [ ] **Clarify MOSSES** with Hyperon team (open GitHub discussion)
+- [ ] **Draft integration spec** based on definition
+- [ ] **Prototype adapter** for selected interpretation
+- [ ] **Implement runtime loading** of modules
+- [ ] **Test module composition** (multiple algorithms simultaneously)
+- [ ] **Benchmark performance** (loading overhead)
+
+---
+
+## 19. Phase 6: Decentralized Governance (2027+)
+
+### 19.1 From Centralized to DAO-Governed
+
+**Current**: One mining instance, one creator.
+```
+Creator A mines patterns
+  → Only A benefits from discoveries
+  → Duplicate effort across creators
+```
+
+**Future**: Shared pattern repository with reputation and incentives.
+```
+Creator A mines patterns
+  ↓ (proposes to shared KB)
+Creator B validates patterns (via proof checking)
+  ↓ (reaches consensus)
+All creators benefit from canonical rules
+  ↓ (accurate miners earn reputation)
+```
+
+### 19.2 Architecture
+
+```
+Creator A       Creator B       Creator C
+   ↓               ↓               ↓
+   └─ Propose patterns (with CID) ─┘
+           ↓
+    DAO: Validators vote
+    (verify support, check proofs)
+           ↓
+    Canonical KB (immutable log)
+    (all creators can query)
+           ↓
+    Reward accurate miners
+    (reputation + incentives)
+```
+
+### 19.3 Key Components
+
+#### CID-Addressed Patterns
+
+```metta
+;; Every pattern gets a cryptographic ID
+(: (pattern:cid $pattern) Nat)
+(= (pattern:cid $pattern)
+   (hash-to-cid $pattern))
+
+;; Pattern provenance
+(: (pattern:origin $cid) Atom)
+(= (pattern:origin (pattern:cid (... ) ))
+   (metadata:origin creator-name timestamp dataset-cid))
+```
+
+#### Merkle Proofs of Lineage
+
+```
+Pattern P3
+  ↓ (derived from P1 + P2)
+P1 hash: QmAAA
+P2 hash: QmBBB
+P3 hash: QmCCC = hash(QmAAA, QmBBB)
+  ↓ (verifiable: anyone can recompute QmCCC)
+Proof that P3 correctly combines P1 + P2
+```
+
+#### F1R3FLY/ASI-Chain Integration
+
+(From Hyperon whitepaper): governance layer for decentralized decision-making.
+
+```metta
+;; Proposal: add pattern to canonical KB
+(governance:propose-pattern
+  (author creator_a)
+  (pattern (, (topic $x "AI") (engagement $x "high")))
+  (confidence 0.83)
+  (support-count 5))
+
+;; Validators vote
+(governance:vote creator_b (on proposal-id) (confidence 0.79))  ;; Validate
+(governance:vote creator_c (on proposal-id) (confidence 0.71))  ;; Partial support
+
+;; Consensus: 2/3 validators approve
+(governance:approve proposal-id)
+  → Pattern added to canonical KB
+  → Creator A earns reputation (0.83 avg confidence)
+```
+
+### 19.4 Implementation Checklist
+
+- [ ] Define pattern CID scheme
+- [ ] Implement Merkle proofs of derivation
+- [ ] Create voting mechanism (governance contract)
+- [ ] Build leaderboard (miner reputation)
+- [ ] Integrate with F1R3FLY/ASI-Chain (if available)
+- [ ] Test multi-creator merging scenarios
+- [ ] Deploy DAO smart contract
+
+---
+
+## 20. Roadmap Summary: Phases & Timeline
+
+| Phase | Start | Duration | FTE | Key Components | Target |
+|-------|-------|----------|-----|---|---|
+| **Now** | Jan 2026 | — | 1 | Pattern Mining, Backward Chaining | Working prototype |
+| **1** | Q1 2026 | 6 wks | 1.0 | MetaMo appraisal, PRIMUS loop | Emotion-driven mining |
+| **2** | Q2 2026 | 8 wks | 1.5 | Forward chaining, confidence | Engagement simulation |
+| **3** | Q2 2026 | 10 wks | 2.0 | MORK adapter, PathMap | 1M+ article scale |
+| **4** | Q3 2026 | 8 wks | 1.0 | ECAN STI/LTI, scheduler | Fair resource allocation |
+| **5** | Q4 2026 | TBD | TBD | MOSSES modules | Pluggable algorithms |
+| **6** | 2027+ | TBD | TBD | DAO governance, CID-addressing | Decentralized validation |
+| **Total (1-4)** | **6 months** | **5.5 FTE-months** | **$66K** | **Core Hyperon integration** | **Production readiness** |
+
+### 20.1 Resource Allocation
+
+```
+Month 1-2 (Q1):    1.0 FTE → Phase 1 (MetaMo)
+Month 2-4 (Q2):    2.5 FTE → Phases 2 (forward) + 3 (MORK start)
+Month 4-6 (Q3):    2.0 FTE → Phase 3 (MORK finish) + Phase 4 (ECAN)
+Month 6+ (Q4):     TBD → Phase 5 (MOSSES), Phase 6 (governance)
+```
+
+### 20.2 Success Metrics
+
+**Phase 1**: Creator's emotional state influences mining (>80% correlation between gap and mining frequency)
+
+**Phase 2**: Engagement predictions within 10% accuracy, confidence scores correlate with actual outcomes (R² > 0.7)
+
+**Phase 3**: Handle 1M articles in <5s queries, concurrent writers don't block readers, cold-start in <30s
+
+**Phase 4**: Fair CPU allocation (coefficient of variation <0.2), high-STI ops prioritized, throughput increases 2-3x under load
+
+**Phase 5**: Pluggable miners swap at runtime, version pinning reproducible, <1% overhead for module system
+
+**Phase 6**: Multi-creator merging without conflicts, DAO governance functional, reputation system incentive-aligned
+
+---
+
+## 21. Alignment with Hyperon Vision
+
+### 21.1 PRIMUS Cognitive Cycle
+
+Hyperon's PRIMUS architecture orchestrates:
+1. **Perception** (what do we observe?)
+2. **Goal-Directed Loop** (what do we want?)
+3. **Ambient Loop** (what are our background routines?)
+4. **Action** (how do we respond?)
+
+**Mindplex-Hyperon implementation**:
+- **Perception**: Article ingestion, metadata extraction
+- **Goal-Directed**: MetaMo appraisals (engagement targets)
+- **Ambient**: ECAN scheduling, continuous pattern validation
+- **Action**: Recommendations, rule refinement, forward-chain predictions
+
+### 21.2 Weakness as Unifying Principle
+
+Hyperon emphasizes **weakness** (simplicity prior) across all modules.
+
+**Mindplex-Hyperon exemplifies this**:
+- **Pattern Mining**: Minimum support filters out spurious patterns (weak ones discarded)
+- **Star-Join**: Single-hub constraint enforces simplicity
+- **Forward Chaining**: Prefer shorter proofs, simpler rule chains
+- **ECAN**: Allocate budget to simpler operations first (cost minimization)
+
+### 21.3 Geodesic Control: Effort-Balanced Decisions
+
+Hyperon's **geodesic effort** = reachability × usefulness per unit cost.
+
+**Mindplex-Hyperon formalization**:
+$$\text{Priority}(\text{operation}) = \frac{\text{STI} \times \text{LTI}}{\text{Cost}}$$
+
+Where:
+- **STI** (reachability): how relevant is this now?
+- **LTI** (usefulness): how useful historically?
+- **Cost**: CPU cycles, memory, latency
+
+### 21.4 Composability & Modularity
+
+Hyperon vision: "One unified system exercised across radically different challenges."
+
+**Mindplex-Hyperon path**:
+1. Start: content engagement (narrow domain)
+2. Generalize: any content + metadata (broader domain)
+3. MOSSES: swap modules (education vs. entertainment miners)
+4. Scale: distributed deployment (multi-server shards)
+5. Transfer: apply to robotics, games, bioinformatics (Hyperon's other demos)
+
+---
+
+## 22. Risk & Mitigation
+
+| Risk | Impact | Mitigation |
+|------|--------|-----------|
+| MetaMo API not finalized | P1 blocked | Prototype with simple gap-based motivation |
+| MORK learning curve steep | P3 delayed | Partner with Hyperon team for support |
+| ECAN overhead > benefit | P4 fails | Profile critical paths, implement caching |
+| MOSSES undefined | P5 stalled | Proceed with P1-4, revisit when clarified |
+| Scale testing reveals bugs | All phases | Load test after P2, fix before P3 |
+| Creator adoption low | 6 months wasted | Gather feedback monthly, iterate UI |
+
+---
+
+## 23. Conclusion: Mindplex-Hyperon as PRIMUS Exemplar
+
+Mindplex-Hyperon demonstrates how Hyperon's architecture—unified substrate, multiple cognitive methods, intelligent resource allocation, decentralized governance—solves real-world problems while maintaining:
+
+- **Transparency**: Every decision traceable to patterns and proofs
+- **Composability**: Multiple inference paradigms on one substrate
+- **Safety**: Self-modifying rules under proof-like constraints
+- **Scalability**: From research prototype (10k atoms) to production (1B+ atoms)
+- **Extensibility**: From content domain to robotics, games, and beyond
+
+By end of 2026, Mindplex-Hyperon should showcase PRIMUS + MetaMo + ECAN + MORK working in concert—**a blueprint for beneficial AGI that remains interpretable and controllable at every scale.**
 
 Mindplex-Hyperon exemplifies **principled symbolic AI**:
 
@@ -738,3 +1600,19 @@ Mindplex-Hyperon exemplifies **principled symbolic AI**:
 4. **Extensibility**: Architecture naturally extends to confidence, higher-order patterns, temporal reasoning
 
 The **star-join innovation** demonstrates that symbolic systems can be both theoretically sound and practically efficient—a model for future Hyperon applications seeking the best of logic-based and data-driven approaches.
+
+---
+
+## 13. Roadmap Summary: Evolving Toward Full PRIMUS Integration
+
+| Phase | Component | Current | Target | Timeline |
+|-------|-----------|---------|--------|----------|
+| **Now** | Pattern Mining | Manual button | MetaMo-triggered | Q1 2026 |
+| **Now** | Inference | Backward chaining only | + Forward simulator | Q2 2026 |
+| **Phase 1** | Storage | MeTTa in-memory | MORK PathMap | Q2-Q3 2026 |
+| **Phase 2** | Scheduling | Static minsup | ECAN STI/LTI budget | Q3 2026 |
+| **Phase 3** | Modularity | Monolithic | MOSSES modules | Q4 2026 |
+| **Phase 4** | Governance | Centralized | CID-addressed + decentralized | 2027 |
+| **Aspirational** | Embodiment | Text-only | Robotic deployment via PRIMUS | 2027+ |
+
+**Invariant**: Every phase upgrades the system using **Hyperon components**, not ad-hoc extensions. By end of 2026, Mindplex-Hyperon should showcase PRIMUS + MetaMo + ECAN + MORK working in concert—a canonical use case for beneficial AGI.
