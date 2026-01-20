@@ -1,0 +1,2 @@
+((++ $x) (S $x))
+(exec (Z (S (S (S Z)))) (, (exec ($z (S $n)) $ptn $tmp) ((++ $z) $res)) (,  $res (exec ((S $z)$n) $ptn $tmp) ((++ $res) (S $res))))
