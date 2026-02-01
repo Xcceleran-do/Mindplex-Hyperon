@@ -42,3 +42,5 @@ node_modules/
 # Misc
 *.swp
 *.bak
+
+google-cloud-sdk/
