@@ -20,18 +20,19 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the entire project
 COPY . /app/
 
-# Set PYTHONPATH to include the workspace root
+# Set PYTHONPATH to include the workspace root (for relative imports)
 ENV PYTHONPATH=/app:$PYTHONPATH
+
+# Set working directory to workspace root (so relative paths work)
+WORKDIR /app
 
 # Expose port (Cloud Run will set PORT env variable)
 ENV PORT=8080
 EXPOSE 8080
 
-# Set the working directory to experiments for the server
-WORKDIR /app/experiments
-
 # Run the Flask app with production server (gunicorn)
 RUN pip install gunicorn
 
-# Command to run the application
-CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 mining_api:app
+# Command to run the application from the root directory
+# This ensures relative imports like "experiments:pattern-miner" work correctly
+CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 experiments.mining_api:app

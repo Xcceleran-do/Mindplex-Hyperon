@@ -15,9 +15,7 @@ echo "🚀 Deploying to Google Cloud Run..."
 echo "Project: $PROJECT_ID"
 echo "Region: $REGION"
 echo "Service: $SERVICE_NAME"
-echo ""gcloud resource-manager tags bindings create \
-  --tag-value=ENVIRONMENT \
-  --parent=projects/midplex-hyperon
+echo ""
 
 # Check if gcloud is installed
 if ! command -v gcloud &> /dev/null; then
