@@ -148,7 +148,7 @@ tools_schema = [
         "type": "function",
         "function": {
             "name": "getChainerResult",
-            "description": "Get the result of backward chaining for a specific query.",
+            "description": "Get the result of -chai chaining for a specific query.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -384,117 +384,6 @@ def getAllFactsAndRules():
 
     return {"status": "success", "facts": normalized}
 
-
-def handle_backward_chain_for_message(message: str):
-    """Detect simple 'why' questions about an article and run the
-    required automatic workflow: fetch facts, rewrite query to canonical
-    form, then call the chainer. Returns (response_text, function_calls) or
-    (None, None) if not applicable.
-    """
-    # Quick heuristic: look for 'why' and an article id
-    if not re.search(r'\bwhy\b|explain why|prove that', message, re.I):
-        return None, None
-
-    m = re.search(r'article\s+(\d+)', message, re.I)
-    if not m:
-        return None, None
-
-    article_id = m.group(1)
-
-    # Call getAllFactsAndRules to obtain canonical atoms
-    print("DEBUG: handle_backward_chain_for_message - calling getAllFactsAndRules()")
-    facts_res = getAllFactsAndRules()
-    print("DEBUG: facts_res type:", type(facts_res))
-    print("DEBUG: facts_res preview:", (facts_res.get('facts')[:5] if isinstance(facts_res, dict) else str(facts_res)[:200]))
-    function_calls = [{'name': 'getAllFactsAndRules', 'args': {}, 'result': facts_res}]
-
-    if not isinstance(facts_res, dict) or facts_res.get('status') != 'success':
-        return None, None
-
-    facts = facts_res.get('facts', []) or []
-
-    # Ask the LLM to rewrite the user's question into a canonical MeTTa query
-    # using the facts we retrieved. The model must output only a single MeTTa
-    # expression (e.g. (engagement 1 $what)).
-    try:
-        facts_text = "\n".join(facts[:200]) if isinstance(facts, list) else str(facts)
-        rewrite_prompt = f"""
-            You are given the following KB atoms (facts/rules), one per line:
-            {facts_text}
-
-            User question: "{message}"
-
-            Task (STRICT):
-            - Do NOT narrate or describe any internal steps.
-            - Do NOT output anything except a SINGLE canonical MeTTa expression that uses predicate and constant names from the KB above.
-            - If mapping is ambiguous, pick the most semantically likely predicate present in the KB.
-            - If you cannot produce a valid MeTTa expression, output the single token NO_QUERY and NOTHING ELSE.
-
-            Example mapping (for clarity only, do not output this): facts contain (engagement 1 "High") -> question "Why is article 1 high?" -> output: (engagement 1 $what)
-
-            OUTPUT ONLY the MeTTa expression or NO_QUERY.
-            """
-        print("DEBUG: sending rewrite prompt to LLM (first 300 chars):", rewrite_prompt[:300])
-        rewrite_resp = model.generate_content(rewrite_prompt)
-        candidate_query = None
-        # Prefer structured text, fall back to parsing candidates
-        if hasattr(rewrite_resp, 'text') and rewrite_resp.text:
-            candidate_query = rewrite_resp.text.strip()
-        else:
-            try:
-                parts = rewrite_resp.candidates[0].content.parts
-                acc = ""
-                for part in parts:
-                    if hasattr(part, 'text'):
-                        acc += part.text
-                candidate_query = acc.strip()
-            except Exception:
-                candidate_query = None
-
-        print("DEBUG: rewrite result:", candidate_query)
-        function_calls.append({'name': 'rewrite_query', 'args': {'message': message}, 'result': candidate_query})
-    except Exception as e:
-        print('DEBUG: rewrite error:', e)
-        return None, None
-
-    if not candidate_query or candidate_query.upper() == 'NO_QUERY':
-        print('DEBUG: no candidate query produced by LLM')
-        return None, None
-
-    # Ensure the candidate looks like a MeTTa expression; if it contains extra text,
-    # try to extract the first parenthesized expression.
-    mexpr = re.search(r"\([^\)]*\)", candidate_query)
-    if mexpr:
-        candidate_query = mexpr.group(0).strip()
-
-    print('DEBUG: final candidate_query to send to chainer:', candidate_query)
-
-    # Call the chainer with the rewritten query and include debug output
-    try:
-        print('DEBUG: calling getChainerResult with', candidate_query)
-        chainer_result = getChainerResult(candidate_query)
-        print('DEBUG: chainer_result type:', chainer_result)
-    except Exception as e:
-        print('DEBUG: chainer call error:', e)
-        chainer_result = {'status': 'error', 'error': str(e)}
-
-    function_calls.append({'name': 'getChainerResult', 'args': {'whatToCheck': candidate_query}, 'result': chainer_result})
-
-    # Use the chainer's justification as the assistant response text (don't reveal internal steps)
-    resp_text = ''
-    if isinstance(chainer_result, dict):
-        raw_just = chainer_result.get('justification') or chainer_result.get('error') or ''
-    else:
-        raw_just = str(chainer_result)
-
-    if not raw_just:
-        resp_text = "No proof was found."
-    else:
-        # Apply a friendly/jokey wrapper without revealing internal steps
-        resp_text = f"Alright, here's the scoop —\n\n{raw_just}\n\n(That's the reasoning I found.)"
-    print('DEBUG: final response text:', resp_text)
-    return resp_text, function_calls
-
 # Define available functions for the AI with proper docstrings for automatic function calling
 def get_mining_results() -> dict:
     """Retrieves the latest pattern mining results from the system.
@@ -669,18 +558,17 @@ def formatter(mined_patterns):
     print("formatter started :--:")
     mined_patterns = metta4Miner.parse_single(mined_patterns)
     metta4Miner.run(f""" !(add-reduct &res1 (main {mined_patterns})) """)
-    print("formatter ended :-_-:")
+    print("formatter ended :-_-:", metta4Miner.run(f"""!(get-atoms &res1)"""))
 
 def backWardChainer(whatToCheck, depth=5):
     whatToCheck = metta4Miner.parse_single(whatToCheck)
-    print("res1: ", metta4Miner.run(f"""!(get-atoms &res1)"""))
     answer = metta4Miner.run(f""" !(backward-chain &res1 (S (S (S Z))) (: $prf {whatToCheck})) """)
     return answer
 
 def getChainerResult(whatToCheck, depth=5):
     """ Get the result of backward chaining for a specific query. 
     Args:
-        whatToCheck (str): The query to check, e.g., '(reputation 0 "High")'
+        whatToCheck (str): The query to check, e.g., '(engagement 0 "High")'
         depth (int): The depth limit for backward chaining. (default 5)
     Returns:
         The justification of the backward chaining operation.
@@ -824,7 +712,7 @@ SYSTEM_INSTRUCTION = """You are a friendly and knowledgeable AI assistant with e
     - "Why is..." / "Explain why..." / "Prove that..." questions → Use getChainerResult() with the query formatted as a MeTTa expression
 
     **CRITICAL BACKWARD-CHAINING WORKFLOW (MUST FOLLOW):**
-    Before calling getChainerResult(), ALWAYS call getChainerResult().
+    ALWAYS call getChainerResult().
 
     Example:
     - User: "What is article 1's engagement level?"
@@ -1175,27 +1063,6 @@ def chat():
 
         if not message:
             return jsonify({'error': 'Message is required'}), 400
-
-        # Special-case: 'why' questions about articles should run the
-        # return the chainer's justification directly.
-        try:
-            bc_text, bc_calls = handle_backward_chain_for_message(message)
-            print('DEBUG: backward chain shortcut result:', bc_text, bc_calls)
-            if bc_text is not None:
-                # store in history (conversations[session_id] is guaranteed to exist now)
-                conversations[session_id].append({'role': 'user', 'content': message})
-                print('DEBUG: stored backward chain shortcut in history')
-                conversations[session_id].append({'role': 'assistant', 'content': bc_text})
-                try:
-                    safe_calls = make_json_safe(bc_calls)
-                except Exception:
-                    safe_calls = str(bc_calls)
-                return jsonify({'response': bc_text, 'functionCalls': safe_calls, 'session_id': session_id})
-        except Exception as e:
-            print('Error handling backward chain shortcut:', e)
-            # fall through to normal chat flow
-
-        conversations.setdefault(session_id, [])
 
         # Build conversation history for ASI1
         asi_messages = [{"role": "system", "content": SYSTEM_INSTRUCTION}]
