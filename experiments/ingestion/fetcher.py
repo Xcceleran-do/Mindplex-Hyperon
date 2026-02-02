@@ -41,6 +41,10 @@ class MindplexFetcher:
             if not batch:
                 print("No more posts found.")
                 break
+            
+            # Add publisher username to each article
+            for article in batch:
+                article['publisher_username'] = self.username
                 
             articles.extend(batch)
             

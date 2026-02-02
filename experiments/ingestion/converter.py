@@ -36,9 +36,13 @@ class JsonToMetta:
             add_prop("engagement", meta.get('engagement'))
             add_prop("audience-sentiment", meta.get('audience_sentiment'))
             
-            # Author
+            # Author (original author of the content)
             author_username = article.get('author_username', 'unknown')
             add_prop("authored-by", author_username)
+            
+            # Publisher (who published/shared this article)
+            publisher_username = article.get('publisher_username', author_username)
+            add_prop("published-by", publisher_username)
             
             # Title (optional, good for debugging)
             add_prop("title", article.get('post_title'))
