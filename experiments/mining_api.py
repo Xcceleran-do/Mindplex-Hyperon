@@ -15,7 +15,7 @@ import traceback
 import re
 import json
 import requests
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import threading
 import uuid
@@ -299,7 +299,7 @@ def make_json_safe(o):
         return repr(o)
 
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder=os.path.abspath(os.path.join(os.path.dirname(__file__), 'atomspace_visualizer/public')))
 # Enable CORS for all domains on all routes with all methods
 CORS(app, resources={r"/*": {
     "origins": "*",  # Allow all origins
@@ -309,6 +309,16 @@ CORS(app, resources={r"/*": {
     "supports_credentials": False,
     "max_age": 3600
 }})
+
+@app.route('/data.metta', methods=['GET'])
+def serve_data_metta():
+    """Serve the data.metta file with no-cache headers to prevent stale data."""
+    data_file = os.path.join(app.static_folder, 'data.metta')
+    response = send_file(data_file, mimetype='text/plain', as_attachment=False)
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 
 @app.route('/api/ingest', methods=['POST'])
 def ingest_data():

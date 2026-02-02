@@ -10,7 +10,7 @@ class JsonToMetta:
             
             # Helper to add line
             def add_prop(prop, value):
-                if value and value != "Unknown":
+                if value:
                     # Sanitize string for MeTTa
                     safe_val = str(value).replace('"', '\\"').replace('\n', ' ')
                     metta_lines.append(f"({prop} {art_id} \"{safe_val}\")")
@@ -36,12 +36,8 @@ class JsonToMetta:
             add_prop("engagement", meta.get('engagement'))
             add_prop("audience-sentiment", meta.get('audience_sentiment'))
             
-            # Author (original author of the content)
-            author_username = article.get('author_username', 'unknown')
-            add_prop("authored-by", author_username)
-            
             # Publisher (who published/shared this article)
-            publisher_username = article.get('publisher_username', author_username)
+            publisher_username = article.get('publisher_username', article.get('author_username', 'unknown'))
             add_prop("published-by", publisher_username)
             
             # Title (optional, good for debugging)
