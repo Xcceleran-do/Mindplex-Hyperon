@@ -1,0 +1,22 @@
+(: a A)
+(: ab (→ A B))
+(: bc (→ B C))
+(: ModusPonens (-> (→ $p $q) (-> $p $q)))
+
+(exec 0 (, (= (bc-loop (Cons (task prove (S (S (S Z))) (: $prf A)) Nil) Nil) $x)) (, $x))
+(exec 1 (, (= (bc-loop (Cons (task prove (S (S (S Z))) (: $prf B)) Nil) Nil) $x)) (, $x))
+(exec 2 (, (= (bc-loop (Cons (task prove (S (S (S Z))) (: $prf C)) Nil) Nil) $x)) (, $x))
+
+(= (bc-loop Z Nil $acc) $acc)
+
+(= (bc-loop  (Cons (task prove $k (: $prf $ccln)) Nil) $acc) (exec 3 (, (: $prf $ccln)) (, (: $prf $ccln))))
+
+(= (bc-loop (Cons (task prove $k (: $prf $ccln)) (Cons $next $tail)) $acc) (exec 4 (, (: $prf $ccln) (= (bc-loop (Cons $next $tail) (: $prf $ccln)) $res)) (, $res)))
+
+(= (bc-loop (Cons (task prove (S $k) (: ($prfabs $prfarg) $ccln)) $rest) $acc) (exec 5 (, (= (bc-loop (Cons (task prove $k (: $prfabs (-> $prms $ccln))) (Cons (task seek $k $prfarg $prms $ccln $rest) Nil)) $acc) $res)) (, $res)))
+
+(= (bc-loop (Cons (task seek $k $prfarg $prms $ccln $saved-rest) $rest) (: $resolved-abs (-> $prms $ccln))) (exec 6 (, (= (bc-loop (Cons (task prove $k (: $prfarg $prms)) (Cons (task assemble $k $resolved-abs $ccln $saved-rest) Nil)) Nil) $res)) (, $res)))
+
+(= (bc-loop (Cons (task assemble $k $resolved-abs $ccln Nil) $rest) (: $resolved-arg $prms)) (: ($resolved-abs $resolved-arg) $ccln))
+
+(= (bc-loop (Cons (task assemble $k $resolved-abs $ccln (Cons $saved-next $saved-tail)) $rest) (: $resolved-arg $prms)) (exec 7 (, (= (bc-loop (Cons $saved-next $saved-tail) (: ($resolved-abs $resolved-arg) $ccln)) $res)) (, $res)))
