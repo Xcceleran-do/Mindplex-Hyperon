@@ -215,80 +215,15 @@ clause_has_required_keyword([Functor|_], Keywords) :-
     member(Keyword, Keywords),
     sub_atom(Functor, 0, _, _, Keyword).
 
-% sort_conj(+Conjunction, -Result)
-% Sort clauses inside a conjunction based on canonicalized MeTTa string form.
-sort_conj(Conjunction, [Sorted]) :-
+% promote_engagement_conj(+Conjunction, -Result)
+% Move engagement-related clauses to the end of a conjunction.
+promote_engagement_conj(Conjunction, Promoted) :-
     ( Conjunction = [','|Clauses]
-    -> maplist(clause_key, Clauses, Pairs),
-       keysort(Pairs, SortedPairs),
-       pairs_values(SortedPairs, SortedClauses),
-       Sorted = [','|SortedClauses]
-    ; Sorted = Conjunction
+    -> required_functor_keywords(Keywords),
+       partition(has_required_keyword(Keywords), Clauses, Matches, Others),
+         append(Others, Matches, Promoted)
+    ; Promoted = Conjunction
     ).
 
-clause_key(Clause, Key-Clause) :-
-    swrite(Clause, Str),
-    canonicalize_metta_expr(Str, Key).
-
-canonicalize_metta_expr(Str, Canonical) :-
-    string_codes(Str, Codes),
-    canon_codes(Codes, [], 0, CanonCodes, _Map, _Next),
-    string_codes(Canon0, CanonCodes),
-    normalize_space(string(Canon1), Canon0),
-    replace_all("( ", "(", Canon1, Canon2),
-    replace_all(" )", ")", Canon2, Canonical).
-
-canon_codes([], Map, Next, [], Map, Next).
-canon_codes([C|Cs], Map0, Next0, Out, Map, Next) :-
-    ( C =:= 0'$, Cs = [N|_], is_var_start(N)
-    -> read_var_name(Cs, NameCodes, Rest),
-       atom_codes(NameAtom, NameCodes),
-       lookup_or_add_index(NameAtom, Map0, Next0, Map1, Next1, Index),
-       number_codes(Index, IndexCodes),
-       append([0'$, 0'V|IndexCodes], Tail, Out),
-       canon_codes(Rest, Map1, Next1, Tail, Map, Next)
-    ; Out = [C|Tail],
-      canon_codes(Cs, Map0, Next0, Tail, Map, Next)
-    ).
-
-is_var_start(C) :-
-    ( C >= 0'a, C =< 0'z )
-    ; ( C >= 0'A, C =< 0'Z )
-    ; C =:= 0'_.
-
-is_var_char(C) :-
-    is_var_start(C)
-    ; ( C >= 0'0, C =< 0'9 )
-    ; C =:= 0'-.
-
-read_var_name([0'#|Cs], Name, Rest) :-
-    skip_digits(Cs, Rest),
-    Name = []
-    .
-read_var_name([C|Cs], [C|Name], Rest) :-
-    is_var_char(C),
-    !,
-    read_var_name(Cs, Name, Rest).
-read_var_name(Rest, [], Rest).
-
-skip_digits([C|Cs], Rest) :-
-    C >= 0'0,
-    C =< 0'9,
-    !,
-    skip_digits(Cs, Rest).
-skip_digits(Rest, Rest).
-
-lookup_or_add_index(Name, Map0, Next0, Map, Next, Index) :-
-    ( memberchk(Name-Index0, Map0)
-    -> Map = Map0,
-       Next = Next0,
-       Index = Index0
-    ; Index = Next0,
-      Next is Next0 + 1,
-      Map = [Name-Index|Map0]
-    ).
-
-replace_all(Pattern, Replacement, Input, Output) :-
-    split_string(Input, Pattern, "", Parts),
-    atomic_list_concat(Parts, Replacement, OutAtom),
-    atom_string(OutAtom, Output).
+has_required_keyword(Keywords, Clause) :-
+    clause_has_required_keyword(Clause, Keywords).

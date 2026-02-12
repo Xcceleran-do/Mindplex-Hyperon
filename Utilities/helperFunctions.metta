@@ -95,7 +95,7 @@
 ;; Function to count atom occrence in a list of atoms.
 (: count (-> $Atom Expression Number))
 (= (count $atom $list)
-   (foldl-atom $list 0 $acc $x  (if (== $atom $x) (+ $acc 1) $acc)))
+   (foldl-atom $list 0 $acc $x (if (== $atom $x) (+ $acc 1) $acc)))
 
 ;; A function to check if a given atom is symbol.
 ;(: isSymbol (-> Atom Bool))

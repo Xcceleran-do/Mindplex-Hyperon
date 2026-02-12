@@ -1,36 +1,15 @@
-(= (removeAnyMetricsAtom $superset $subsets)
-     (let ($x $subset) ((superpose $superset) (superpose $subsets))
-          (unify 
-               $subset
-               $x
-               (let $a (subtraction-atom $superset ($subset)) (union-atom $a ($subset))) 
-               (empty)
-          )
-     )
-)
-; !(removeAnyMetricsAtom ((engagement $p41 high) (length $p41 low) (reputation $r45 low)) ((engagement $j $k) (reputation $_ $__) (popularity $___ $____)))
-
-(= (convertIncomingDataHelper2 $organized)
+(= (convertIncomingDataHelper $organized)
      (if (> (size-atom $organized) 1)
-          (let ($head $tail) (decons-atom $organized) (-> $head (convertIncomingDataHelper2 $tail)))
+          (let ($head $tail) (decons-atom $organized) (-> $head (convertIncomingDataHelper $tail)))
           (car-atom $organized)
      )
 )
-; !(convertIncomingDataHelper ((engagement $p41 high) (length $p41 low) (reputation $r45 low)))
 
-(= (convertIncomingDataHelper $data)
-     (convertIncomingDataHelper2 (removeAnyMetricsAtom $data ((engagement_level $j $k) (reputation $_ $__) (popularity $___ $____))))
-)
-; !(convertIncomingDataHelper ((engagement $p41 high) (length $p41 low) (popularity $re45 low)))
-     
-     
 (= (main $rules) 
      (let (supportOf $rule $num) (superpose $rules)
           (let $formattedRule (convertIncomingDataHelper (cdr-atom $rule)) (: (rule:- $formattedRule) (convertIncomingDataHelper (cdr-atom $rule))))
      )
 )
-
-
 
 ;; Define cast functions between Nat and Number
 (= (fromNumber $n) (if (<= $n 0) Z (S (fromNumber (- $n 1)))))

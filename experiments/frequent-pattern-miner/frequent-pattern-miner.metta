@@ -66,14 +66,14 @@
 ;; Formats conjunctions with deterministic ordering and support annotation.
 ;; 1:- Iterate over (conjunct ...) items
 ;; 2:- Compute support with sup-num; skip if < $minSup
-;; 3:- Sort clauses with sort_conj and emit (supportOf (, $sorted) $support)
+;; 3:- Promote engagement clause and emit (supportOf (, $sorted) $support)
 ;(: formatter (-> SpaceType SpaceType Number Atom ))
 
 (= (formatter (conjunct $conjunct) $dbspace $minSup) 
         (let $cnt (counter $dbspace $conjunct)
                     (if (>= $cnt $minSup)
-                        (let $sorted (sort_conj $conjunct)
-                                (supportOf $sorted $cnt))
+                        (let $organized (promote_engagement_conj $conjunct)
+                                (trace! $organized (supportOf $organized $cnt)))
                                 (empty))))
         
 ; --------------------------------------------------------

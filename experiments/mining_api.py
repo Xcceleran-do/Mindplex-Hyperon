@@ -37,18 +37,28 @@ ASI_MODEL = "asi1-mini"
 metta4Miner = MeTTa()
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+def to_wsl_path(path: str) -> str:
+    abs_path = os.path.abspath(path)
+    if re.match(r"^[A-Za-z]:\\", abs_path):
+        drive = abs_path[0].lower()
+        rest = abs_path[2:].replace('\\', '/')
+        return f"/mnt/{drive}{rest}"
+    return abs_path.replace('\\', '/')
+
 # For PeTTa/run.sh, always use forward slashes as it will be executed by bash
-PETTA_RUN_SH = os.path.join(PROJECT_ROOT, "PeTTa", "run.sh").replace('\\', '/')
+PROJECT_ROOT_WSL = to_wsl_path(PROJECT_ROOT)
+PETTA_RUN_SH = to_wsl_path(os.path.join(PROJECT_ROOT, "PeTTa", "run.sh"))
 
-METTA_SETUP = """
-!(import! &self /mnt/c/Users/HP/iCog/Mindplex-Hyperon/PeTTa/lib/lib_import.metta)
-!(import_prolog_functions_from_file "/mnt/c/Users/HP/iCog/Mindplex-Hyperon/experiments/frequent-pattern-miner/conj_exp.pl" (unique_combinations_star cut-first-char sort_conj))
+METTA_SETUP = f"""
+!(import! &self {PROJECT_ROOT_WSL}/PeTTa/lib/lib_import.metta)
+!(import_prolog_functions_from_file "{PROJECT_ROOT_WSL}/experiments/frequent-pattern-miner/conj_exp.pl" (unique_combinations_star cut-first-char promote_engagement_conj))
 
-!(import! &self /mnt/c/Users/HP/iCog/Mindplex-Hyperon/experiments/frequent-pattern-miner/frequent-pattern-miner)
-!(import! &self /mnt/c/Users/HP/iCog/Mindplex-Hyperon/experiments/pattern-miner/pattern-miner)
-!(import! &self /mnt/c/Users/HP/iCog/Mindplex-Hyperon/experiments/utils/common-utils)
-!(import! &tempo /mnt/c/Users/HP/iCog/Mindplex-Hyperon/experiments/atomspace_visualizer/public/data)
-!(import! &self /mnt/c/Users/HP/iCog/Mindplex-Hyperon/experiments/chainer/main)
+!(import! &self {PROJECT_ROOT_WSL}/experiments/frequent-pattern-miner/frequent-pattern-miner)
+!(import! &self {PROJECT_ROOT_WSL}/experiments/pattern-miner/pattern-miner)
+!(import! &self {PROJECT_ROOT_WSL}/experiments/utils/common-utils)
+!(import! &tempo {PROJECT_ROOT_WSL}/experiments/atomspace_visualizer/public/data)
+!(import! &self {PROJECT_ROOT_WSL}/experiments/chainer/main)
 
 !(let $atom (let $fact (get-atoms &tempo) (: (fact:- $fact) $fact)) (add-atom &res1 $atom))
 
@@ -216,7 +226,8 @@ def run_metta_with_petta(metta_code: str) -> str:
     try:
         # Using bash explicitly as PeTTa/run.sh is a shell script
         # and we are on Windows (likely using git bash or similar environment)
-        cmd = ["bash", PETTA_RUN_SH, temp_file_path]
+        temp_file_path_wsl = to_wsl_path(temp_file_path)
+        cmd = ["bash", PETTA_RUN_SH, temp_file_path_wsl]
         print(f"DEBUG: Running petta command: {' '.join(cmd)}")
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
         return result.stdout
@@ -765,7 +776,7 @@ def start_mining_job(conjunction_count: int):
 def formatter(mined_patterns):
     print("formatter started :--:")
     mined_patterns = metta4Miner.parse_single(mined_patterns)
-    metta4Miner.run(f""" !(add-reduct &res1 (main {mined_patterns})) """)
+    metta4Miner.run(f""" !(let $atom (main {mined_patterns}) (add-atom &res1 $atom)) """)
     print("formatter ended :-_-:")
 
 def backWardChainer(whatToCheck, depth=5):
