@@ -23,8 +23,9 @@ unique_combinations_star(Exprs, Size, Results) :-
               ),
               RawCombos),
       sort(RawCombos, UniqueCombos),
-      maplist(normalize_combo_vars, UniqueCombos, NormalizedCombos),
-      maplist(wrap_conjunct, NormalizedCombos, Results)
+            maplist(normalize_combo_vars, UniqueCombos, NormalizedCombos),
+            maplist(wrap_conjunct, NormalizedCombos, WrappedCombos),
+            include(conjunct_has_engagement, WrappedCombos, Results)
     ).
 
 parse_k(Size, K) :-
@@ -199,6 +200,20 @@ lookup_or_add_var(Key, Map0, Map, Var) :-
     ).
 
 wrap_conjunct(Combo, [conjunct, [','|Combo]]).
+
+required_functor_keywords([engagement]).
+
+conjunct_has_engagement([conjunct, [','|Clauses]]) :-
+    required_functor_keywords(Keywords),
+    member(Clause, Clauses),
+    clause_has_required_keyword(Clause, Keywords),
+    !.
+conjunct_has_engagement(_) :- false.
+
+clause_has_required_keyword([Functor|_], Keywords) :-
+    atom(Functor),
+    member(Keyword, Keywords),
+    sub_atom(Functor, 0, _, _, Keyword).
 
 % sort_conj(+Conjunction, -Result)
 % Sort clauses inside a conjunction based on canonicalized MeTTa string form.
