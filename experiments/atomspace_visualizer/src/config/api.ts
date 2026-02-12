@@ -2,12 +2,13 @@
 // Centralized API endpoint configuration using environment variables
 
 export const API_CONFIG = {
-  BASE_URL: import.meta.env.VITE_API_BASE_URL || '',
+  BASE_URL: import.meta.env.VITE_API_BASE_URL || 'https://rr9qsbzr-5000.uks1.devtunnels.ms',
   
   // API endpoints
   ENDPOINTS: {
     HEALTH: '/api/health',
     MINE: '/api/mine',
+    INGEST: '/api/ingest',
     CHAT: '/api/chat',
     CHAT_ANALYZE: '/api/chat/analyze',
     CHAT_CLEAR: '/api/chat/clear',

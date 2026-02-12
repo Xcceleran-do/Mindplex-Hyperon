@@ -6,24 +6,33 @@ A Flask-based API server that exposes pattern mining and AI chat functionality
 
 import os
 import sys
+import json
 import time
 import traceback
 import re
 import subprocess
 import tempfile
+import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import threading
 import uuid
 from dataclasses import dataclass
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from hyperon import MeTTa
-import google.generativeai as genai
 from dotenv import load_dotenv
+
+# Add workspace root to path to allow imports
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
+from experiments.ingestion.pipeline import run_ingestion
 load_dotenv()
 
-# Configure Gemini API
-genai.configure(api_key=os.getenv("GEMINI_API_KEY4"))
+# Configure ASI API
+ASI_API_KEY = os.getenv("ASI_API_KEY")
+if not ASI_API_KEY:
+    print("WARNING: ASI_API_KEY environment variable is not set. AI features will fail.")
+ASI_BASE_URL = "https://api.asi1.ai/v1/chat/completions"
+ASI_MODEL = "asi1-mini"
 
 metta4Miner = MeTTa()
 
@@ -47,6 +56,149 @@ METTA_SETUP = """
 """
 
 metta4Miner.run(METTA_SETUP)
+
+# Define tools for ASI API
+tools_schema = [
+    {
+        "type": "function",
+        "function": {
+            "name": "mine_pattern",
+            "description": "Mines patterns with a specified number of conjunctions.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "numberOfConjunction": {
+                        "type": "integer",
+                        "description": "The number of conjunctions to use in pattern mining."
+                    }
+                },
+                "required": ["numberOfConjunction"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "start_mining_job",
+            "description": "Starts a mining job with a specified number of conjunctions.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "conjunction_count": {
+                        "type": "integer",
+                        "description": "The number of conjunctions to use in pattern mining."
+                    }
+                },
+                "required": ["conjunction_count"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_mining_results",
+            "description": "Retrieves the latest pattern mining results from the system.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "analyze_specific_pattern",
+            "description": "Analyzes a specific pattern in detail, extracting properties and values.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "pattern": {
+                        "type": "string",
+                        "description": "The pattern string to analyze."
+                    }
+                },
+                "required": ["pattern"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_pattern_statistics",
+            "description": "Gets statistics about all mining results including total jobs and patterns.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "visualize_pattern_request",
+            "description": "Requests visualization of a specific pattern on the graph canvas.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "pattern": {
+                        "type": "string",
+                        "description": "The pattern string to visualize."
+                    }
+                },
+                "required": ["pattern"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "getChainerResult",
+            "description": "Get the result of backward chaining for a specific query.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "whatToCheck": {
+                        "type": "string",
+                        "description": "The query to check, e.g., '(reputation 0 \"\\High\")'"
+                    },
+                    "depth": {
+                        "type": "integer",
+                        "description": "The depth limit for backward chaining.",
+                        "default": 5
+                    }
+                },
+                "required": ["whatToCheck"]
+            }
+        }
+    }
+]
+
+def call_asi_api(messages: List[Dict[str, Any]], tools: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+    """Calls the ASI API with the given messages and tools."""
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {ASI_API_KEY}"
+    }
+    payload = {
+        "model": ASI_MODEL,
+        "messages": messages,
+        "temperature": 0.7
+    }
+    if tools:
+        payload["tools"] = tools
+        payload["tool_choice"] = "auto"
+
+    try:
+        response = requests.post(ASI_BASE_URL, headers=headers, json=payload)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        print(f"ASI API Error: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+            print(f"Response content: {e.response.text}")
+        return {"error": str(e)}
 
 def run_metta_with_petta(metta_code: str) -> str:
     """
@@ -111,15 +263,39 @@ def parse_pattern_string(p_str: str):
     Parses a pattern string like (supportOf ((length $x "low") (engagement_level $x "high")) 3)
     into a dictionary with 'pattern' and 'support' keys.
     """
-    # Regex to capture (supportOf <pattern> <count>)
-    # This is a bit naive but should work for the standard format
-    match = re.search(r'\(supportOf\s+(.+)\s+(\d+)\)', p_str)
+    # Capture the last numeric token as support, everything before it as pattern.
+    match = re.match(r'^\(supportOf\s+(.+)\s+(\d+)\)$', p_str.strip(), re.DOTALL)
     if match:
         return {
             "pattern": match.group(1).strip(),
             "support": match.group(2).strip()
         }
     return None
+
+def extract_support_of_expressions(text: str) -> list[str]:
+    """Extract all (supportOf ...) expressions from text with balanced parentheses."""
+    results = []
+    start = 0
+    while True:
+        idx = text.find("(supportOf", start)
+        if idx == -1:
+            break
+        depth = 0
+        end = None
+        for i in range(idx, len(text)):
+            ch = text[i]
+            if ch == '(':
+                depth += 1
+            elif ch == ')':
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        if end is None:
+            break
+        results.append(text[idx:end])
+        start = end
+    return results
 
 def mine_pattern(numberOfConjunction: int) -> dict:
     """
@@ -151,12 +327,8 @@ def mine_pattern(numberOfConjunction: int) -> dict:
         # We look for (supportOf ...) patterns in the output.
         # The regex in parse_pattern_string is already designed for this.
         
-        # Find all occurrences of (supportOf ...)
-        support_matches = re.findall(r'\(supportOf\s+\([^\)]+\)\s+\d+\)', full_answer_str)
-        if not support_matches:
-            # Try a slightly more flexible regex for more complex patterns
-            # (supportOf (<pattern>) <count>)
-            support_matches = re.findall(r'\(supportOf\s+\(.*\)\s+\d+\)', full_answer_str)
+        # Find all occurrences of (supportOf ...) with balanced parentheses
+        support_matches = extract_support_of_expressions(full_answer_str)
 
         for match in support_matches:
             parsed = parse_pattern_string(match)
@@ -247,6 +419,32 @@ CORS(app, resources={r"/api/*": {
     "supports_credentials": False,
     "max_age": 3600
 }})
+
+@app.route('/api/ingest', methods=['POST'])
+def ingest_data():
+    """
+    Trigger the ingestion pipeline for a specific user.
+    Expects JSON: { "username": "some_user" }
+    """
+    try:
+        data = request.get_json()
+        username = data.get('username') if data else None
+
+        if not username:
+            return jsonify({"status": "error", "message": "Username is required"}), 400
+
+        print(f"Received ingestion request for user: {username}")
+        result = run_ingestion(username=username)
+
+        if result.get("status") == "error":
+            return jsonify(result), 500
+
+        return jsonify(result)
+
+    except Exception as e:
+        print(f"Ingestion error: {e}")
+        traceback.print_exc()
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 def getAllFactsAndRules():
     """Return current facts and rules from the MeTTa knowledge base.
@@ -341,21 +539,14 @@ def handle_backward_chain_for_message(message: str):
             OUTPUT ONLY the MeTTa expression or NO_QUERY.
             """
         print("DEBUG: sending rewrite prompt to LLM (first 300 chars):", rewrite_prompt[:300])
-        rewrite_resp = model.generate_content(rewrite_prompt)
+        messages = [
+            {"role": "system", "content": SYSTEM_INSTRUCTION},
+            {"role": "user", "content": rewrite_prompt}
+        ]
+        response_data = call_asi_api(messages)
         candidate_query = None
-        # Prefer structured text, fall back to parsing candidates
-        if hasattr(rewrite_resp, 'text') and rewrite_resp.text:
-            candidate_query = rewrite_resp.text.strip()
-        else:
-            try:
-                parts = rewrite_resp.candidates[0].content.parts
-                acc = ""
-                for part in parts:
-                    if hasattr(part, 'text'):
-                        acc += part.text
-                candidate_query = acc.strip()
-            except Exception:
-                candidate_query = None
+        if 'choices' in response_data and response_data['choices']:
+            candidate_query = response_data['choices'][0]['message'].get('content', '').strip()
 
         print("DEBUG: rewrite result:", candidate_query)
         function_calls.append({'name': 'rewrite_query', 'args': {'message': message}, 'result': candidate_query})
@@ -624,16 +815,21 @@ def getChainerResult(whatToCheck, depth=5):
         """
 
     try:
-        # Use Gemini to analyze the results
-        response = model.generate_content(prompt)
-        justification = response.text if response.text else "Unable to generate justification analysis."
-        
+        messages = [
+            {"role": "system", "content": SYSTEM_INSTRUCTION},
+            {"role": "user", "content": prompt}
+        ]
+        response_data = call_asi_api(messages)
+        justification = None
+        if 'choices' in response_data and response_data['choices']:
+            justification = response_data['choices'][0]['message'].get('content', '')
+
         return {
             "query": whatToCheck,
             "status": "success",
             "raw_proofs": str(chainAnswer),
             "proof_count": len(chainAnswer),
-            "justification": justification,
+            "justification": justification or "Unable to generate justification analysis.",
             "depth_used": depth
         }
         
@@ -682,19 +878,14 @@ def summarize_patterns(patterns: list) -> str:
     prompt = "\n\n".join(prompt_parts)
 
     try:
-        resp = model.generate_content(prompt)
-        text = resp.text if hasattr(resp, 'text') and resp.text else None
-        if not text:
-            # Try extracting from candidates-like structure
-            try:
-                parts = resp.candidates[0].content.parts
-                acc = ""
-                for part in parts:
-                    if hasattr(part, 'text'):
-                        acc += part.text
-                text = acc
-            except Exception:
-                text = None
+        messages = [
+            {"role": "system", "content": SYSTEM_INSTRUCTION},
+            {"role": "user", "content": prompt}
+        ]
+        response_data = call_asi_api(messages)
+        text = None
+        if 'choices' in response_data and response_data['choices']:
+            text = response_data['choices'][0]['message'].get('content', '')
 
         return text or "The model could not produce a summary."
     except Exception as e:
@@ -715,11 +906,7 @@ available_functions = {
     "getChainerResult": getChainerResult
 }
 
-# Initialize Gemini model with automatic function calling
-model = genai.GenerativeModel(
-    "gemini-2.0-flash-exp",
-    tools=[start_mining_job, mine_pattern, analyze_specific_pattern, get_pattern_statistics, visualize_pattern_request, getChainerResult],
-    system_instruction="""You are a friendly and knowledgeable AI assistant with expertise in data mining patterns, knowledge graphs, and pattern analysis. 
+SYSTEM_INSTRUCTION = """You are a friendly and knowledgeable AI assistant with expertise in data mining patterns, knowledge graphs, and pattern analysis. 
 
         **Your Primary Specialty:**
         You excel at analyzing pattern mining results, explaining conjunctions, and providing insights about relationships in data.
@@ -810,7 +997,6 @@ model = genai.GenerativeModel(
         - Adapt your tone to match the user's style
 
         Remember: While your expertise is in pattern mining, you're a helpful general-purpose assistant who can discuss any topic!"""
-)
 # Store conversation history
 conversations = {}
 
@@ -1049,7 +1235,7 @@ def summarize_patterns_endpoint():
 
 @app.route('/api/chat', methods=['POST', 'OPTIONS'])
 def chat():
-    """Main chat endpoint with Gemini AI and automatic function calling
+    """Main chat endpoint with ASI and automatic function calling
 
     This cleaned implementation centralizes error handling and ensures the
     returned payload is JSON-serializable by sanitizing function call results.
@@ -1098,19 +1284,21 @@ def chat():
 
         conversations.setdefault(session_id, [])
 
-        # Build conversation history for Gemini
-        gemini_history = []
+        # Build conversation history for ASI
+        asi_messages = [{"role": "system", "content": SYSTEM_INSTRUCTION}]
         for msg in history[-10:]:
-            if msg.get('role') == 'user':
-                gemini_history.append({'role': 'user', 'parts': [msg.get('content', '')]})
-            elif msg.get('role') == 'assistant':
-                gemini_history.append({'role': 'model', 'parts': [msg.get('content', '')]})
+            role = msg.get('role')
+            if role == 'assistant':
+                role = 'assistant'
+            elif role == 'user':
+                role = 'user'
+            asi_messages.append({'role': role, 'content': msg.get('content', '')})
 
-        # Start chat with history and send the user message
-        chat_session = model.start_chat(history=gemini_history)
-        response = chat_session.send_message(message)
+        asi_messages.append({'role': 'user', 'content': message})
 
-        # Handle automatic function calling loop
+        response_data = call_asi_api(asi_messages, tools=tools_schema)
+
+        # Handle function calling loop
         max_iterations = 5
         iteration = 0
         function_results = []
@@ -1118,76 +1306,74 @@ def chat():
         while iteration < max_iterations:
             iteration += 1
 
-            parts = getattr(response.candidates[0].content, 'parts', []) if response and response.candidates else []
-            if not parts:
+            if 'error' in response_data:
+                print(f"ASI API Error: {response_data['error']}")
                 break
 
-            part = parts[0]
-            if not (hasattr(part, 'function_call') and part.function_call):
+            if 'choices' not in response_data or not response_data['choices']:
                 break
 
-            function_call = part.function_call
-            function_name = getattr(function_call, 'name', None)
-            function_args = dict(getattr(function_call, 'args', {}) or {})
+            choice = response_data['choices'][0]
+            message_obj = choice['message']
 
-            print(f"🔧 Function call: {function_name}({function_args})")
+            # Append assistant message to history
+            asi_messages.append(message_obj)
 
-            if function_name not in available_functions:
-                print(f"✗ Unknown function: {function_name}")
-                break
+            if 'tool_calls' in message_obj and message_obj['tool_calls']:
+                tool_calls = message_obj['tool_calls']
 
-            try:
-                # Normalize args (alias mapping and numeric normalization)
-                norm_args = {}
-                for k, v in function_args.items():
-                    key = k
-                    if k in ('conjunction_count', 'conjunctions', 'conjunctionCount', 'numberOfConjunction', 'n'):
-                        key = 'conjunction_count'
+                for tool_call in tool_calls:
+                    function_name = tool_call['function']['name']
+                    function_args_str = tool_call['function']['arguments']
+                    try:
+                        function_args = json.loads(function_args_str)
+                    except json.JSONDecodeError:
+                        function_args = {}
 
-                    if isinstance(v, str) and re.fullmatch(r"\d+", v):
-                        norm_args[key] = int(v)
-                    elif isinstance(v, float) and v.is_integer():
-                        norm_args[key] = int(v)
+                    print(f"🔧 Function call: {function_name}({function_args})")
+
+                    if function_name not in available_functions:
+                        print(f"✗ Unknown function: {function_name}")
+                        function_result = {"error": f"Unknown function {function_name}"}
                     else:
-                        norm_args[key] = v
+                        try:
+                            # Normalize args (alias mapping and numeric normalization)
+                            norm_args = {}
+                            for k, v in function_args.items():
+                                key = k
+                                if k in ('conjunction_count', 'conjunctions', 'conjunctionCount', 'numberOfConjunction', 'n'):
+                                    key = 'conjunction_count'
 
-                function_result = available_functions[function_name](**norm_args)
-                function_results.append({'name': function_name, 'args': norm_args, 'result': function_result})
+                                if isinstance(v, str) and re.fullmatch(r"\d+", v):
+                                    norm_args[key] = int(v)
+                                elif isinstance(v, float) and v.is_integer():
+                                    norm_args[key] = int(v)
+                                else:
+                                    norm_args[key] = v
 
-                # Send the function result back to the model
-                response = chat_session.send_message(
-                    genai.types.content_types.to_content({
-                        'role': 'function',
-                        'parts': [{
-                            'function_response': {
-                                'name': function_name,
-                                'response': function_result
-                            }
-                        }]
+                            function_result = available_functions[function_name](**norm_args)
+                            function_results.append({'name': function_name, 'args': norm_args, 'result': function_result})
+                        except Exception as func_error:
+                            print(f"✗ Function error: {func_error}")
+                            function_result = {'error': str(func_error)}
+
+                    # Append tool output to messages
+                    asi_messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call['id'],
+                        "content": json.dumps(function_result)
                     })
-                )
 
-            except Exception as func_error:
-                print(f"✗ Function error: {func_error}")
-                # Return an error response from the function back to the model
-                response = chat_session.send_message(
-                    genai.types.content_types.to_content({
-                        'role': 'function',
-                        'parts': [{
-                            'function_response': {
-                                'name': function_name,
-                                'response': {'error': str(func_error)}
-                            }
-                        }]
-                    })
-                )
+                # Call API again with tool outputs
+                response_data = call_asi_api(asi_messages, tools=tools_schema)
+            else:
+                # No more tool calls, we have the final response
+                break
 
         # Extract final text response
         response_text = ''
-        if response and response.candidates:
-            for part in getattr(response.candidates[0].content, 'parts', []):
-                if hasattr(part, 'text'):
-                    response_text += part.text
+        if 'choices' in response_data and response_data['choices']:
+            response_text = response_data['choices'][0]['message'].get('content', '')
 
         # If the model didn't generate text but mining results exist, synthesize a summary
         if not response_text:

@@ -16,64 +16,255 @@
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  padding: 10px 12px;
+  padding: 12px 16px;
   cursor: pointer;
   user-select: none;
-  background: var(--bg-hover);
+
+  /* Glass Button */
+  background: var(--bg-surface);
+  /* Slightly more opaque for contrast */
   color: var(--text-primary);
-  border-radius: 6px;
-  transition: all 0.2s ease;
-  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+
+  font-family: var(--font-heading);
   font-size: 0.9rem;
   font-weight: 600;
+  letter-spacing: 0.02em;
+
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--shadow-sm);
 }
 
 .sectionToggle:hover {
-  background: var(--bg-secondary);
-  border-color: var(--node-hover);
+  background: var(--bg-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--accent-cyan);
 }
+
+.toggleIcon {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  transition: transform 0.2s;
+}
+
+/* Rotate icon when open (handled by state usually, but good to have anim class if possible) */
 
 .legendContent {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   padding: 4px;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .legendItem {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  border-radius: 4px;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
   cursor: pointer;
   transition: background 0.2s;
   font-size: 0.85rem;
-  color: var(--text-primary);
+  color: var(--text-secondary);
+  border: 1px solid transparent;
 }
 
 .legendItem:hover {
-  background-color: var(--bg-hover);
+  background-color: rgba(255, 255, 255, 0.05);
+  border-color: var(--border-subtle);
+  color: var(--text-primary);
 }
 
-.colorDot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
+.legendColor {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
   flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
-.legendLabel {
+.colorLabel {
   flex: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
 }
 
-.countBadge {
+.colorCode {
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-tertiary);
+  font-size: 0.7rem;
+  opacity: 0.7;
+}
+
+/* Filter Styles */
+.filterStatus {
+  background: rgba(16, 185, 129, 0.1);
+  /* Emerald tint */
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  margin-bottom: 12px;
+  font-size: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.filterStatus strong {
+  color: var(--accent-emerald);
+  font-family: var(--font-heading);
+}
+
+.clearButton {
+  align-self: flex-end;
+  background: transparent;
+  border: 1px solid var(--accent-emerald);
+  color: var(--accent-emerald);
+  padding: 6px 12px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.clearButton:hover {
+  background: var(--accent-emerald);
+  color: white;
+}
+
+.multiSelectHint {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-tertiary);
   font-size: 0.75rem;
+  font-style: italic;
+}
+
+.legendSection {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.legendSection h4 {
+  margin: 0;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-tertiary);
+  font-weight: 700;
+  padding-left: 4px;
+}
+
+.categoryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 10px;
+}
+
+/* Chips for Categories */
+.categoryButton {
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  padding: 10px;
+  border-radius: 12px;
   color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 0.2s;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.categoryButton:hover {
   background: var(--bg-hover);
-  padding: 2px 6px;
-  border-radius: 10px;
+  border-color: var(--text-secondary);
+  color: var(--text-primary);
+}
+
+.categoryButtonActive {
+  background: linear-gradient(135deg, var(--primary-600) 0%, var(--accent-purple) 100%);
+  color: white;
+  border-color: transparent;
+  box-shadow: 0 4px 10px rgba(139, 92, 246, 0.3);
+}
+
+.filterOptions {
+  background: rgba(0, 0, 0, 0.02);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 16px;
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.itemGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+/* Property Value Chips */
+.filterButton {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  padding: 6px 12px;
+  border-radius: 20px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.filterButton:hover {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  transform: translateY(-1px);
+}
+
+.filterButtonActive {
+  background: rgba(6, 182, 212, 0.1);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  font-weight: 600;
+  box-shadow: 0 0 0 1px var(--accent-cyan);
 }

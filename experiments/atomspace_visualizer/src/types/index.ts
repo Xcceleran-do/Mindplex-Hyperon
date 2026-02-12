@@ -15,6 +15,8 @@ export interface GraphNode {
   type: NodeType;
   position: Point;
   color?: string;
+  textColor?: string; // Explicit text color for good contrast
+  strokeColor?: string; // Explicit border color
   size?: number;
   isHypergraph?: boolean;
   metadata: {
@@ -23,6 +25,7 @@ export interface GraphNode {
     isGenerated?: boolean; // For hypergraph intermediate nodes
     columnType?: 'article' | 'header' | 'property'; // For columnar layout
     propertyName?: string; // Property name for property nodes
+    isTarget?: boolean; // Whether this is a target attribute
   };
 }
 

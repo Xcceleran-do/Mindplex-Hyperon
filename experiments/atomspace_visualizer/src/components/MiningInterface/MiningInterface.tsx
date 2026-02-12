@@ -1,4 +1,4 @@
-import { createSignal, createEffect, Show } from 'solid-js';
+import { createSignal, createEffect, Show, onCleanup } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import ButtonParticleEffects from './ButtonEffects';
 import './MiningInterface.css';
@@ -15,6 +15,7 @@ export interface MiningInterfaceProps {
   onMiningStart?: (conjunctSize: number) => void;
   onMiningComplete?: (result: MiningResult) => void;
   onPatternsFound?: (patterns: Array<{ pattern: string; support: string }>, conjunctSize?: number) => void;
+  onShowRules?: () => void;
 }
 
 const MiningInterface = (props: MiningInterfaceProps) => {
@@ -22,6 +23,28 @@ const MiningInterface = (props: MiningInterfaceProps) => {
   const [miningResult, setMiningResult] = createSignal<MiningResult | null>(null);
   const [conjunctionCount, setConjunctionCount] = createSignal(5);
   const [showResult, setShowResult] = createSignal(false);
+  const [miningProgress, setMiningProgress] = createSignal(0);
+  const [miningStatus, setMiningStatus] = createSignal('Preparing mines...');
+
+  const statusMessages = [
+    'Scanning AtomSpace...',
+    'Digging for conjuncts...',
+    'Filtering patterns...',
+    'Extracting gold...',
+    'Refining results...'
+  ];
+
+  createEffect(() => {
+    if (isMining()) {
+      const interval = setInterval(() => {
+        setMiningProgress(prev => Math.min(prev + Math.random() * 5, 95));
+        setMiningStatus(statusMessages[Math.floor(Math.random() * statusMessages.length)]);
+      }, 800);
+      onCleanup(() => clearInterval(interval));
+    } else {
+      setMiningProgress(0);
+    }
+  });
 
   const startMining = async () => {
     // Delegate to parent unified flow when available
@@ -37,7 +60,7 @@ const MiningInterface = (props: MiningInterfaceProps) => {
       return;
     }
 
-  // Fallback: if parent handler not provided, call API directly (legacy)
+    // Fallback: if parent handler not provided, call API directly (legacy)
 
     const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -56,17 +79,17 @@ const MiningInterface = (props: MiningInterfaceProps) => {
       }
 
       const jobData = await response.json();
-      
+
       // Mining now completes immediately with results
       setIsMining(false);
-      
+
       const miningResult: MiningResult = {
         jobId: jobData.jobId,
         status: 'completed',
         result: jobData.result,
         duration: 0
       };
-      
+
       if (jobData.result && Array.isArray(jobData.result)) {
         console.log('MiningInterface (fallback): Calling onPatternsFound with conjunctSize:', conjunctionCount());
         props.onPatternsFound?.(jobData.result, conjunctionCount());
@@ -149,8 +172,13 @@ const MiningInterface = (props: MiningInterfaceProps) => {
               </Show>
               <Show when={isMining()}>
                 <div class="mining-animation">
-                  <div class="pickaxe-swing">⛏️</div>
-                  <span class="mining-text">Mining...</span>
+                  <div class="progress-bar-container">
+                    <div class="progress-bar-fill" style={{ width: `${miningProgress()}%` }}></div>
+                  </div>
+                  <div class="mining-status-content">
+                    <div class="pickaxe-swing">⛏️</div>
+                    <span class="mining-text">{miningStatus()}</span>
+                  </div>
                   <div class="sparkles">
                     <span class="sparkle">✨</span>
                     <span class="sparkle">⭐</span>
@@ -161,6 +189,16 @@ const MiningInterface = (props: MiningInterfaceProps) => {
             </div>
           </button>
         </div>
+
+        <Show when={props.onShowRules}>
+          <button
+            class="show-rules-btn"
+            onClick={props.onShowRules}
+            title="Show Mined Rules"
+          >
+            📜
+          </button>
+        </Show>
       </div>
 
 
@@ -193,7 +231,7 @@ const MiningInterface = (props: MiningInterfaceProps) => {
                 </div>
               </div>
             </Show>
-            
+
             <Show when={miningResult()?.status === 'error'}>
               <div class="result-header error">
                 <h2>⚠️ Mining Failed ⚠️</h2>
