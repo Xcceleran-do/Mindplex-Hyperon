@@ -4,7 +4,7 @@
 !(import! &db ../../atomspace_visualizer/public/data)
 
 !(bind! purifiedDbSpace (new-space)) ; space to hold the database atoms
-!(add-reduct purifiedDbSpace (get-atoms &db))
+!(let $atom (get-atoms &db) (add-atom purifiedDbSpace $atom))
 
 ;; space to hold the miner result
 !(bind! &res1 (new-space))
@@ -13,9 +13,9 @@
 ; !(memberChecker (engagement_level $x "low") ( (engagement_level $x "low") (engagement_level $x "med")) purifiedDbSpace 3)
 ; !(let $ana (customUnique (match purifiedDbSpace ($link $x $y) (createSpecials ($link $x $y))) purifiedDbSpace 3) (--- :- --- (unique_combinations_star $ana)))
 
----------------------------------------------------
+; ---------------------------------------------------
 ;; mine frequent patterns without surprissingness 
----------------------------------------------------
+; ---------------------------------------------------
 ;; minimum support 3 -3rd arg
 ;; number of conjuncts 3 -4th arg
 

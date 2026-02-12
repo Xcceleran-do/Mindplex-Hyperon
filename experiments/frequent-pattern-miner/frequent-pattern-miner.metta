@@ -1,6 +1,3 @@
-;!(import! &self "conj_exp.py")
-; !(import! &self "freq-pat.py")
-
 (= (sup-eval $db $pattern $minSup) 
     (let $matches (collapse (match $db $pattern $pattern)) 
         (>= (size-atom $matches) $minSup)

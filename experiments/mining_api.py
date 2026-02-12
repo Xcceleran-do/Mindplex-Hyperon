@@ -9,6 +9,8 @@ import sys
 import time
 import traceback
 import re
+import subprocess
+import tempfile
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import threading
@@ -25,23 +27,103 @@ genai.configure(api_key=os.getenv("GEMINI_API_KEY4"))
 
 metta4Miner = MeTTa()
 
-metta4Miner.run("""
-    !(import! &self experiments/pattern-miner/pattern-miner)
-    !(import! &self experiments/utils/common-utils)
-    !(import! &self experiments/frequent-pattern-miner/frequent-pattern-miner)
-    !(import! &tempo experiments/atomspace_visualizer/public/data)
-    !(import! &self experiments/chainer/main)
-                            
-    !(bind! &res1 (new-space)) ;; space to hold the formatted miner result
-    !(add-reduct &res1 (let $fact (get-atoms &tempo) (: (fact:- $fact) $fact)))
-                
-    !(bind! purifiedDbSpace (new-space)) ; space to hold the database atoms
-    !(add-reduct purifiedDbSpace (get-atoms &tempo))
-""")
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# For PeTTa/run.sh, always use forward slashes as it will be executed by bash
+PETTA_RUN_SH = os.path.join(PROJECT_ROOT, "PeTTa", "run.sh").replace('\\', '/')
+
+METTA_SETUP = """
+!(import! &self /mnt/c/Users/HP/iCog/Mindplex-Hyperon/PeTTa/lib/lib_import.metta)
+!(import_prolog_functions_from_file "/mnt/c/Users/HP/iCog/Mindplex-Hyperon/experiments/frequent-pattern-miner/conj_exp.pl" (unique_combinations_star cut-first-char sort_conj))
+
+!(import! &self /mnt/c/Users/HP/iCog/Mindplex-Hyperon/experiments/frequent-pattern-miner/frequent-pattern-miner)
+!(import! &self /mnt/c/Users/HP/iCog/Mindplex-Hyperon/experiments/pattern-miner/pattern-miner)
+!(import! &self /mnt/c/Users/HP/iCog/Mindplex-Hyperon/experiments/utils/common-utils)
+!(import! &tempo /mnt/c/Users/HP/iCog/Mindplex-Hyperon/experiments/atomspace_visualizer/public/data)
+!(import! &self /mnt/c/Users/HP/iCog/Mindplex-Hyperon/experiments/chainer/main)
+
+!(let $atom (let $fact (get-atoms &tempo) (: (fact:- $fact) $fact)) (add-atom &res1 $atom))
+
+!(let $atom (get-atoms &tempo) (add-atom &purifiedDbSpace $atom))
+"""
+
+metta4Miner.run(METTA_SETUP)
+
+def run_metta_with_petta(metta_code: str) -> str:
+    """
+    Runs MeTTa code using the petta CLI.
+    Creates a temporary file with the setup and the code, then executes it.
+    """
+    full_metta_script = METTA_SETUP + "\n" + metta_code
+    
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.metta', delete=False) as tf:
+        tf.write(full_metta_script)
+        temp_file_path = tf.name
+    print(full_metta_script)  # Debug: print the full MeTTa script being executed
+    print(f"DEBUG: Temporary file created at: {temp_file_path}")
+
+    try:
+        # Using bash explicitly as PeTTa/run.sh is a shell script
+        # and we are on Windows (likely using git bash or similar environment)
+        cmd = ["bash", PETTA_RUN_SH, temp_file_path]
+        print(f"DEBUG: Running petta command: {' '.join(cmd)}")
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        return result.stdout
+    except subprocess.CalledProcessError as e:
+        print(f"ERROR: Petta execution failed: {e.stderr}")
+        raise Exception(f"Petta execution failed: {e.stderr}")
+    finally:
+        if os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
+
+def parse_petta_output(output: str):
+    """
+    Parses the output from petta to extract the final result.
+    Removes ANSI escape codes and debug lines.
+    """
+    # Remove ANSI escape codes
+    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+    clean_output = ansi_escape.sub('', output)
+    
+    lines = clean_output.splitlines()
+    result_lines = []
+    capture = False
+    
+    # Simple heuristic to find the result line(s)
+    # PeTTa output usually has debug info then the actual result
+    # In my test it looked like:
+    # "Hello from PeTTa"
+    # true
+    # We want the lines that aren't debug info.
+    
+    for line in lines:
+        line = line.strip()
+        if not line: continue
+        if line.startswith("-->") or line.startswith("prolog goal") or line.startswith("metta runnable"):
+            continue
+        if line.startswith("^^^^^"):
+            continue
+        result_lines.append(line)
+    
+    return result_lines
+
+def parse_pattern_string(p_str: str):
+    """
+    Parses a pattern string like (supportOf ((length $x "low") (engagement_level $x "high")) 3)
+    into a dictionary with 'pattern' and 'support' keys.
+    """
+    # Regex to capture (supportOf <pattern> <count>)
+    # This is a bit naive but should work for the standard format
+    match = re.search(r'\(supportOf\s+(.+)\s+(\d+)\)', p_str)
+    if match:
+        return {
+            "pattern": match.group(1).strip(),
+            "support": match.group(2).strip()
+        }
+    return None
 
 def mine_pattern(numberOfConjunction: int) -> dict:
     """
-    Mines patterns with a specified number of conjunctions.
+    Mines patterns with a specified number of conjunctions using PeTTa.
 
     Args:
         numberOfConjunction: The number of conjunctions to use in pattern mining.
@@ -49,34 +131,43 @@ def mine_pattern(numberOfConjunction: int) -> dict:
     Returns:
         A dictionary containing the mining results with parsed patterns.
     """
-    answer = metta4Miner.run(f"!(pattern-miner purifiedDbSpace 3 {int(numberOfConjunction)})")
-    
-    # Parse the result into JSON-serializable format
-    if not answer or len(answer) == 0:
-        return {"status": "no_results", "patterns": []}
+    print(f"Debug: mine pattern function being called with conjunction count {numberOfConjunction}")
     
     try:
-        # Extract the atom result
-        print("Debug: mine pattern function being called")
-        result_atom = answer[0][0]
-        print(f"Debug: Result atom = {result_atom}")
-        list_of_patterns = result_atom.get_children()
-        print(f"Debug: List of Patterns = {list_of_patterns}")
+        # Run the miner with petta
+        query = f"!(pattern-miner &purifiedDbSpace 3 {int(numberOfConjunction)})"
+        print(f"DEBUG: Executing PeTTa query: {query}")
+        petta_output = run_metta_with_petta(query)
+        print(f"DEBUG: PeTTa execution finished. Output length: {len(petta_output)}")
+        result_lines = parse_petta_output(petta_output)
         
-        # Parse each pattern
+        print(f"Debug: PeTTa result lines: {result_lines}")
+        
+        # Parse the result into JSON-serializable format
         patterns = []
-        for pattern_atom in list_of_patterns:
-            pattern_parts = pattern_atom.get_children()
-            if len(pattern_parts) >= 3:  # (supportOf <pattern> <count>)
-                pattern_str = str(pattern_parts[1])
-                support_str = str(pattern_parts[2])
-                patterns.append({
-                    "pattern": pattern_str,
-                    "support": support_str
-                })
+        full_answer_str = " ".join(result_lines)
+        
+        # In PeTTa, the output might be one or more lists.
+        # We look for (supportOf ...) patterns in the output.
+        # The regex in parse_pattern_string is already designed for this.
+        
+        # Find all occurrences of (supportOf ...)
+        support_matches = re.findall(r'\(supportOf\s+\([^\)]+\)\s+\d+\)', full_answer_str)
+        if not support_matches:
+            # Try a slightly more flexible regex for more complex patterns
+            # (supportOf (<pattern>) <count>)
+            support_matches = re.findall(r'\(supportOf\s+\(.*\)\s+\d+\)', full_answer_str)
+
+        for match in support_matches:
+            parsed = parse_pattern_string(match)
+            if parsed:
+                patterns.append(parsed)
+        
+        if not patterns:
+            return {"status": "no_results", "patterns": []}
         
         return {
-            "answer": f"{result_atom}",
+            "answer": full_answer_str,
             "status": "success",
             "conjunction_count": numberOfConjunction,
             "patterns": patterns,
@@ -84,10 +175,11 @@ def mine_pattern(numberOfConjunction: int) -> dict:
         }
         
     except Exception as e:
+        print(f"ERROR in mine_pattern: {traceback.format_exc()}")
         return {
             "status": "error",
-            "message": f"Failed to parse mining result: {str(e)}",
-            "raw_result": str(answer)
+            "message": f"Failed to run pattern mining or parse result: {str(e)}",
+            "raw_result": locals().get('petta_output', 'Command failed before output')
         }
 
 

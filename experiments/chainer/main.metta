@@ -1,7 +1,3 @@
-!(import! &rules rules)
-!(import! &facts facts)
-
-
 (= (removeAnyMetricsAtom $superset $subsets)
      (let ($x $subset) ((superpose $superset) (superpose $subsets))
           (unify 
@@ -58,13 +54,3 @@
 (= (backward-chain $kb $depth (: $prf $ccln)) 
      (backward-chain_ True $kb (S (S (S (Z)))) (: $prf $ccln))
 )
-
-; !(fromNumber 5)
-
-;! (bind! &kb (new-space))
-;! (add-reduct &kb (get-atoms &facts))
-;! (add-reduct &kb (main (collapse (get-atoms &rules))))
-
-;!(get-atoms &kb)
-;!(backward-chain &kb (fromNumber 5) (: $prf (engagement_level 1 $what)))
-;[(: ((, (engagement_level 1 high) (topic 1 AI)) (topic 1 AI)) (engagement_level 1 high)),  (: ((, (engagement_level 1 high) (length 1 low)) (length 1 low)) (engagement_level 1 high))]
