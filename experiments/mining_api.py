@@ -13,6 +13,7 @@ import re
 import subprocess
 import tempfile
 import requests
+import platform
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import threading
@@ -38,6 +39,22 @@ metta4Miner = MeTTa()
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+# Make PeTTa Python wrapper importable (persistent Prolog engine).
+PETTA_PYTHON_PATH = os.path.join(PROJECT_ROOT, "PeTTa", "python")
+if PETTA_PYTHON_PATH not in sys.path:
+    sys.path.append(PETTA_PYTHON_PATH)
+
+try:
+    from petta import PeTTa
+    import petta as petta_module
+    PETTA_PYTHON_AVAILABLE = True
+    PETTA_IMPORT_ERROR = None
+except Exception as e:
+    PeTTa = None
+    petta_module = None
+    PETTA_PYTHON_AVAILABLE = False
+    PETTA_IMPORT_ERROR = str(e)
+
 def to_wsl_path(path: str) -> str:
     abs_path = os.path.abspath(path)
     if re.match(r"^[A-Za-z]:\\", abs_path):
@@ -50,7 +67,23 @@ def to_wsl_path(path: str) -> str:
 PROJECT_ROOT_WSL = to_wsl_path(PROJECT_ROOT)
 PETTA_RUN_SH = to_wsl_path(os.path.join(PROJECT_ROOT, "PeTTa", "run.sh"))
 
-METTA_SETUP = f"""
+# For in-process PeTTa (Janus), use native absolute paths with forward slashes.
+PROJECT_ROOT_NATIVE = os.path.abspath(PROJECT_ROOT).replace('\\', '/')
+
+def is_wsl_environment() -> bool:
+    if os.environ.get("WSL_DISTRO_NAME") or os.environ.get("WSL_INTEROP"):
+        return True
+    try:
+        return "microsoft" in platform.release().lower()
+    except Exception:
+        return False
+
+PROJECT_ROOT_PETTA = PROJECT_ROOT_WSL if is_wsl_environment() else PROJECT_ROOT_NATIVE
+
+# Enable extra PeTTa debug probes for backward chaining when set to "1".
+PETTA_DEBUG = os.getenv("PETTA_DEBUG", "0") == "1"
+
+METTA_SETUP_WSL = f"""
 !(import! &self {PROJECT_ROOT_WSL}/PeTTa/lib/lib_import.metta)
 !(import_prolog_functions_from_file "{PROJECT_ROOT_WSL}/experiments/frequent-pattern-miner/conj_exp.pl" (unique_combinations_star cut-first-char promote_engagement_conj))
 
@@ -65,7 +98,53 @@ METTA_SETUP = f"""
 !(let $atom (get-atoms &tempo) (add-atom &purifiedDbSpace $atom))
 """
 
+METTA_SETUP_PETTA = f"""
+!(import! &self {PROJECT_ROOT_PETTA}/PeTTa/lib/lib_import.metta)
+!(import_prolog_functions_from_file "{PROJECT_ROOT_PETTA}/experiments/frequent-pattern-miner/conj_exp.pl" (unique_combinations_star cut-first-char promote_engagement_conj))
+
+!(import! &self {PROJECT_ROOT_PETTA}/experiments/frequent-pattern-miner/frequent-pattern-miner)
+!(import! &self {PROJECT_ROOT_PETTA}/experiments/pattern-miner/pattern-miner)
+!(import! &self {PROJECT_ROOT_PETTA}/experiments/utils/common-utils)
+!(import! &tempo {PROJECT_ROOT_PETTA}/experiments/atomspace_visualizer/public/data)
+!(import! &self {PROJECT_ROOT_PETTA}/experiments/chainer/main)
+
+!(let $atom (let $fact (get-atoms &tempo) (: (fact:- $fact) $fact)) (add-atom &res1 $atom))
+
+!(let $atom (get-atoms &tempo) (add-atom &purifiedDbSpace $atom))
+"""
+
+# Keep the original WSL-based setup for the existing MeTTa (hyperon) flow.
+METTA_SETUP = METTA_SETUP_WSL
+
 metta4Miner.run(METTA_SETUP)
+
+# Persistent PeTTa runtime state (Janus-based).
+petta_engine = None
+petta_setup_loaded = False
+petta_lock = threading.Lock()
+
+def init_petta_engine() -> bool:
+    """Initialize the in-process PeTTa engine and load METTA_SETUP once."""
+    global petta_engine, petta_setup_loaded
+    if not PETTA_PYTHON_AVAILABLE:
+        return False
+
+    if petta_engine is None:
+        petta_engine = PeTTa(verbose=False, petta_path=os.path.join(PROJECT_ROOT, "PeTTa"))
+
+    if not petta_setup_loaded:
+        # Use load_metta_file so working_dir is set by the helper without changing PeTTa files.
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.metta', delete=False) as tf:
+            tf.write(METTA_SETUP_PETTA)
+            setup_file_path = tf.name
+        try:
+            petta_engine.load_metta_file(setup_file_path)
+        finally:
+            if os.path.exists(setup_file_path):
+                os.remove(setup_file_path)
+        petta_setup_loaded = True
+
+    return True
 
 # Define tools for ASI API
 tools_schema = [
@@ -212,11 +291,47 @@ def call_asi_api(messages: List[Dict[str, Any]], tools: Optional[List[Dict[str, 
 
 def run_metta_with_petta(metta_code: str) -> str:
     """
-    Runs MeTTa code using the petta CLI.
-    Creates a temporary file with the setup and the code, then executes it.
+    Runs MeTTa code using the persistent PeTTa Python wrapper when available,
+    otherwise falls back to the petta CLI.
     """
-    full_metta_script = METTA_SETUP + "\n" + metta_code
-    
+    if init_petta_engine():
+        with petta_lock:
+            try:
+                results = petta_engine.process_metta_string(metta_code)
+                print(f"DEBUG: In-process PeTTa results: {results}")
+                if isinstance(results, (list, tuple)):
+                    # If the runnable was not evaluated, fall back to load_metta_file.
+                    if len(results) == 1 and str(results[0]).strip() == metta_code.strip().lstrip("!").strip():
+                        raise ValueError("Unevaluated runnable from process_metta_string")
+                    return "\n".join(str(r) for r in results)
+                return str(results)
+            except Exception as e:
+                print(f"ERROR: In-process PeTTa failed: {e}")
+                # Fallback: run via load_metta_file in-process before CLI.
+                try:
+                    with tempfile.NamedTemporaryFile(mode='w', suffix='.metta', delete=False) as tf:
+                        tf.write(metta_code)
+                        temp_file_path = tf.name
+                    results = petta_engine.load_metta_file(temp_file_path)
+                    print(f"DEBUG: In-process PeTTa load_metta_file results: {results}")
+                    if isinstance(results, (list, tuple)):
+                        return "\n".join(str(r) for r in results)
+                    return str(results)
+                except Exception as e2:
+                    print(f"ERROR: In-process PeTTa load_metta_file failed: {e2}")
+                finally:
+                    try:
+                        if os.path.exists(temp_file_path):
+                            os.remove(temp_file_path)
+                    except Exception:
+                        pass
+                # Fall back to CLI if available
+
+    if not PETTA_PYTHON_AVAILABLE:
+        print(f"WARNING: PeTTa Python wrapper unavailable: {PETTA_IMPORT_ERROR}")
+
+    full_metta_script = METTA_SETUP_WSL + "\n" + metta_code
+
     with tempfile.NamedTemporaryFile(mode='w', suffix='.metta', delete=False) as tf:
         tf.write(full_metta_script)
         temp_file_path = tf.name
@@ -271,7 +386,7 @@ def parse_petta_output(output: str):
 
 def parse_pattern_string(p_str: str):
     """
-    Parses a pattern string like (supportOf ((length $x "low") (engagement_level $x "high")) 3)
+    Parses a pattern string like (supportOf ((length $x "low") (engagement $x "high")) 3)
     into a dictionary with 'pattern' and 'support' keys.
     """
     # Capture the last numeric token as support, everything before it as pattern.
@@ -308,6 +423,52 @@ def extract_support_of_expressions(text: str) -> list[str]:
         start = end
     return results
 
+def extract_parenthesized_expressions(text: str) -> list[str]:
+    """Extract all balanced parenthesized expressions from text."""
+    results = []
+    start = 0
+    while True:
+        idx = text.find("(", start)
+        if idx == -1:
+            break
+        depth = 0
+        end = None
+        for i in range(idx, len(text)):
+            ch = text[i]
+            if ch == '(':
+                depth += 1
+            elif ch == ')':
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        if end is None:
+            break
+        results.append(text[idx:end])
+        start = end
+    return results
+
+def run_petta_query_lines(metta_code: str) -> list[str]:
+    """Run MeTTa code through PeTTa and return cleaned output lines."""
+    petta_output = run_metta_with_petta(metta_code)
+    return [line for line in parse_petta_output(petta_output) if line and line.lower() != "true"]
+
+def debug_petta_chainer_state(what_to_check: str) -> None:
+    """Log a few diagnostic probes to confirm what PeTTa sees."""
+    if not PETTA_DEBUG:
+        return
+    try:
+        print("DEBUG: PeTTa probe - get-atoms &res1")
+        atoms_lines = run_petta_query_lines(f"!(backward-chain &res1 (S (S Z)) (: $prf {what_to_check}))")
+        print("DEBUG: PeTTa atoms lines (first 10):", atoms_lines)
+
+        print("DEBUG: PeTTa probe - direct match")
+        match_query = f"!(match &res1 {what_to_check} $x)"
+        match_lines = run_petta_query_lines(match_query)
+        print("DEBUG: PeTTa match lines:", match_lines)
+    except Exception as e:
+        print("DEBUG: PeTTa probe failed:", e)
+
 def mine_pattern(numberOfConjunction: int) -> dict:
     """
     Mines patterns with a specified number of conjunctions using PeTTa.
@@ -326,6 +487,13 @@ def mine_pattern(numberOfConjunction: int) -> dict:
         print(f"DEBUG: Executing PeTTa query: {query}")
         petta_output = run_metta_with_petta(query)
         print(f"DEBUG: PeTTa execution finished. Output length: {len(petta_output)}")
+        normalized_query = query.strip().lstrip("!").strip()
+        if petta_output.strip() == normalized_query:
+            return {
+                "status": "error",
+                "message": "PeTTa returned the unevaluated expression. The runnable may not have executed.",
+                "raw_result": petta_output
+            }
         result_lines = parse_petta_output(petta_output)
         
         print(f"Debug: PeTTa result lines: {result_lines}")
@@ -464,9 +632,18 @@ def getAllFactsAndRules():
     can rewrite a user's natural-language question into a canonical MeTTa
     query that matches predicates/constants present in the KB. Example:
     user: "What is article 1's engagement level?"
-    assistant: call getAllFactsAndRules(), notice atoms like `(engagement_level 1 "high")`,
-    rewrite as `(engagement_level 1 $whatIsIt)`, then call getChainerResult.
+    assistant: call getAllFactsAndRules(), notice atoms like `(engagement 1 "high")`,
+    rewrite as `(engagement 1 $whatIsIt)`, then call getChainerResult.
     """
+    if init_petta_engine():
+        try:
+            lines = run_petta_query_lines("!(collapse (get-atoms &res1))")
+            joined = " ".join(lines)
+            facts = extract_parenthesized_expressions(joined) or lines
+            return {"status": "success", "facts": facts}
+        except Exception as e:
+            return {"status": "error", "error": str(e)}
+
     try:
         facts = metta4Miner.run("!(collapse (get-atoms &res1))")
     except Exception as e:
@@ -530,7 +707,7 @@ def handle_backward_chain_for_message(message: str):
 
     # Ask the LLM to rewrite the user's question into a canonical MeTTa query
     # using the facts we retrieved. The model must output only a single MeTTa
-    # expression (e.g. (engagement_level 1 $what)).
+    # expression (e.g. (engagement 1 $what)).
     try:
         facts_text = "\n".join(facts[:200]) if isinstance(facts, list) else str(facts)
         rewrite_prompt = f"""
@@ -545,7 +722,7 @@ def handle_backward_chain_for_message(message: str):
             - If mapping is ambiguous, pick the most semantically likely predicate present in the KB.
             - If you cannot produce a valid MeTTa expression, output the single token NO_QUERY and NOTHING ELSE.
 
-            Example mapping (for clarity only, do not output this): facts contain (engagement_level 1 high) -> question "Why is article 1 high?" -> output: (engagement_level 1 $what)
+            Example mapping (for clarity only, do not output this): facts contain (engagement 1 high) -> question "Why is article 1 high?" -> output: (engagement 1 $what)
 
             OUTPUT ONLY the MeTTa expression or NO_QUERY.
             """
@@ -647,7 +824,7 @@ def analyze_specific_pattern(pattern: str) -> dict:
     """Analyzes a specific pattern in detail, extracting properties and values.
     
     Args:
-        pattern: The pattern string to analyze, e.g., '((length $x "low") (engagement_level $x "high"))'
+        pattern: The pattern string to analyze, e.g., '((length $x "low") (engagement $x "high"))'
         
     Returns:
         A dictionary with pattern analysis including properties and their values.
@@ -775,13 +952,31 @@ def start_mining_job(conjunction_count: int):
 
 def formatter(mined_patterns):
     print("formatter started :--:")
+    if init_petta_engine():
+        try:
+            run_metta_with_petta(f"!(let $atom (main {mined_patterns}) (add-atom &res1 $atom))")
+            print("formatter used PeTTa atomspace")
+            return
+        except Exception as e:
+            print(f"formatter: PeTTa path failed, falling back to hyperon: {e}")
+
     mined_patterns = metta4Miner.parse_single(mined_patterns)
     metta4Miner.run(f""" !(let $atom (main {mined_patterns}) (add-atom &res1 $atom)) """)
     print("formatter ended :-_-:")
 
 def backWardChainer(whatToCheck, depth=5):
+    if init_petta_engine():
+        debug_petta_chainer_state(whatToCheck)
+        query = f"!(backward-chain &res1 (fromNumber 5) (: $prf {whatToCheck}))"
+        lines = run_petta_query_lines(query)
+        if PETTA_DEBUG:
+            print("DEBUG: raw backward chaining output lines:", lines)
+        joined = " ".join(lines)
+        proofs = extract_parenthesized_expressions(joined)
+        return proofs or lines
+
     whatToCheck = metta4Miner.parse_single(whatToCheck)
-    answer = metta4Miner.run(f""" !(backward-chain &res1 (S (S Z)) (: $prf {whatToCheck})) """)
+    answer = metta4Miner.run(f""" !(backward-chain &res1 (fromNumber 5) (: $prf {whatToCheck})) """)
     return answer
 
 def getChainerResult(whatToCheck, depth=5):
@@ -810,9 +1005,9 @@ def getChainerResult(whatToCheck, depth=5):
         **Backward Chaining Results:** {chainAnswer}
 
         **Backward Chaining Example:**
-        When user asks "why is article 1 did get high engagement?", format query as "(engagement_level 1 high)" and call getChainerResult. 
+        When user asks "why is article 1 did get high engagement?", format query as "(engagement 1 high)" and call getChainerResult. 
         
-        If backward chaining returns: [(: ((rule:- (, (engagement_level 1 high) (topic 1 AI))) (fact:- (topic 1 AI))) (engagement_level 1 high)), (: ((rule:- (, (engagement_level 1 high) (length 1 low))) (fact:- (length 1 low))) (engagement_level 1 high))]
+        If backward chaining returns: [(: ((rule:- (, (engagement 1 high) (topic 1 AI))) (fact:- (topic 1 AI))) (engagement 1 high)), (: ((rule:- (, (engagement 1 high) (length 1 low))) (fact:- (length 1 low))) (engagement 1 high))]
         
         Analyze as: "I found 2 proofs for why article 1 has high engagement:
         
@@ -930,11 +1125,11 @@ SYSTEM_INSTRUCTION = """You are a friendly and knowledgeable AI assistant with e
     - "Why is..." / "Explain why..." / "Prove that..." questions → Use getChainerResult() with the query formatted as a MeTTa expression
 
     **CRITICAL BACKWARD-CHAINING WORKFLOW (MUST FOLLOW):**
-    Before calling getChainerResult(), ALWAYS call getChainerResult().
+    Before answering why questions, ALWAYS call getChainerResult().
 
     Example:
     - User: "What is article 1's engagement level?"
-    - Assistant: call getChainerResult("(engagement_level 1 $whatIsIt)").
+    - Assistant: call getChainerResult("(engagement 1 $whatIsIt)").
     - This ensures the chainer is invoked with a query that matches KB atoms and returns useful proofs.
 
                 IMPORTANT: FOR ANY "WHY" / "EXPLAIN" / "PROVE" QUESTIONS (MANDATORY):
@@ -1056,15 +1251,16 @@ def start_mining():
     run_mining_task(job_id, conjunction_count)
     print(f"🔍 DEBUG: Starting mining job {job_id} with conjunction count {conjunction_count}")
     result = mining_jobs[job_id].result
-    # Start formatting in background thread
+    # Start formatting in background thread only if we have an answer payload
     print("🔍 DEBUG: Starting formatting thread")
     print("🔍 DEBUG: Result before formatting =", result)
-    thread = threading.Thread(
-        target=formatter,
-        args=(f"{result['answer']}",),
-        daemon=True
-    )
-    thread.start()
+    if isinstance(result, dict) and result.get('answer'):
+        thread = threading.Thread(
+            target=formatter,
+            args=(f"{result['answer']}",),
+            daemon=True
+        )
+        thread.start()
     
     print(f"🔍 DEBUG: result type = {type(result)}")
     print(f"🔍 DEBUG: result = {result}")
