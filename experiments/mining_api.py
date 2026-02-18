@@ -6,14 +6,12 @@ A Flask-based API server that exposes pattern mining and AI chat functionality
 
 import os
 import sys
-
-# Add workspace root to path to allow imports
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
-
+import json
 import time
 import traceback
 import re
-import json
+import subprocess
+import tempfile
 import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -23,35 +21,53 @@ from dataclasses import dataclass
 from typing import Dict, Any, Optional, List
 from hyperon import MeTTa
 from dotenv import load_dotenv
+
+# Add workspace root to path to allow imports
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
 from experiments.ingestion.pipeline import run_ingestion
 load_dotenv()
 
-# Configure ASI1 API
+# Configure ASI API
 ASI_API_KEY = os.getenv("ASI_API_KEY")
 if not ASI_API_KEY:
     print("WARNING: ASI_API_KEY environment variable is not set. AI features will fail.")
 ASI_BASE_URL = "https://api.asi1.ai/v1/chat/completions"
-ASI_MODEL = "asi1-mini" # Using asi1-mini as per documentation example, can be switched to asi1-graph
+ASI_MODEL = "asi1-mini"
 
 metta4Miner = MeTTa()
 
-metta4Miner.run("""
-    ! (register-module! experiments)
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-    ! (import! &self experiments:pattern-miner:pattern-miner)
-    ! (import! &self experiments:utils:common-utils)
-    ! (import! &self experiments:frequent-pattern-miner:frequent-pattern-miner)
-    ! (import! &tempo experiments:atomspace_visualizer:public:data)
-    ! (import! &self experiments:chainer:main)
-                            
-    !(bind! &res1 (new-space)) ;; space to hold the formatted miner result
-    !(add-reduct &res1 (let $fact (get-atoms &tempo) (: (fact:- $fact) $fact)))
-                
-    ! (bind! purifiedDbSpace (new-space)) ; space to hold the database atoms
-    ! (add-reduct purifiedDbSpace (get-atoms &tempo))
-""")
+def to_wsl_path(path: str) -> str:
+    abs_path = os.path.abspath(path)
+    if re.match(r"^[A-Za-z]:\\", abs_path):
+        drive = abs_path[0].lower()
+        rest = abs_path[2:].replace('\\', '/')
+        return f"/mnt/{drive}{rest}"
+    return abs_path.replace('\\', '/')
 
-# Define tools for ASI1 API
+# For PeTTa/run.sh, always use forward slashes as it will be executed by bash
+PROJECT_ROOT_WSL = to_wsl_path(PROJECT_ROOT)
+PETTA_RUN_SH = to_wsl_path(os.path.join(PROJECT_ROOT, "PeTTa", "run.sh"))
+
+METTA_SETUP = f"""
+!(import! &self {PROJECT_ROOT_WSL}/PeTTa/lib/lib_import.metta)
+!(import_prolog_functions_from_file "{PROJECT_ROOT_WSL}/experiments/frequent-pattern-miner/conj_exp.pl" (unique_combinations_star cut-first-char promote_engagement_conj))
+
+!(import! &self {PROJECT_ROOT_WSL}/experiments/frequent-pattern-miner/frequent-pattern-miner)
+!(import! &self {PROJECT_ROOT_WSL}/experiments/pattern-miner/pattern-miner)
+!(import! &self {PROJECT_ROOT_WSL}/experiments/utils/common-utils)
+!(import! &tempo {PROJECT_ROOT_WSL}/experiments/atomspace_visualizer/public/data)
+!(import! &self {PROJECT_ROOT_WSL}/experiments/chainer/main)
+
+!(let $atom (let $fact (get-atoms &tempo) (: (fact:- $fact) $fact)) (add-atom &res1 $atom))
+
+!(let $atom (get-atoms &tempo) (add-atom &purifiedDbSpace $atom))
+"""
+
+metta4Miner.run(METTA_SETUP)
+
+# Define tools for ASI API
 tools_schema = [
     {
         "type": "function",
@@ -155,7 +171,7 @@ tools_schema = [
                 "properties": {
                     "whatToCheck": {
                         "type": "string",
-                        "description": "The query to check, e.g., '(reputation 0 \"High\")'"
+                        "description": "The query to check, e.g., '(reputation 0 \"\\High\")'"
                     },
                     "depth": {
                         "type": "integer",
@@ -170,7 +186,7 @@ tools_schema = [
 ]
 
 def call_asi_api(messages: List[Dict[str, Any]], tools: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
-    """Calls the ASI1 API with the given messages and tools."""
+    """Calls the ASI API with the given messages and tools."""
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {ASI_API_KEY}"
@@ -194,9 +210,107 @@ def call_asi_api(messages: List[Dict[str, Any]], tools: Optional[List[Dict[str, 
             print(f"Response content: {e.response.text}")
         return {"error": str(e)}
 
+def run_metta_with_petta(metta_code: str) -> str:
+    """
+    Runs MeTTa code using the petta CLI.
+    Creates a temporary file with the setup and the code, then executes it.
+    """
+    full_metta_script = METTA_SETUP + "\n" + metta_code
+    
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.metta', delete=False) as tf:
+        tf.write(full_metta_script)
+        temp_file_path = tf.name
+    print(full_metta_script)  # Debug: print the full MeTTa script being executed
+    print(f"DEBUG: Temporary file created at: {temp_file_path}")
+
+    try:
+        # Using bash explicitly as PeTTa/run.sh is a shell script
+        # and we are on Windows (likely using git bash or similar environment)
+        temp_file_path_wsl = to_wsl_path(temp_file_path)
+        cmd = ["bash", PETTA_RUN_SH, temp_file_path_wsl]
+        print(f"DEBUG: Running petta command: {' '.join(cmd)}")
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        return result.stdout
+    except subprocess.CalledProcessError as e:
+        print(f"ERROR: Petta execution failed: {e.stderr}")
+        raise Exception(f"Petta execution failed: {e.stderr}")
+    finally:
+        if os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
+
+def parse_petta_output(output: str):
+    """
+    Parses the output from petta to extract the final result.
+    Removes ANSI escape codes and debug lines.
+    """
+    # Remove ANSI escape codes
+    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+    clean_output = ansi_escape.sub('', output)
+    
+    lines = clean_output.splitlines()
+    result_lines = []
+    capture = False
+    
+    # Simple heuristic to find the result line(s)
+    # PeTTa output usually has debug info then the actual result
+    # In my test it looked like:
+    # "Hello from PeTTa"
+    # true
+    # We want the lines that aren't debug info.
+    
+    for line in lines:
+        line = line.strip()
+        if not line: continue
+        if line.startswith("-->") or line.startswith("prolog goal") or line.startswith("metta runnable"):
+            continue
+        if line.startswith("^^^^^"):
+            continue
+        result_lines.append(line)
+    
+    return result_lines
+
+def parse_pattern_string(p_str: str):
+    """
+    Parses a pattern string like (supportOf ((length $x "low") (engagement_level $x "high")) 3)
+    into a dictionary with 'pattern' and 'support' keys.
+    """
+    # Capture the last numeric token as support, everything before it as pattern.
+    match = re.match(r'^\(supportOf\s+(.+)\s+(\d+)\)$', p_str.strip(), re.DOTALL)
+    if match:
+        return {
+            "pattern": match.group(1).strip(),
+            "support": match.group(2).strip()
+        }
+    return None
+
+def extract_support_of_expressions(text: str) -> list[str]:
+    """Extract all (supportOf ...) expressions from text with balanced parentheses."""
+    results = []
+    start = 0
+    while True:
+        idx = text.find("(supportOf", start)
+        if idx == -1:
+            break
+        depth = 0
+        end = None
+        for i in range(idx, len(text)):
+            ch = text[i]
+            if ch == '(':
+                depth += 1
+            elif ch == ')':
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        if end is None:
+            break
+        results.append(text[idx:end])
+        start = end
+    return results
+
 def mine_pattern(numberOfConjunction: int) -> dict:
     """
-    Mines patterns with a specified number of conjunctions.
+    Mines patterns with a specified number of conjunctions using PeTTa.
 
     Args:
         numberOfConjunction: The number of conjunctions to use in pattern mining.
@@ -204,34 +318,39 @@ def mine_pattern(numberOfConjunction: int) -> dict:
     Returns:
         A dictionary containing the mining results with parsed patterns.
     """
-    answer = metta4Miner.run(f"!(pattern-miner purifiedDbSpace 3 {int(numberOfConjunction)})")
-    
-    # Parse the result into JSON-serializable format
-    if not answer or len(answer) == 0:
-        return {"status": "no_results", "patterns": []}
+    print(f"Debug: mine pattern function being called with conjunction count {numberOfConjunction}")
     
     try:
-        # Extract the atom result
-        print("Debug: mine pattern function being called")
-        result_atom = answer[0][0]
-        print(f"Debug: Result atom = {result_atom}")
-        list_of_patterns = result_atom.get_children()
-        print(f"Debug: List of Patterns = {list_of_patterns}")
+        # Run the miner with petta
+        query = f"!(pattern-miner &purifiedDbSpace 3 {int(numberOfConjunction)})"
+        print(f"DEBUG: Executing PeTTa query: {query}")
+        petta_output = run_metta_with_petta(query)
+        print(f"DEBUG: PeTTa execution finished. Output length: {len(petta_output)}")
+        result_lines = parse_petta_output(petta_output)
         
-        # Parse each pattern
+        print(f"Debug: PeTTa result lines: {result_lines}")
+        
+        # Parse the result into JSON-serializable format
         patterns = []
-        for pattern_atom in list_of_patterns:
-            pattern_parts = pattern_atom.get_children()
-            if len(pattern_parts) >= 3:  # (supportOf <pattern> <count>)
-                pattern_str = str(pattern_parts[1])
-                support_str = str(pattern_parts[2])
-                patterns.append({
-                    "pattern": pattern_str,
-                    "support": support_str
-                })
+        full_answer_str = " ".join(result_lines)
+        
+        # In PeTTa, the output might be one or more lists.
+        # We look for (supportOf ...) patterns in the output.
+        # The regex in parse_pattern_string is already designed for this.
+        
+        # Find all occurrences of (supportOf ...) with balanced parentheses
+        support_matches = extract_support_of_expressions(full_answer_str)
+
+        for match in support_matches:
+            parsed = parse_pattern_string(match)
+            if parsed:
+                patterns.append(parsed)
+        
+        if not patterns:
+            return {"status": "no_results", "patterns": []}
         
         return {
-            "answer": f"{result_atom}",
+            "answer": full_answer_str,
             "status": "success",
             "conjunction_count": numberOfConjunction,
             "patterns": patterns,
@@ -239,10 +358,11 @@ def mine_pattern(numberOfConjunction: int) -> dict:
         }
         
     except Exception as e:
+        print(f"ERROR in mine_pattern: {traceback.format_exc()}")
         return {
             "status": "error",
-            "message": f"Failed to parse mining result: {str(e)}",
-            "raw_result": str(answer)
+            "message": f"Failed to run pattern mining or parse result: {str(e)}",
+            "raw_result": locals().get('petta_output', 'Command failed before output')
         }
 
 
@@ -302,11 +422,11 @@ def make_json_safe(o):
 
 app = Flask(__name__)
 # Enable CORS for all domains on all routes with all methods
-CORS(app, resources={r"/*": {
+CORS(app, resources={r"/api/*": {
     "origins": "*",  # Allow all origins
     "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    "allow_headers": ["Content-Type", "Authorization", "Access-Control-Allow-Origin"],
-    "expose_headers": ["Content-Type", "Access-Control-Allow-Origin"],
+    "allow_headers": ["Content-Type", "Authorization"],
+    "expose_headers": ["Content-Type"],
     "supports_credentials": False,
     "max_age": 3600
 }})
@@ -319,23 +439,17 @@ def ingest_data():
     """
     try:
         data = request.get_json()
-        username = data.get('username')
-        
+        username = data.get('username') if data else None
+
         if not username:
             return jsonify({"status": "error", "message": "Username is required"}), 400
-            
-        # Run ingestion in a separate thread to avoid blocking, or run synchronously if preferred.
-        # For now, let's run synchronously to return the result immediately, 
-        # but be aware it might timeout if it takes too long.
-        # Given the user wants an animation, maybe async is better, but let's try sync first 
-        # as it's simpler to report success/failure.
-        
+
         print(f"Received ingestion request for user: {username}")
         result = run_ingestion(username=username)
-        
+
         if result.get("status") == "error":
-             return jsonify(result), 500
-             
+            return jsonify(result), 500
+
         return jsonify(result)
 
     except Exception as e:
@@ -350,8 +464,8 @@ def getAllFactsAndRules():
     can rewrite a user's natural-language question into a canonical MeTTa
     query that matches predicates/constants present in the KB. Example:
     user: "What is article 1's engagement level?"
-    assistant: call getAllFactsAndRules(), notice atoms like `(engagement 1 "High")`,
-    rewrite as `(engagement 1 $whatIsIt)`, then call getChainerResult.
+    assistant: call getAllFactsAndRules(), notice atoms like `(engagement_level 1 "high")`,
+    rewrite as `(engagement_level 1 $whatIsIt)`, then call getChainerResult.
     """
     try:
         facts = metta4Miner.run("!(collapse (get-atoms &res1))")
@@ -416,7 +530,7 @@ def handle_backward_chain_for_message(message: str):
 
     # Ask the LLM to rewrite the user's question into a canonical MeTTa query
     # using the facts we retrieved. The model must output only a single MeTTa
-    # expression (e.g. (engagement 1 $what)).
+    # expression (e.g. (engagement_level 1 $what)).
     try:
         facts_text = "\n".join(facts[:200]) if isinstance(facts, list) else str(facts)
         rewrite_prompt = f"""
@@ -431,26 +545,19 @@ def handle_backward_chain_for_message(message: str):
             - If mapping is ambiguous, pick the most semantically likely predicate present in the KB.
             - If you cannot produce a valid MeTTa expression, output the single token NO_QUERY and NOTHING ELSE.
 
-            Example mapping (for clarity only, do not output this): facts contain (engagement 1 "High") -> question "Why is article 1 high?" -> output: (engagement 1 $what)
+            Example mapping (for clarity only, do not output this): facts contain (engagement_level 1 high) -> question "Why is article 1 high?" -> output: (engagement_level 1 $what)
 
             OUTPUT ONLY the MeTTa expression or NO_QUERY.
             """
         print("DEBUG: sending rewrite prompt to LLM (first 300 chars):", rewrite_prompt[:300])
-        rewrite_resp = model.generate_content(rewrite_prompt)
+        messages = [
+            {"role": "system", "content": SYSTEM_INSTRUCTION},
+            {"role": "user", "content": rewrite_prompt}
+        ]
+        response_data = call_asi_api(messages)
         candidate_query = None
-        # Prefer structured text, fall back to parsing candidates
-        if hasattr(rewrite_resp, 'text') and rewrite_resp.text:
-            candidate_query = rewrite_resp.text.strip()
-        else:
-            try:
-                parts = rewrite_resp.candidates[0].content.parts
-                acc = ""
-                for part in parts:
-                    if hasattr(part, 'text'):
-                        acc += part.text
-                candidate_query = acc.strip()
-            except Exception:
-                candidate_query = None
+        if 'choices' in response_data and response_data['choices']:
+            candidate_query = response_data['choices'][0]['message'].get('content', '').strip()
 
         print("DEBUG: rewrite result:", candidate_query)
         function_calls.append({'name': 'rewrite_query', 'args': {'message': message}, 'result': candidate_query})
@@ -540,7 +647,7 @@ def analyze_specific_pattern(pattern: str) -> dict:
     """Analyzes a specific pattern in detail, extracting properties and values.
     
     Args:
-        pattern: The pattern string to analyze, e.g., '((length $x "low") (engagement $x "High"))'
+        pattern: The pattern string to analyze, e.g., '((length $x "low") (engagement_level $x "high"))'
         
     Returns:
         A dictionary with pattern analysis including properties and their values.
@@ -669,19 +776,18 @@ def start_mining_job(conjunction_count: int):
 def formatter(mined_patterns):
     print("formatter started :--:")
     mined_patterns = metta4Miner.parse_single(mined_patterns)
-    metta4Miner.run(f""" !(add-reduct &res1 (main {mined_patterns})) """)
+    metta4Miner.run(f""" !(let $atom (main {mined_patterns}) (add-atom &res1 $atom)) """)
     print("formatter ended :-_-:")
 
 def backWardChainer(whatToCheck, depth=5):
     whatToCheck = metta4Miner.parse_single(whatToCheck)
-    print("res1: ", metta4Miner.run(f"""!(get-atoms &res1)"""))
-    answer = metta4Miner.run(f""" !(backward-chain &res1 (S (S (S Z))) (: $prf {whatToCheck})) """)
+    answer = metta4Miner.run(f""" !(backward-chain &res1 (S (S Z)) (: $prf {whatToCheck})) """)
     return answer
 
 def getChainerResult(whatToCheck, depth=5):
     """ Get the result of backward chaining for a specific query. 
     Args:
-        whatToCheck (str): The query to check, e.g., '(reputation 0 "High")'
+        whatToCheck (str): The query to check, e.g., '(reputation 0 high)'
         depth (int): The depth limit for backward chaining. (default 5)
     Returns:
         The justification of the backward chaining operation.
@@ -704,9 +810,9 @@ def getChainerResult(whatToCheck, depth=5):
         **Backward Chaining Results:** {chainAnswer}
 
         **Backward Chaining Example:**
-        When user asks "why is article 1 did get high engagement?", format query as "(engagement 1 "High")" and call getChainerResult. 
+        When user asks "why is article 1 did get high engagement?", format query as "(engagement_level 1 high)" and call getChainerResult. 
         
-        If backward chaining returns: [(: ((rule:- (, (engagement 1 "High") (topic 1 AI))) (fact:- (topic 1 AI))) (engagement 1 "High")), (: ((rule:- (, (engagement 1 "High") (length 1 low))) (fact:- (length 1 low))) (engagement 1 "High"))]
+        If backward chaining returns: [(: ((rule:- (, (engagement_level 1 high) (topic 1 AI))) (fact:- (topic 1 AI))) (engagement_level 1 high)), (: ((rule:- (, (engagement_level 1 high) (length 1 low))) (fact:- (length 1 low))) (engagement_level 1 high))]
         
         Analyze as: "I found 2 proofs for why article 1 has high engagement:
         
@@ -720,22 +826,21 @@ def getChainerResult(whatToCheck, depth=5):
         """
 
     try:
-        # Use ASI1 to analyze the results
         messages = [
             {"role": "system", "content": SYSTEM_INSTRUCTION},
             {"role": "user", "content": prompt}
         ]
         response_data = call_asi_api(messages)
-        justification = "Unable to generate justification analysis."
+        justification = None
         if 'choices' in response_data and response_data['choices']:
-             justification = response_data['choices'][0]['message'].get('content', '')
-        
+            justification = response_data['choices'][0]['message'].get('content', '')
+
         return {
             "query": whatToCheck,
             "status": "success",
             "raw_proofs": str(chainAnswer),
             "proof_count": len(chainAnswer),
-            "justification": justification,
+            "justification": justification or "Unable to generate justification analysis.",
             "depth_used": depth
         }
         
@@ -766,7 +871,7 @@ def getChainerResult(whatToCheck, depth=5):
 
 
 def summarize_patterns(patterns: list) -> str:
-    """Use the ASI model to create a single comprehensive summary of the
+    """Use the Gemini model to create a single comprehensive summary of the
     supplied mined patterns. The summary will reference patterns as [N]
     so the frontend can make them clickable for visualization.
     """
@@ -791,7 +896,7 @@ def summarize_patterns(patterns: list) -> str:
         response_data = call_asi_api(messages)
         text = None
         if 'choices' in response_data and response_data['choices']:
-             text = response_data['choices'][0]['message'].get('content', '')
+            text = response_data['choices'][0]['message'].get('content', '')
 
         return text or "The model could not produce a summary."
     except Exception as e:
@@ -829,7 +934,7 @@ SYSTEM_INSTRUCTION = """You are a friendly and knowledgeable AI assistant with e
 
     Example:
     - User: "What is article 1's engagement level?"
-    - Assistant: call getChainerResult("(engagement 1 $whatIsIt)").
+    - Assistant: call getChainerResult("(engagement_level 1 $whatIsIt)").
     - This ensures the chainer is invoked with a query that matches KB atoms and returns useful proofs.
 
                 IMPORTANT: FOR ANY "WHY" / "EXPLAIN" / "PROVE" QUESTIONS (MANDATORY):
@@ -951,23 +1056,15 @@ def start_mining():
     run_mining_task(job_id, conjunction_count)
     print(f"🔍 DEBUG: Starting mining job {job_id} with conjunction count {conjunction_count}")
     result = mining_jobs[job_id].result
-    print(f"result => {result}")
-    
-    # Start formatting in background thread only if we have a valid result with an answer
-    if isinstance(result, dict) and 'answer' in result:
-        print("🔍 DEBUG: Starting formatting thread")
-        print("🔍 DEBUG: Result before formatting =", result)
-        try:
-            thread = threading.Thread(
-                target=formatter,
-                args=(f"{result['answer']}",),
-                daemon=True
-            )
-            thread.start()
-        except Exception as e:
-            print(f"⚠️ Warning: Failed to start formatter thread: {e}")
-    else:
-        print(f"⚠️ Warning: Skipping formatter. Result is not valid or missing 'answer'. Result: {result}")
+    # Start formatting in background thread
+    print("🔍 DEBUG: Starting formatting thread")
+    print("🔍 DEBUG: Result before formatting =", result)
+    thread = threading.Thread(
+        target=formatter,
+        args=(f"{result['answer']}",),
+        daemon=True
+    )
+    thread.start()
     
     print(f"🔍 DEBUG: result type = {type(result)}")
     print(f"🔍 DEBUG: result = {result}")
@@ -1149,7 +1246,7 @@ def summarize_patterns_endpoint():
 
 @app.route('/api/chat', methods=['POST', 'OPTIONS'])
 def chat():
-    """Main chat endpoint with Gemini AI and automatic function calling
+    """Main chat endpoint with ASI and automatic function calling
 
     This cleaned implementation centralizes error handling and ensures the
     returned payload is JSON-serializable by sanitizing function call results.
@@ -1198,7 +1295,7 @@ def chat():
 
         conversations.setdefault(session_id, [])
 
-        # Build conversation history for ASI1
+        # Build conversation history for ASI
         asi_messages = [{"role": "system", "content": SYSTEM_INSTRUCTION}]
         for msg in history[-10:]:
             role = msg.get('role')
@@ -1207,36 +1304,35 @@ def chat():
             elif role == 'user':
                 role = 'user'
             asi_messages.append({'role': role, 'content': msg.get('content', '')})
-        
+
         asi_messages.append({'role': 'user', 'content': message})
 
-        # Call ASI1 API
         response_data = call_asi_api(asi_messages, tools=tools_schema)
-        
+
         # Handle function calling loop
         max_iterations = 5
         iteration = 0
         function_results = []
-        
+
         while iteration < max_iterations:
             iteration += 1
-            
+
             if 'error' in response_data:
                 print(f"ASI API Error: {response_data['error']}")
                 break
-                
+
             if 'choices' not in response_data or not response_data['choices']:
                 break
 
             choice = response_data['choices'][0]
             message_obj = choice['message']
-            
+
             # Append assistant message to history
             asi_messages.append(message_obj)
-            
+
             if 'tool_calls' in message_obj and message_obj['tool_calls']:
                 tool_calls = message_obj['tool_calls']
-                
+
                 for tool_call in tool_calls:
                     function_name = tool_call['function']['name']
                     function_args_str = tool_call['function']['arguments']
@@ -1244,9 +1340,9 @@ def chat():
                         function_args = json.loads(function_args_str)
                     except json.JSONDecodeError:
                         function_args = {}
-                        
+
                     print(f"🔧 Function call: {function_name}({function_args})")
-                    
+
                     if function_name not in available_functions:
                         print(f"✗ Unknown function: {function_name}")
                         function_result = {"error": f"Unknown function {function_name}"}
@@ -1278,17 +1374,17 @@ def chat():
                         "tool_call_id": tool_call['id'],
                         "content": json.dumps(function_result)
                     })
-                
+
                 # Call API again with tool outputs
                 response_data = call_asi_api(asi_messages, tools=tools_schema)
             else:
                 # No more tool calls, we have the final response
                 break
-        
+
         # Extract final text response
         response_text = ''
         if 'choices' in response_data and response_data['choices']:
-             response_text = response_data['choices'][0]['message'].get('content', '')
+            response_text = response_data['choices'][0]['message'].get('content', '')
 
         # If the model didn't generate text but mining results exist, synthesize a summary
         if not response_text:
