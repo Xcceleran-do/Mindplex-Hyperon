@@ -46,12 +46,10 @@ if PETTA_PYTHON_PATH not in sys.path:
 
 try:
     from petta import PeTTa
-    import petta as petta_module
     PETTA_PYTHON_AVAILABLE = True
     PETTA_IMPORT_ERROR = None
 except Exception as e:
     PeTTa = None
-    petta_module = None
     PETTA_PYTHON_AVAILABLE = False
     PETTA_IMPORT_ERROR = str(e)
 
@@ -1215,9 +1213,6 @@ class MiningJob:
     start_time: float = 0
     end_time: Optional[float] = None
     conjunction_count: int = 0
-class rule:
-    pattern: str
-    support: int
 # In-memory storage for mining jobs
 mining_jobs: Dict[str, MiningJob] = {}
 

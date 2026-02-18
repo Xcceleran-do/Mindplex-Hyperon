@@ -3,10 +3,9 @@ import datetime
 import json
 import re
 import requests
-import os
 from .config import (
     LENGTH_BUCKETS, READING_TIME_BUCKETS, ENGAGEMENT_BUCKETS, 
-    RETENTION_BUCKETS, ANALYSIS_PROMPT_TEMPLATE
+    ANALYSIS_PROMPT_TEMPLATE
 )
 
 ASI_BASE_URL = "https://api.asi1.ai/v1/chat/completions"

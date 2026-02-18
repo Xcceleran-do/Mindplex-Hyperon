@@ -35,13 +35,6 @@ ENGAGEMENT_BUCKETS = {
     "Low": lambda x: x < 30
 }
 
-RETENTION_BUCKETS = {
-    # Completion rate (if available)
-    "High_Completion": lambda x: x > 0.80,
-    "Moderate_Completion": lambda x: 0.50 <= x <= 0.80,
-    "Low_Completion": lambda x: x < 0.50
-}
-
 # AI Prompts
 ANALYSIS_PROMPT_TEMPLATE = """
 Analyze the following article content and metadata to provide categorical classifications.
