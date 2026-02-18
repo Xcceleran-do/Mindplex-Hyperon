@@ -18,7 +18,7 @@ WORKDIR /app
 COPY . /app
 
 # Install Python dependencies for the experiments service
-RUN pip3 install --no-cache-dir -r experiments/requirements.txt
+RUN pip3 install --no-cache-dir --break-system-packages -r experiments/requirements.txt
 
 EXPOSE 5000
 
