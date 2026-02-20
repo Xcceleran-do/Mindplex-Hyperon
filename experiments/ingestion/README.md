@@ -78,16 +78,11 @@ Monitors for missing or inconsistent metadata. It can trigger re-fetching from s
 
 The end goal is to produce a metadata-rich knowledge base that the Hyperon miner can process. This typically means a set of triplets or facts of the form:
 
-(predicate subject object)
-
-Assumptions:
-
-- AtomSpace is per-user (no shared in-memory spaces across users).
-- Ingestion output is scoped per user (per-user file, bucket prefix, or database row namespace).
+(property entity value)
 
 ### Example: Movie
 
-(MovTitle ie123 "Inception")
+(ie123 MovTitle "Inception")
 
 (hasDirector Movie123 "Christopher Nolan")
 
@@ -99,7 +94,7 @@ Assumptions:
 
 ### Example: Research Paper
 
-(hasAuthor PaperABC "Alice Smith")
+(PaperABC hasAuthor "Alice Smith")
 
 (hasTopic PaperABC "Graph Mining")
 
@@ -115,13 +110,9 @@ Unstructured text analysis yields triples like:
 
 OpenIE and entity linking are key here. Sometimes dynamic knowledge graph techniques are used to handle streaming data, updating triples over time.
 
-Provenance is important: each triple should tag its confidence or source. The reasoning engine (PLN) uses subjective truth values (STV), so the schema is:
+Provenance is important: each triple should tag its confidence or source. The reasoning engine (PLN) can then assign uncertainty to rules. For example, an NLP-extracted fact might have 0.85 confidence. The pipeline can store:
 
-(STV confidence strength)
-
-The full pattern is then:
-
-(predicate subject object (STV confidence strength))
+(entity relation object confidence)
 
 so downstream inference knows which premises are less certain.
 
