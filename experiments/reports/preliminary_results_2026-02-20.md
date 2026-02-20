@@ -72,11 +72,5 @@ Representative examples:
 - Engagement labels are proxy-derived and should not be interpreted as causal outcomes.
 - Pattern overlap/redundancy is expected (many near-duplicate conjunctions).
 
-## Recommended Next Steps (1–2 week window)
-1. **De-duplicate and rank rules** by support + lift/confidence to reduce redundancy.
-2. **Holdout validation**: verify top patterns on a separate split for stability.
-3. **Actionability shortlist**: extract top 10 segments for editorial/product experiments.
-4. **Comparative baseline**: report against overall engagement base rates to quantify uplift.
-
 ## Conclusion
 We now have credible preliminary evidence from an actual dataset run. The strongest mined structure is a robust low-engagement cluster around archived, short, formal news content. Next, we should move from descriptive pattern frequency to validated and actionable pattern scoring.
