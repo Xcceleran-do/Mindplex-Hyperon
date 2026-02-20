@@ -7,12 +7,18 @@ interface IngestionFormProps {
 }
 
 const IngestionForm: Component<IngestionFormProps> = (props) => {
+  const ingestionEnabled = import.meta.env.VITE_BYPASS_INGESTION === 'false';
   const [username, setUsername] = createSignal('');
   const [isLoading, setIsLoading] = createSignal(false);
   const [error, setError] = createSignal('');
   const [statusMessage, setStatusMessage] = createSignal('');
 
   const handleIngest = async () => {
+    if (!ingestionEnabled) {
+      setError('Ingestion is currently bypassed. Set VITE_BYPASS_INGESTION=false to enable it.');
+      return;
+    }
+
     if (!username()) {
       setError('Please enter a username');
       return;
@@ -80,10 +86,14 @@ const IngestionForm: Component<IngestionFormProps> = (props) => {
           <div class={styles.status}>{statusMessage()}</div>
         </Show>
 
+        <Show when={!ingestionEnabled}>
+          <div class={styles.status}>Ingestion is bypassed in this build to preserve the current data.metta.</div>
+        </Show>
+
         <button 
           class={styles.button} 
           onClick={handleIngest}
-          disabled={isLoading()}
+          disabled={isLoading() || !ingestionEnabled}
         >
           <Show when={isLoading()} fallback="Visualize Data">
             <span class={styles.spinner}></span> Processing...

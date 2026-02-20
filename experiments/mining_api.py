@@ -603,6 +603,12 @@ def ingest_data():
     Trigger the ingestion pipeline for a specific user.
     Expects JSON: { "username": "some_user" }
     """
+    if os.getenv("DISABLE_INGESTION", "1") == "1":
+        return jsonify({
+            "status": "disabled",
+            "message": "Ingestion is disabled to protect current data.metta. Set DISABLE_INGESTION=0 to enable.",
+        }), 403
+
     try:
         data = request.get_json()
         username = data.get('username') if data else None

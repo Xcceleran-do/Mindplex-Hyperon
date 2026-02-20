@@ -6,6 +6,7 @@ import EnhancedLegend from './components/Legend/EnhancedLegend';
 import ChatInterface from './components/ChatInterface/ChatInterface';
 import MiningInterface from './components/MiningInterface/MiningInterface';
 import IngestionForm from './components/IngestionForm/IngestionForm';
+import { API_CONFIG } from './config/api';
 import { GraphData, GraphNode, FilterState } from './types';
 import { MettaParserImpl } from './services/parser/MettaParser';
 import { ColumnarTransformer } from './services/graph/ColumnarTransformer';
@@ -15,8 +16,70 @@ import './styles/components.css';
 import './styles/themes.css';
 import styles from './AppColumnar.module.css';
 
+const MAX_VISUALIZATION_ARTICLES = Number(import.meta.env.VITE_MAX_VIS_ARTICLES || 1500);
+
+const limitTriplesForVisualization = (triples: ReturnType<MettaParserImpl['extractTriples']>) => {
+  if (!Number.isFinite(MAX_VISUALIZATION_ARTICLES) || MAX_VISUALIZATION_ARTICLES <= 0) {
+    return triples;
+  }
+
+  const allowedArticles = new Set<string>();
+  const limited: typeof triples = [];
+
+  for (const triple of triples) {
+    const subjects = Array.isArray(triple.subject) ? triple.subject : [triple.subject];
+    const articleId = subjects[0];
+
+    if (allowedArticles.has(articleId)) {
+      limited.push(triple);
+      continue;
+    }
+
+    if (allowedArticles.size < MAX_VISUALIZATION_ARTICLES) {
+      allowedArticles.add(articleId);
+      limited.push(triple);
+    }
+  }
+
+  return limited;
+};
+
+const buildVisualizationSubset = (mettaText: string, maxArticles: number) => {
+  if (!Number.isFinite(maxArticles) || maxArticles <= 0) {
+    return mettaText;
+  }
+
+  const lines = mettaText.split('\n');
+  const selectedLines: string[] = [];
+  const allowedArticles = new Set<string>();
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith(';')) {
+      continue;
+    }
+
+    const match = line.match(/^\([^\s()]+\s+([^\s()]+)\s+/);
+    if (!match) {
+      continue;
+    }
+
+    const articleId = match[1];
+    if (!allowedArticles.has(articleId)) {
+      if (allowedArticles.size >= maxArticles) {
+        continue;
+      }
+      allowedArticles.add(articleId);
+    }
+
+    selectedLines.push(rawLine);
+  }
+
+  return selectedLines.join('\n');
+};
+
 const App: Component = () => {
-  const [showVisualizer, setShowVisualizer] = createSignal(false);
+  const [showVisualizer, setShowVisualizer] = createSignal(!API_CONFIG.INGESTION_ENABLED);
 
   // Load initial text from data.metta file
   const [initialTextResource, { refetch }] = createResource(async () => {
@@ -87,9 +150,10 @@ const App: Component = () => {
   createEffect(() => {
     if (mettaText().trim()) {
       try {
-        const parseResult = parser.parse(mettaText());
-        const triples = parser.extractTriples(mettaText());
-        const columnarData = columnarTransformer.transformToColumnar(triples);
+        const visualizationText = buildVisualizationSubset(mettaText(), MAX_VISUALIZATION_ARTICLES);
+        const triples = parser.extractTriples(visualizationText);
+        const visualizationTriples = limitTriplesForVisualization(triples);
+        const columnarData = columnarTransformer.transformToColumnar(visualizationTriples);
         setGraphData(columnarData);
       } catch (error) {
         console.error('Parsing error:', error);
@@ -324,7 +388,7 @@ const App: Component = () => {
   };
 
   return (
-    <Show when={showVisualizer()} fallback={<IngestionForm onComplete={handleIngestionComplete} />}>
+    <Show when={showVisualizer()} fallback={<Show when={API_CONFIG.INGESTION_ENABLED}><IngestionForm onComplete={handleIngestionComplete} /></Show>}>
       <div
         class={styles.app}
         style={{ "--sidebar-width": `${sidebarWidth()}px` } as any}
