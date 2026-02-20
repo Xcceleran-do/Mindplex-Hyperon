@@ -28,9 +28,9 @@ Ensures all inputs are in a consistent internal format. For example, it might ex
 
 For structured fields present in the data (titles, authors, genres, timestamps), dedicated agents parse and validate these fields. They can also enrich metadata via external APIs: e.g. querying CrossRef or SemanticScholar for paper abstracts and citation counts, or TMDB/OMDb for movie metadata. This yields triples like:
 
-(Paper, hasAuthor, X)
+(hasAuthor Paper X)
 
-(Movie, hasGenre, Comedy)
+(hasGenre Movie Comedy)
 
 ---
 
@@ -78,41 +78,41 @@ Monitors for missing or inconsistent metadata. It can trigger re-fetching from s
 
 The end goal is to produce a metadata-rich knowledge base that the Hyperon miner can process. This typically means a set of triplets or facts of the form:
 
-(entity, property, value)
+(property entity value)
 
 ### Example: Movie
 
-(Movie123, hasTitle, "Inception")
+(ie123 MovTitle "Inception")
 
-(Movie123, hasDirector, "Christopher Nolan")
+(hasDirector Movie123 "Christopher Nolan")
 
-(Movie123, belongsToGenre, "Sci-Fi")
+(belongsToGenre Movie123 "Sci-Fi")
 
-(Movie123, wasReleasedInYear, 2010)
+(wasReleasedInYear Movie123 2010)
 
-(Movie123, hasAverageRating, 8.8)
+(hasAverageRating Movie123 8.8)
 
 ### Example: Research Paper
 
-(PaperABC, hasAuthor, "Alice Smith")
+(PaperABC hasAuthor "Alice Smith")
 
-(PaperABC, hasTopic, "Graph Mining")
+(hasTopic PaperABC "Graph Mining")
 
-(PaperABC, hasCitationCount, 42)
+(hasCitationCount PaperABC  42)
 
-(PaperABC, hasDifficulty, "advanced")
+(hasDifficulty PaperABC "advanced")
 
 Unstructured text analysis yields triples like:
 
-(Alice, authored, PaperABC)
+(authored Alice PaperABC)
 
-(PaperABC, usesTechnique, "association rule mining")
+(usesTechnique PaperABC "association rule mining")
 
 OpenIE and entity linking are key here. Sometimes dynamic knowledge graph techniques are used to handle streaming data, updating triples over time.
 
 Provenance is important: each triple should tag its confidence or source. The reasoning engine (PLN) can then assign uncertainty to rules. For example, an NLP-extracted fact might have 0.85 confidence. The pipeline can store:
 
-(entity, relation, object, confidence)
+(entity relation object confidence)
 
 so downstream inference knows which premises are less certain.
 
@@ -124,9 +124,9 @@ Recommendation often relies on similarity: “Users who liked X also liked Y.”
 
 These similarity relations become additional edges in the knowledge graph, like:
 
-(UserX, similarToUser, UserY)
+(similarToUser UserX UserY)
 
-(MovieA, isLike, MovieB)
+(isLike MovieA MovieB)
 
 which the pattern miner can use for collaborative patterns.
 
