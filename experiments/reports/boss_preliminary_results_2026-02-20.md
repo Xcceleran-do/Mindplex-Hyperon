@@ -14,7 +14,7 @@ We ran the mining pipeline on an **actual external dataset** (MIND-derived), wit
 - Pattern support shown as raw occurrence count.
 - This phase is association mining only (no causal inference).
 
-## Engagement Labeling Rule (Explicit)
+## Engagement Labeling Rule (Explicit) 
 Engagement is computed from click-through behavior in MIND impression logs:
 
 - **CTR(article)** = `clicks / impressions`
