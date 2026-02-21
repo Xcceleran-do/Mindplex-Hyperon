@@ -1,0 +1,9 @@
+{
+  "query": "(engagement A_N123 \"Low\")",
+  "saved_at_utc": "20260221T063708Z",
+  "result": {
+    "justification": "No logical proof could be found for the query '(engagement A_N123 \"Low\")' within depth 5. This means the query cannot be deduced from the available rules and facts in the knowledge base.",
+    "query": "(engagement A_N123 \"Low\")",
+    "status": "no_proof"
+  }
+}

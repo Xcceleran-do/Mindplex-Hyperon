@@ -1,0 +1,11 @@
+{
+  "query": "(engagement A_N123 \"Low\")",
+  "saved_at_utc": "20260221T071208Z",
+  "result": {
+    "depth_used": 5,
+    "proof_count": 0,
+    "query": "(engagement A_N123 \"Low\")",
+    "raw_proofs": [],
+    "status": "no_proof"
+  }
+}
