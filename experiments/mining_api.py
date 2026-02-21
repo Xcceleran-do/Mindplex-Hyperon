@@ -457,8 +457,8 @@ def debug_petta_chainer_state(what_to_check: str) -> None:
         return
     try:
         print("DEBUG: PeTTa probe - get-atoms &res1")
-        atoms_lines = run_petta_query_lines(f"!(backward-chain &res1 (S (S Z)) (: $prf {what_to_check}))")
-        print("DEBUG: PeTTa atoms lines (first 10):", atoms_lines)
+        atoms_lines = run_petta_query_lines(f"!(get-atoms &res1)")
+        print("DEBUG: PeTTa atoms lines (first 10):", atoms_lines[:100])
 
         print("DEBUG: PeTTa probe - direct match")
         match_query = f"!(match &res1 {what_to_check} $x)"
@@ -481,7 +481,7 @@ def mine_pattern(numberOfConjunction: int) -> dict:
     
     try:
         # Run the miner with petta
-        query = f"!(pattern-miner &purifiedDbSpace 3 {int(numberOfConjunction)})"
+        query = f"!(pattern-miner &purifiedDbSpace 20 {int(numberOfConjunction)})"
         print(f"DEBUG: Executing PeTTa query: {query}")
         petta_output = run_metta_with_petta(query)
         print(f"DEBUG: PeTTa execution finished. Output length: {len(petta_output)}")
@@ -971,7 +971,7 @@ def formatter(mined_patterns):
 def backWardChainer(whatToCheck, depth=5):
     if init_petta_engine():
         debug_petta_chainer_state(whatToCheck)
-        query = f"!(backward-chain &res1 (fromNumber 5) (: $prf {whatToCheck}))"
+        query = f"!(backward-chain &res1 (S (S (S (S Z)))) (: $prf {whatToCheck}))"
         lines = run_petta_query_lines(query)
         if PETTA_DEBUG:
             print("DEBUG: raw backward chaining output lines:", lines)
@@ -980,7 +980,7 @@ def backWardChainer(whatToCheck, depth=5):
         return proofs or lines
 
     whatToCheck = metta4Miner.parse_single(whatToCheck)
-    answer = metta4Miner.run(f""" !(backward-chain &res1 (fromNumber 5) (: $prf {whatToCheck})) """)
+    answer = metta4Miner.run(f""" !(backward-chain &res1 (fromNumber {depth}) (: $prf {whatToCheck})) """)
     return answer
 
 def getChainerResult(whatToCheck, depth=5):
@@ -1067,6 +1067,101 @@ def getChainerResult(whatToCheck, depth=5):
             "depth_used": depth,
             "error": str(e)
         }
+
+
+@app.route('/api/chainer/query', methods=['POST'])
+def run_chainer_query():
+    """Run backward chaining and return analyzed justification."""
+    try:
+        data = request.get_json() or {}
+        what_to_check = data.get('whatToCheck') or data.get('query')
+        depth = data.get('depth', 5)
+
+        if not what_to_check:
+            return jsonify({'status': 'error', 'message': 'whatToCheck is required'}), 400
+
+        try:
+            depth = int(depth)
+        except Exception:
+            depth = 5
+
+        result = getChainerResult(what_to_check, depth)
+        return jsonify(make_json_safe(result))
+    except Exception as e:
+        print(f"/api/chainer/query error: {e}")
+        traceback.print_exc()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/chainer/raw', methods=['POST'])
+def run_chainer_raw():
+    """Run backward chaining and return raw proofs only (no LLM post-processing)."""
+    try:
+        data = request.get_json() or {}
+        what_to_check = data.get('whatToCheck') or data.get('query')
+        depth = data.get('depth', 5)
+
+        if not what_to_check:
+            return jsonify({'status': 'error', 'message': 'whatToCheck is required'}), 400
+
+        try:
+            depth = int(depth)
+        except Exception:
+            depth = 5
+
+        proofs = backWardChainer(what_to_check, depth)
+        proof_count = len(proofs) if isinstance(proofs, (list, tuple)) else (1 if proofs else 0)
+
+        return jsonify(make_json_safe({
+            'status': 'success' if proof_count > 0 else 'no_proof',
+            'query': what_to_check,
+            'proof_count': proof_count,
+            'raw_proofs': proofs,
+            'depth_used': depth,
+        }))
+    except Exception as e:
+        print(f"/api/chainer/raw error: {e}")
+        traceback.print_exc()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/chainer/export-rules', methods=['POST'])
+def export_chainer_rules():
+    """Export current &res1 atoms to a .metta rules file.
+
+    Optional JSON body:
+      { "outputPath": "experiments/chainer/rules.metta" }
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        output_path = data.get('outputPath')
+        if not output_path:
+            output_path = os.path.join(PROJECT_ROOT, 'experiments', 'chainer', 'rules.metta')
+        elif not os.path.isabs(output_path):
+            output_path = os.path.join(PROJECT_ROOT, output_path)
+
+        facts_res = getAllFactsAndRules()
+        if not isinstance(facts_res, dict) or facts_res.get('status') != 'success':
+            return jsonify({
+                'status': 'error',
+                'message': 'Unable to read &res1 atoms',
+                'details': make_json_safe(facts_res)
+            }), 500
+
+        facts = facts_res.get('facts', []) or []
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        with open(output_path, 'w', encoding='utf-8') as file_obj:
+            file_obj.write("\n".join(str(atom) for atom in facts))
+
+        return jsonify({
+            'status': 'success',
+            'outputPath': output_path,
+            'atomCount': len(facts),
+        })
+    except Exception as e:
+        print(f"/api/chainer/export-rules error: {e}")
+        traceback.print_exc()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
 def summarize_patterns(patterns: list) -> str:

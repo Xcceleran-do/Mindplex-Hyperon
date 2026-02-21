@@ -1,3 +1,4 @@
+!(import! &rules rules)
 (= (convertIncomingDataHelper $organized)
      (if (> (size-atom $organized) 1)
           (let ($head $tail) (decons-atom $organized) (-> $head (convertIncomingDataHelper $tail)))
@@ -27,3 +28,5 @@
      )
 )
 
+
+!(backward-chain &rules (fromNumber 5) (: ($prfabs $prfarg) (engagement A_N41020 "Medium")))
