@@ -3,7 +3,7 @@
 
 export const API_CONFIG = {
   BASE_URL: import.meta.env.VITE_API_BASE_URL || 'https://rr9qsbzr-5000.uks1.devtunnels.ms',
-  INGESTION_ENABLED: import.meta.env.VITE_BYPASS_INGESTION === 'false',
+  INGESTION_ENABLED: import.meta.env.VITE_BYPASS_INGESTION !== 'true',
   
   // API endpoints
   ENDPOINTS: {

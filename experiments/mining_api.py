@@ -157,6 +157,10 @@ tools_schema = [
                     "numberOfConjunction": {
                         "type": "integer",
                         "description": "The number of conjunctions to use in pattern mining."
+                    },
+                    "min_support": {
+                        "type": "integer",
+                        "description": "Minimum support threshold for pattern mining."
                     }
                 },
                 "required": ["numberOfConjunction"]
@@ -174,6 +178,10 @@ tools_schema = [
                     "conjunction_count": {
                         "type": "integer",
                         "description": "The number of conjunctions to use in pattern mining."
+                    },
+                    "min_support": {
+                        "type": "integer",
+                        "description": "Minimum support threshold for pattern mining."
                     }
                 },
                 "required": ["conjunction_count"]
@@ -477,11 +485,17 @@ def mine_pattern(numberOfConjunction: int) -> dict:
     Returns:
         A dictionary containing the mining results with parsed patterns.
     """
-    print(f"Debug: mine pattern function being called with conjunction count {numberOfConjunction}")
+    return mine_pattern_with_minsup(numberOfConjunction, 3)
+
+
+def mine_pattern_with_minsup(numberOfConjunction: int, min_support: int = 3) -> dict:
+    print(
+        f"Debug: mine pattern function being called with conjunction count {numberOfConjunction} and min_support {min_support}"
+    )
     
     try:
         # Run the miner with petta
-        query = f"!(pattern-miner &purifiedDbSpace 3 {int(numberOfConjunction)})"
+        query = f"!(pattern-miner &purifiedDbSpace {int(min_support)} {int(numberOfConjunction)})"
         print(f"DEBUG: Executing PeTTa query: {query}")
         petta_output = run_metta_with_petta(query)
         print(f"DEBUG: PeTTa execution finished. Output length: {len(petta_output)}")
@@ -513,18 +527,25 @@ def mine_pattern(numberOfConjunction: int) -> dict:
                 patterns.append(parsed)
         
         if not patterns:
-            return {"status": "no_results", "patterns": []}
+            return {
+                "status": "no_results",
+                "patterns": [],
+                "conjunction_count": numberOfConjunction,
+                "min_support": min_support,
+                "message": "No patterns found for the selected conjunction/min support values.",
+            }
         
         return {
             "answer": full_answer_str,
             "status": "success",
             "conjunction_count": numberOfConjunction,
+            "min_support": min_support,
             "patterns": patterns,
             "total_count": len(patterns)
         }
         
     except Exception as e:
-        print(f"ERROR in mine_pattern: {traceback.format_exc()}")
+        print(f"ERROR in mine_pattern_with_minsup: {traceback.format_exc()}")
         return {
             "status": "error",
             "message": f"Failed to run pattern mining or parse result: {str(e)}",
@@ -603,7 +624,7 @@ def ingest_data():
     Trigger the ingestion pipeline for a specific user.
     Expects JSON: { "username": "some_user" }
     """
-    if os.getenv("DISABLE_INGESTION", "1") == "1":
+    if os.getenv("DISABLE_INGESTION", "0") == "1":
         return jsonify({
             "status": "disabled",
             "message": "Ingestion is disabled to protect current data.metta. Set DISABLE_INGESTION=0 to enable.",
@@ -891,7 +912,7 @@ def run_mining_task(job_id: str, conjunction_count: int):
     job = mining_jobs[job_id]
     job.start_time = time.time()
     try:
-        result = mine_pattern(conjunction_count)
+        result = mine_pattern_with_minsup(conjunction_count, job.min_support)
         job.status = 'completed'
         job.result = result  # Store the dict directly, not result[0][0]
         job.end_time = time.time()
@@ -914,7 +935,7 @@ def run_mining_task(job_id: str, conjunction_count: int):
             'end_time': job.end_time
         }
 
-def start_mining_job(conjunction_count: int):
+def start_mining_job(conjunction_count: int, min_support: int = 3):
     """
     Wrapper that creates a MiningJob and runs the mining task synchronously
     so that function-calls from the LLM go through the same code path as the
@@ -924,11 +945,18 @@ def start_mining_job(conjunction_count: int):
     try:
         if not isinstance(conjunction_count, int):
             conjunction_count = int(conjunction_count)
+        if not isinstance(min_support, int):
+            min_support = int(min_support)
     except Exception:
-        return { 'error': 'conjunction_count must be an integer' }
+        return {'error': 'conjunction_count and min_support must be integers'}
 
     job_id = str(uuid.uuid4())
-    job = MiningJob(job_id=job_id, status='running', conjunction_count=conjunction_count)
+    job = MiningJob(
+        job_id=job_id,
+        status='running',
+        conjunction_count=conjunction_count,
+        min_support=min_support,
+    )
     mining_jobs[job_id] = job
 
     # Run synchronously (this will call mine_pattern internally)
@@ -951,6 +979,7 @@ def start_mining_job(conjunction_count: int):
         'jobId': job_id,
         'status': mining_jobs[job_id].status,
         'conjunction_count': conjunction_count,
+        'min_support': min_support,
         'result': mining_jobs[job_id].result
     }
 
@@ -1219,6 +1248,7 @@ class MiningJob:
     start_time: float = 0
     end_time: Optional[float] = None
     conjunction_count: int = 0
+    min_support: int = 3
 # In-memory storage for mining jobs
 mining_jobs: Dict[str, MiningJob] = {}
 
@@ -1234,10 +1264,13 @@ def start_mining():
 
     data = request.get_json() or {}
     conjunction_count = data.get('conjunction_count', 2)
+    min_support = data.get('min_support', 3)
     
     # Validate conjunction count
     if not isinstance(conjunction_count, int) or conjunction_count < 1:
         return jsonify({'error': 'conjunctionCount must be a positive integer'}), 400
+    if not isinstance(min_support, int) or min_support < 1:
+        return jsonify({'error': 'min_support must be a positive integer'}), 400
     
     # Generate unique job ID
     job_id = str(uuid.uuid4())
@@ -1246,11 +1279,14 @@ def start_mining():
     job = MiningJob(
         job_id=job_id,
         status='running',
-        conjunction_count=conjunction_count
+        conjunction_count=conjunction_count,
+        min_support=min_support,
     )
     mining_jobs[job_id] = job
     run_mining_task(job_id, conjunction_count)
-    print(f"🔍 DEBUG: Starting mining job {job_id} with conjunction count {conjunction_count}")
+    print(
+        f"🔍 DEBUG: Starting mining job {job_id} with conjunction count {conjunction_count} and min_support {min_support}"
+    )
     result = mining_jobs[job_id].result
     # Start formatting in background thread only if we have an answer payload
     print("🔍 DEBUG: Starting formatting thread")
@@ -1266,27 +1302,41 @@ def start_mining():
     print(f"🔍 DEBUG: result type = {type(result)}")
     print(f"🔍 DEBUG: result = {result}")
     
-    # Check if mining was successful
-    if isinstance(result, dict) and result.get('status') == 'success':
-        rules = result.get('patterns', [])
-        print(f"✅ Mining job {job_id} finished with {len(rules)} patterns")
-        return jsonify({
-            'jobId': job_id,
-            'status': 'finished',
-            'conjunction_count': conjunction_count,
-            'message': 'Mining job finished successfully',
-            'result': rules
-        })
-        
-    else:
-        # Handle error case
-        error_msg = result.get('message', 'Unknown error') if isinstance(result, dict) else str(result)
-        print(f"❌ Mining error: {error_msg}")
-        return jsonify({
-            'jobId': job_id,
-            'status': 'error',
-            'message': error_msg
-        }), 500
+    # Check mining status
+    if isinstance(result, dict):
+        mining_status = result.get('status')
+
+        if mining_status == 'success':
+            rules = result.get('patterns', [])
+            print(f"✅ Mining job {job_id} finished with {len(rules)} patterns")
+            return jsonify({
+                'jobId': job_id,
+                'status': 'finished',
+                'conjunction_count': conjunction_count,
+                'min_support': min_support,
+                'message': 'Mining job finished successfully',
+                'result': rules
+            })
+
+        if mining_status == 'no_results':
+            print(f"ℹ️ Mining job {job_id} finished with no patterns")
+            return jsonify({
+                'jobId': job_id,
+                'status': 'no_results',
+                'conjunction_count': conjunction_count,
+                'min_support': min_support,
+                'message': result.get('message', 'No patterns found for the selected parameters.'),
+                'result': []
+            })
+
+    # Handle error case
+    error_msg = result.get('message', 'Mining failed') if isinstance(result, dict) else str(result)
+    print(f"❌ Mining error: {error_msg}")
+    return jsonify({
+        'jobId': job_id,
+        'status': 'error',
+        'message': error_msg
+    }), 500
     
 
 @app.route('/api/mine/<job_id>', methods=['GET'])
@@ -1301,6 +1351,7 @@ def get_mining_status(job_id: str):
         'jobId': job_id,
         'status': job.status,
         'conjunction count': job.conjunction_count,
+        'min_support': job.min_support,
         'startTime': job.start_time
     }
     
@@ -1327,6 +1378,7 @@ def list_mining_jobs():
             'jobId': job_id,
             'status': job.status,
             'conjunctionCount': job.conjunction_count,
+            'minSupport': job.min_support,
             'startTime': job.start_time
         }
         if job.end_time:

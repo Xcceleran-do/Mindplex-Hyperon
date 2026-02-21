@@ -10,18 +10,53 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 /* Conjunction Input */
-.conjunction-input {
-  position: relative;
+.parameter-panel {
   display: flex;
-  align-items: center;
+  align-items: stretch;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-glass);
+  backdrop-filter: blur(var(--blur-amount));
+  box-shadow: var(--shadow-sm);
+}
+
+.parameter-field {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+}
+
+.parameter-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.parameter-divider {
+  width: 1px;
+  align-self: stretch;
+  background: var(--border-subtle);
+}
+
+.parameter-hint {
+  font-size: 0.66rem;
+  color: var(--text-secondary);
+  line-height: 1;
 }
 
 .separate-conj-input {
-  width: 60px;
-  padding: 8px 12px;
+  width: 92px;
+  padding: 7px 10px;
   border-radius: 12px;
   border: 1px solid var(--border-subtle);
   background: var(--bg-surface);

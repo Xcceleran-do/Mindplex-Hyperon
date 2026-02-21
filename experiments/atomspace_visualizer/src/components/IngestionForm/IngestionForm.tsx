@@ -7,7 +7,7 @@ interface IngestionFormProps {
 }
 
 const IngestionForm: Component<IngestionFormProps> = (props) => {
-  const ingestionEnabled = import.meta.env.VITE_BYPASS_INGESTION === 'false';
+  const ingestionEnabled = import.meta.env.VITE_BYPASS_INGESTION !== 'true';
   const [username, setUsername] = createSignal('');
   const [isLoading, setIsLoading] = createSignal(false);
   const [error, setError] = createSignal('');
@@ -15,7 +15,7 @@ const IngestionForm: Component<IngestionFormProps> = (props) => {
 
   const handleIngest = async () => {
     if (!ingestionEnabled) {
-      setError('Ingestion is currently bypassed. Set VITE_BYPASS_INGESTION=false to enable it.');
+      setError('Ingestion is currently bypassed. Set VITE_BYPASS_INGESTION=false or unset it to enable ingestion.');
       return;
     }
 

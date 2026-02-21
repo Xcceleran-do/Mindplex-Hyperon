@@ -134,6 +134,7 @@ const App: Component = () => {
   // Mining and chat state
   const [miningResults, setMiningResults] = createSignal<Array<{ pattern: string; support: string }>>([]);
   const [currentConjunctSize, setCurrentConjunctSize] = createSignal<number | undefined>(undefined);
+  const [miningNotice, setMiningNotice] = createSignal<{ type: 'info' | 'success' | 'error'; text: string } | null>(null);
   const [isRulesModalOpen, setIsRulesModalOpen] = createSignal(false);
 
   // Zoom control state
@@ -285,31 +286,52 @@ const App: Component = () => {
   };
 
   // Unified mining flow
-  const startMiningUnified = async (conjunctSize: number) => {
+  const startMiningUnified = async (conjunctSize: number, minSupport: number = 3) => {
     const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
     try {
       startMiningAnimation();
+      setMiningNotice(null);
 
       const resp = await fetch(`${API_BASE}/api/mine`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conjunction_count: conjunctSize })
+        body: JSON.stringify({ conjunction_count: conjunctSize, min_support: minSupport })
       });
-
-      if (!resp.ok) {
-        throw new Error(`Mining API error ${resp.status}`);
-      }
 
       const job = await resp.json();
 
+      if (!resp.ok) {
+        throw new Error(job?.message || `Mining API error ${resp.status}`);
+      }
+
       stopMiningAnimation();
-      setMiningResults(job.result || []);
       setCurrentConjunctSize(conjunctSize);
+
+      if (job.status === 'no_results') {
+        setMiningResults([]);
+        setMiningNotice({
+          type: 'info',
+          text: job.message || 'No patterns found. Try lowering MinSup or conjunction count.'
+        });
+        return;
+      }
+
+      const patterns = Array.isArray(job.result) ? job.result : [];
+      setMiningResults(patterns);
+      setMiningNotice({
+        type: 'success',
+        text: `Mining completed with ${patterns.length} pattern${patterns.length === 1 ? '' : 's'}.`
+      });
 
     } catch (err) {
       console.error('startMiningUnified error', err);
       stopMiningAnimation();
+      setMiningResults([]);
+      setMiningNotice({
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Mining failed. Please try again.'
+      });
     }
   };
 
@@ -406,6 +428,21 @@ const App: Component = () => {
                 onPatternsFound={handlePatternsFound}
                 onShowRules={miningResults().length > 0 ? () => setIsRulesModalOpen(true) : undefined}
               />
+              <Show when={miningNotice()}>
+                {(notice) => (
+                  <div
+                    class={`${styles.miningStatus} ${
+                      notice().type === 'error'
+                        ? styles.miningStatusError
+                        : notice().type === 'success'
+                          ? styles.miningStatusSuccess
+                          : styles.miningStatusInfo
+                    }`}
+                  >
+                    {notice().text}
+                  </div>
+                )}
+              </Show>
             </div>
           </div>
         </header>

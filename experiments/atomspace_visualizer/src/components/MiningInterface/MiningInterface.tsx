@@ -8,11 +8,12 @@ export interface MiningResult {
   status: 'running' | 'completed' | 'error';
   result?: any;
   error?: string;
+  message?: string;
   duration?: number;
 }
 
 export interface MiningInterfaceProps {
-  onMiningStart?: (conjunctSize: number) => void;
+  onMiningStart?: (conjunctSize: number, minSupport?: number) => void | Promise<void>;
   onMiningComplete?: (result: MiningResult) => void;
   onPatternsFound?: (patterns: Array<{ pattern: string; support: string }>, conjunctSize?: number) => void;
   onShowRules?: () => void;
@@ -22,6 +23,7 @@ const MiningInterface = (props: MiningInterfaceProps) => {
   const [isMining, setIsMining] = createSignal(false);
   const [miningResult, setMiningResult] = createSignal<MiningResult | null>(null);
   const [conjunctionCount, setConjunctionCount] = createSignal(5);
+  const [minSupport, setMinSupport] = createSignal(3);
   const [showResult, setShowResult] = createSignal(false);
   const [miningProgress, setMiningProgress] = createSignal(0);
   const [miningStatus, setMiningStatus] = createSignal('Preparing mines...');
@@ -53,7 +55,7 @@ const MiningInterface = (props: MiningInterfaceProps) => {
     setShowResult(false);
     if (props.onMiningStart) {
       try {
-        props.onMiningStart(conjunctionCount());
+        await props.onMiningStart(conjunctionCount(), minSupport());
       } finally {
         setIsMining(false);
       }
@@ -71,7 +73,7 @@ const MiningInterface = (props: MiningInterfaceProps) => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ conjunction_count: conjunctionCount() }),
+        body: JSON.stringify({ conjunction_count: conjunctionCount(), min_support: minSupport() }),
       });
 
       if (!response.ok) {
@@ -83,16 +85,20 @@ const MiningInterface = (props: MiningInterfaceProps) => {
       // Mining now completes immediately with results
       setIsMining(false);
 
+      const resultData = Array.isArray(jobData.result) ? jobData.result : [];
       const miningResult: MiningResult = {
         jobId: jobData.jobId,
         status: 'completed',
-        result: jobData.result,
+        result: resultData,
+        message: jobData.message,
         duration: 0
       };
+      setMiningResult(miningResult);
+      setShowResult(true);
 
-      if (jobData.result && Array.isArray(jobData.result)) {
+      if (jobData.status !== 'no_results' && resultData.length > 0) {
         console.log('MiningInterface (fallback): Calling onPatternsFound with conjunctSize:', conjunctionCount());
-        props.onPatternsFound?.(jobData.result, conjunctionCount());
+        props.onPatternsFound?.(resultData, conjunctionCount());
       }
 
     } catch (error) {
@@ -144,19 +150,41 @@ const MiningInterface = (props: MiningInterfaceProps) => {
     <div class="mining-interface">
       {/* Mining Control Panel */}
       <div class="mining-controls">
-        <div class="conjunction-input">
-          <input
-            id="conjunction-count"
-            type="number"
-            min="1"
-            max="10"
-            value={conjunctionCount()}
-            onInput={(e) => setConjunctionCount(parseInt(e.target.value) || 5)}
-            disabled={isMining()}
-            class="separate-conj-input"
-            aria-label="Conjunction size"
-            placeholder="Conjuncts"
-          />
+        <div class="parameter-panel">
+          <div class="parameter-field">
+            <label for="conjunction-count" class="parameter-label">Conjunct count</label>
+            <input
+              id="conjunction-count"
+              type="number"
+              min="1"
+              max="10"
+              value={conjunctionCount()}
+              onInput={(e) => setConjunctionCount(parseInt(e.target.value) || 5)}
+              disabled={isMining()}
+              class="separate-conj-input"
+              aria-label="Conjunct count"
+              title="Number of conditions joined in each mined pattern."
+            />
+            <span class="parameter-hint">Pattern complexity</span>
+          </div>
+
+          <div class="parameter-divider" />
+
+          <div class="parameter-field">
+            <label for="min-support" class="parameter-label">Min support</label>
+            <input
+              id="min-support"
+              type="number"
+              min="1"
+              value={minSupport()}
+              onInput={(e) => setMinSupport(parseInt(e.target.value) || 3)}
+              disabled={isMining()}
+              class="separate-conj-input"
+              aria-label="Minimum support"
+              title="Minimum number of occurrences required for a pattern to be returned."
+            />
+            <span class="parameter-hint">Frequency threshold</span>
+          </div>
         </div>
 
         <div class="button-wrapper" style={{ position: 'relative' }}>
@@ -222,6 +250,11 @@ const MiningInterface = (props: MiningInterfaceProps) => {
                 <p class="subtitle">Precious patterns extracted from the depths</p>
               </div>
               <div class="result-content">
+                <Show when={Array.isArray(miningResult()?.result) && miningResult()?.result?.length === 0}>
+                  <div class="error-message">
+                    <p>{miningResult()?.message || 'No patterns found for the current parameters.'}</p>
+                  </div>
+                </Show>
                 <div class="patterns-display">
                   <pre class="patterns-text">{JSON.stringify(miningResult()?.result, null, 2)}</pre>
                 </div>

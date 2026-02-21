@@ -18,7 +18,7 @@ export interface ChatInterfaceProps {
   onVisualize: (filter: import('../../types').FilterState) => void;
   miningResults?: Array<{ pattern: string; support: string }>;
   conjunctSize?: number;
-  onMiningStart?: (conjunctSize: number) => void;
+  onMiningStart?: (conjunctSize: number, minSupport?: number) => void;
   isOpen?: boolean;
   onClose?: () => void;
 }
