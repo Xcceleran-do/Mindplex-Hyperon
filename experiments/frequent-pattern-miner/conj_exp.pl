@@ -157,6 +157,94 @@ extract_var_keys_list([H|T], Acc, Keys) :-
     extract_var_keys(H, Acc, Acc1),
     extract_var_keys_list(T, Acc1, Keys).
 
+% STV-specific functions
+extract_stv_var_keys(Term, Keys) :-
+    extract_stv_var_keys(Term, [], Keys0),
+    list_to_set(Keys0, Keys).
+
+extract_stv_var_keys(Var, Acc, [Key|Acc]) :-
+    var(Var),
+    !,
+    term_to_atom(Var, Name),
+    atom_concat('$', Name, Key).
+extract_stv_var_keys(Atom, Acc, [Atom|Acc]) :-
+    atom(Atom),
+    atom_chars(Atom, ['$'|_]),
+    % Check if this is an STV pattern
+    ( has_stv_tuple(Atom) ->
+        % Handle STV pattern - extract STV variables separately
+        extract_stv_components(Atom, STVVars, Acc),
+        extract_stv_var_keys(Atom, Acc, Keys)
+    ;   % handle regular pattern
+        extract_stv_var_keys(Atom, Acc, Keys)
+    ).
+extract_stv_var_keys(Str, Acc, [StrKey|Acc]) :-
+    string(Str),
+    string_chars(Str, ['$'|_]),
+    !,
+    atom_string(StrKey, Str).
+extract_stv_var_keys(List, Acc, Keys) :-
+    is_list(List),
+    !,
+    extract_stv_var_keys_list(List, Acc, Keys).
+extract_stv_var_keys(Term, Acc, Keys) :-
+    compound(Term),
+    !,
+    Term =.. [_|Args],
+    extract_stv_var_keys_list(Args, Acc, Keys).
+extract_stv_var_keys(_, Acc, Acc).
+
+extract_stv_var_keys_list([], Acc, Acc).
+extract_stv_var_keys_list([H|T], Acc, Keys) :-
+    extract_stv_var_keys(H, Acc, Acc1),
+    extract_stv_var_keys_list(T, Acc1, Keys).
+
+% Helper to detect STV patterns
+has_stv_tuple(Atom) :-
+    atom(Atom),
+    atom_string(Atom, AtomStr),
+    sub_string(AtomStr, "(STV", _).
+
+% Extract STV components (strength and confidence variables)
+extract_stv_components(Atom, STVVars, Acc) :-
+    atom(Atom),
+    atom_string(Atom, AtomStr),
+    % Remove everything before (STV
+    sub_string(AtomStr, "(STV", AfterSTV),
+    % Extract everything after (STV to get STV variables
+    sub_string(AfterSTV, STVPart),
+    % Parse STV variables like $strength $confidence
+    parse_stv_vars(STVPart, STVVars, Acc).
+
+% Parse STV variables from STV part
+parse_stv_vars("", Acc, Acc).
+parse_stv_vars(STVStr, [Var|Acc]) :-
+    string_chars(STVStr, Chars),
+    ( append_to_var(Chars, Var, RestChars) ->
+        parse_stv_vars(RestChars, [Var|Acc])
+    ;   Acc = [Var|Acc]
+    ).
+
+append_to_var([], Var, []).
+append_to_var([Ch|Rest], Var, [Var|Rest]) :-
+    char_code(Ch, Code),
+    ( Code >= 97, Code =< 123 ->  % lowercase letters
+        atom_number(VarNum, VarAtom),
+        atom_concat(VarAtom, VarNum, NewVar),
+        append_to_var(Rest, NewVar, [])
+    ;   append_to_var(Rest, Var, [])
+    ).
+
+extract_stv_var_keys_list([], Acc, Acc).
+extract_stv_var_keys_list([H|T], Acc, Keys) :-
+    extract_stv_var_keys(H, Acc, Acc1),
+    extract_stv_var_keys_list(T, Acc1, Keys).
+
+extract_var_keys_list([], Acc, Acc).
+extract_var_keys_list([H|T], Acc, Keys) :-
+    extract_var_keys(H, Acc, Acc1),
+    extract_var_keys_list(T, Acc1, Keys).
+
 normalize_combo_vars(Combo, Normalized) :-
     normalize_terms(Combo, [], _, Normalized).
 
