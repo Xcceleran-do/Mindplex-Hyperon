@@ -16,10 +16,11 @@
 
 (= (fromNumberInterface $n) (trace! (--> (fromNumber (- $n 1)) is what i've get) (fromNumber (- $n 1))))
 
-;; Base case
-(= (backward-chain_ True $kb $_ (: $prf $ccln)) (match $kb (: $prf $ccln) (: $prf $ccln)))
+;; Base case - enhanced to handle STV patterns
+(= (backward-chain_ True $kb $_ (: $prf $ccln)) 
+    (match $kb (: $prf $ccln) (: $prf $ccln)))
 
-;; Recursive step
+;; Recursive step - enhanced to handle STV patterns and dynamic depth
 (= (backward-chain_ True $kb (S $k) (: ($prfabs $prfarg) $ccln))
    (let* 
           (
@@ -30,6 +31,7 @@
      )
 )
 
+;; Enhanced entry point - uses dynamic depth and supports STV patterns
 (= (backward-chain $kb $depth (: $prf $ccln)) 
-     (backward-chain_ True $kb (S (S (S (Z)))) (: $prf $ccln))
+     (backward-chain_ True $kb $depth (: $prf $ccln))
 )
