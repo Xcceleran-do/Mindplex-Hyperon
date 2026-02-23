@@ -28,6 +28,42 @@ unique_combinations_star(Exprs, Size, Results) :-
             include(conjunct_has_engagement, WrappedCombos, Results)
     ).
 
+% STV-specific combination function
+unique_combinations_star_stv(Exprs, Size, Results) :-
+    parse_k(Size, K),
+    ( K =< 0
+    -> Results = []
+    ; length(Exprs, N),
+      K > N
+    -> Results = []
+    ; build_infos_stv(Exprs, Infos),
+      collect_hubs(Infos, Hubs),
+      findall(SortedCombo,
+              ( member(Hub, Hubs),
+                pool_with_hub(Infos, Hub, Pool),
+                length(Pool, PoolLen),
+                PoolLen >= K,
+                combos_for_hub(Pool, Hub, K, Combo),
+                sort(Combo, SortedCombo)
+              ),
+              RawCombos),
+      sort(RawCombos, UniqueCombos),
+            maplist(normalize_combo_vars_stv, UniqueCombos, NormalizedCombos),
+            maplist(wrap_conjunct, NormalizedCombos, WrappedCombos),
+            include(conjunct_has_engagement, WrappedCombos, Results)
+    ).
+
+% Build info structures for STV patterns
+build_infos_stv([], []).
+build_infos_stv([Expr|Rest], [info(Expr, VarsSet, Functor)|Infos]) :-
+    extract_var_keys(Expr, VarsSet),
+    expr_functor(Expr, Functor),
+    build_infos_stv(Rest, Infos).
+
+% Normalize combo variables for STV patterns
+normalize_combo_vars_stv(Combo, NormalizedCombo) :-
+    normalize_combo_vars(Combo, NormalizedCombo).
+
 parse_k(Size, K) :-
     ( integer(Size) -> K = Size
     ; number(Size) -> K is floor(Size)
