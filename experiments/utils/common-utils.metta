@@ -1329,3 +1329,14 @@
         )
     )
 )
+
+; Name: giveMeUniqueAcc
+; Purpose: Adds an atom to accumulator only if not present.
+; Input: $x (atom), $acc (accumulator)
+; Output: Updated accumulator
+( = (giveMeUniqueAcc $x $acc) 
+    (if (is-member-custom $x $acc)
+        $acc
+        (union-atom $acc ($x))
+    )
+)
