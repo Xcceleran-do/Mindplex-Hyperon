@@ -1340,3 +1340,11 @@
         (union-atom $acc ($x))
     )
 )
+
+; Name: only_unique
+; Purpose: Removes duplicates from a list.
+; Input: $specials (list)
+; Output: List with unique elements
+( = (only_unique $specials) 
+    (foldl-atom $specials () $acc $x (giveMeUniqueAcc $x $acc))
+)
