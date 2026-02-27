@@ -1400,3 +1400,4 @@
     (foldl-atom $specials () $acc $x (giveMeUniqueAcc $x $acc))
 )
 
+; !(let $conj (only_unique ((, (Inheritance Allen $_74568) (Inheritance Abe $_74568)) (, (Inheritance Allen $_74508) (Inheritance Cason $_74508)) (, (Inheritance $_74442 sodaDrinker) (Inheritance $_74442 ugly)) (, (Inheritance $_74382 sodaDrinker) (Inheritance $_74382 human)) (, (Inheritance Abe $_74328) (Inheritance Allen $_74328)) (, (Inheritance Abe $_74268) (Inheritance Cason $_74268)) (, (Inheritance Cason $_74208) (Inheritance Allen $_74208)) (, (Inheritance Cason $_74148) (Inheritance Abe $_74148)) (, (Inheritance $_74082 ugly) (Inheritance $_74082 sodaDrinker)) (, (Inheritance $_74022 ugly) (Inheritance $_74022 human)) (, (Inheritance $_73962 human) (Inheritance $_73962 sodaDrinker)) (, (Inheritance $_73902 human) (Inheritance $_73902 ugly)))) (superpose $conj))
