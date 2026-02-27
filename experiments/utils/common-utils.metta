@@ -1317,3 +1317,15 @@
         )
     )
 )
+
+; Name: is-member-custom
+; Purpose: Recursively checks if an atom is present in a list using alpha equality.
+; Input: $x (atom), $acc (list)
+; Output: True if $x is in $acc, else False
+(= (is-member-custom $x $acc) 
+    (if (== () $acc) False
+        (let ($head $tail) (decons-atom $acc)
+            (if (=alpha $head $x) True (is-member-custom $x $tail))
+        )
+    )
+)
