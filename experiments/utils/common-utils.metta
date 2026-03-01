@@ -1317,3 +1317,87 @@
         )
     )
 )
+
+
+;; Documentation for is-member-custom:
+;;
+;; Description:
+;;   This function checks whether a given atom exists within a list.
+;;   - If the list is empty, the function returns False.
+;;   - If the list is non-empty, it deconstructs the list into head and tail.
+;;   - It compares the head element with the target atom using alpha equality.
+;;   - If a match is found, it returns True.
+;;   - Otherwise, it recursively checks the remaining elements of the list.
+;;
+;;   Alpha equality (=alpha) ensures structural equivalence,
+;;   meaning expressions are considered equal even if variable names differ.
+;;
+;; Parameters:
+;;   $x   - The atom to search for.
+;;   $acc - The list in which membership is checked.
+;;
+;; Returns:
+;;   True  - If the atom is found in the list (based on alpha equality).
+;;   False - If the atom is not present or the list is empty.
+(= (is-member-custom $x $acc) 
+    (if (== () $acc) False
+        (let ($head $tail) (decons-atom $acc)
+            (if (=alpha $head $x) True (is-member-custom $x $tail))
+        )
+    )
+)
+(= (is-member-custom $x $acc) 
+    (if (== () $acc) False
+        (let ($head $tail) (decons-atom $acc)
+            (if (=alpha $head $x) True (is-member-custom $x $tail))
+        )
+    )
+)
+
+;; Documentation for giveMeUniqueAcc:
+;;
+;; Description:
+;;   This function adds an atom to an accumulator only if it is not already present.
+;;   - It checks whether the atom exists in the accumulator using is-member-custom.
+;;   - If the atom is already present, the accumulator is returned unchanged.
+;;   - If the atom is not present, it is added to the accumulator using union-atom.
+;;
+;;   Membership is determined using alpha equality (via is-member-custom),
+;;   ensuring structural equivalence rather than simple syntactic comparison.
+;;
+;; Parameters:
+;;   $x   - The atom to potentially add.
+;;   $acc - The accumulator list to update.
+;;
+;; Returns:
+;;   The original accumulator if the atom is already present,
+;;   otherwise a new accumulator with the atom added.
+( = (giveMeUniqueAcc $x $acc) 
+    (if (is-member-custom $x $acc)
+        $acc
+        (union-atom $acc ($x))
+    )
+)
+
+;; Documentation for only_unique:
+;;
+;; Description:
+;;   This function removes duplicate elements from a list.
+;;   - It iterates over the input list using foldl-atom.
+;;   - Starting from an empty accumulator, each element is processed sequentially.
+;;   - For every element, giveMeUniqueAcc determines whether it should be added.
+;;   - Duplicate elements (based on alpha equality) are ignored.
+;;
+;;   The result is a list containing only structurally unique elements.
+;;
+;; Parameters:
+;;   $specials - The list from which duplicate elements should be removed.
+;;
+;; Returns:
+;;   A new list containing only unique elements from the input list,
+;;   preserving one instance of each alpha-equivalent structure.
+( = (only_unique $specials) 
+    (foldl-atom $specials () $acc $x (giveMeUniqueAcc $x $acc))
+)
+
+; !(let $conj (only_unique ((, (Inheritance Allen $_74568) (Inheritance Abe $_74568)) (, (Inheritance Allen $_74508) (Inheritance Cason $_74508)) (, (Inheritance $_74442 sodaDrinker) (Inheritance $_74442 ugly)) (, (Inheritance $_74382 sodaDrinker) (Inheritance $_74382 human)) (, (Inheritance Abe $_74328) (Inheritance Allen $_74328)) (, (Inheritance Abe $_74268) (Inheritance Cason $_74268)) (, (Inheritance Cason $_74208) (Inheritance Allen $_74208)) (, (Inheritance Cason $_74148) (Inheritance Abe $_74148)) (, (Inheritance $_74082 ugly) (Inheritance $_74082 sodaDrinker)) (, (Inheritance $_74022 ugly) (Inheritance $_74022 human)) (, (Inheritance $_73962 human) (Inheritance $_73962 sodaDrinker)) (, (Inheritance $_73902 human) (Inheritance $_73902 ugly)))) (superpose $conj))
