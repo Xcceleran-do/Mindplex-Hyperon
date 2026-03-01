@@ -61,8 +61,8 @@ METTA_SETUP = f"""
 !(import! &tempo {PROJECT_ROOT_WSL}/experiments/atomspace_visualizer/public/data)
 !(import! &stv-formulas {PROJECT_ROOT_WSL}/experiments/PLN/Formulas)
 
-!(let $atom (let $fact (get-atoms &tempo) (: (fact:- $fact) $fact)) (add-atom &res1 $atom))
-!(let $atom (get-atoms &tempo) (add-atom &purifiedDbSpace $atom))
+!(let $atom (match &tempo ($fact $stv) (: (fact:- $fact) $fact $stv)) (add-atom &res1 $atom))
+!(let $atom (match &tempo ($fact $stv) $fact) (add-atom &purifiedDbSpace $atom))    
 """
 
 metta4Miner.run(METTA_SETUP)
