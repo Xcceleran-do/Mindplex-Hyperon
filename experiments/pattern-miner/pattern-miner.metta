@@ -1,11 +1,10 @@
 ; --------------------------------------------------------------
-;; pattern-miner 
+;; pattern-miner - STV-ONLY VERSION  
 ; --------------------------------------------------------------
-;; main pattern mining pipeline for functional approach 
-;; Enhanced to handle both 3-argument and 4-argument STV patterns
+;; Main pattern mining pipeline for STV patterns
 ;(: pattern-miner (-> $space space Number Number))
-(= (pattern-miner $db $minsup $depth) ( 
-    let $_ (println! ("==== STV Pattern Miner Started ===== depth is" $depth))
+(= (pattern-miner $db $minsup $depth) 
+    (let $_ (println! ("==== STV Pattern Miner Started ===== depth is" $depth))
       (frequency-pattern-miner $db $minsup $depth)
-   )  
+   )
 )

@@ -1317,3 +1317,35 @@
         )
     )
 )
+
+
+; Name: is-member-custom
+; Purpose: Recursively checks if an atom is present in a list using alpha equality.
+; Input: $x (atom), $acc (list)
+; Output: True if $x is in $acc, else False
+(= (is-member-custom $x $acc) 
+    (if (== () $acc) False
+        (let ($head $tail) (decons-atom $acc)
+            (if (=alpha $head $x) True (is-member-custom $x $tail))
+        )
+    )
+)
+
+; Name: giveMeUniqueAcc
+; Purpose: Adds an atom to accumulator only if not present.
+; Input: $x (atom), $acc (accumulator)
+; Output: Updated accumulator
+( = (giveMeUniqueAcc $x $acc) 
+    (if (is-member-custom $x $acc)
+        $acc
+        (union-atom $acc ($x))
+    )
+)
+
+; Name: only_unique
+; Purpose: Removes duplicates from a list.
+; Input: $specials (list)
+; Output: List with unique elements
+( = (only_unique $specials) 
+    (foldl-atom $specials () $acc $x (giveMeUniqueAcc $x $acc))
+)

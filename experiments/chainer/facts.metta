@@ -1,6 +1,21 @@
 ; --- 80 facts with all features ---
 
-(: (fact:- (engagement 9 "high")) (engagement 9 "high"))
+; --- Load STV data from ingestion pipeline ---
+; Enhanced to load 4-argument STV facts instead of hardcoded 3-argument facts
+
+; Import STV data from atomspace visualizer
+!(import! &self ../atomspace_visualizer/public/data)
+
+; Add some test STV facts for demonstration
+!(add-atom &res1 (length A_16624 "Medium" (STV 0.8 0.9)))
+!(add-atom &res1 (tone A_16624 "Instructional" (STV 0.95 0.98)))
+!(add-atom &res1 (engagement A_16624 "Low" (STV 0.1 0.4)))
+
+; Legacy 3-argument facts (commented out for backward compatibility)
+; (: (fact:- (engagement 9 "high")) (engagement 9 "high"))
+; (: (fact:- (length 9 "medium")) (length 9 "medium"))
+; (: (fact:- (tone 9 "Analytical")) (tone 9 "Analytical"))
+
 (: (fact:- (engagement 8 "high")) (engagement 8 "high"))
 (: (fact:- (engagement 7 "high")) (engagement 7 "high"))
 (: (fact:- (engagement 6 "high")) (engagement 6 "high"))
@@ -29,7 +44,6 @@
 (: (fact:- (tone 2 "Analytical")) (tone 2 "Analytical"))
 (: (fact:- (tone 1 "Analytical")) (tone 1 "Analytical"))
 (: (fact:- (tone 0 "Analytical")) (tone 0 "Analytical"))
-(: (fact:- (length 9 "medium")) (length 9 "medium"))
 (: (fact:- (length 8 "low")) (length 8 "low"))
 (: (fact:- (length 7 "low")) (length 7 "low"))
 (: (fact:- (length 6 "medium")) (length 6 "medium"))

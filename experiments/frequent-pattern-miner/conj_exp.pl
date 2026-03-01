@@ -6,64 +6,32 @@
 % variable and no other variable is shared across any pair of clauses.
 unique_combinations_star(Exprs, Size, Results) :-
     parse_k(Size, K),
-    ( K =< 0
-    -> Results = []
+    ( K =< 0 ->
+        Results = []
     ; length(Exprs, N),
-      K > N
-    -> Results = []
+      K > N ->
+        Results = []
     ; build_infos(Exprs, Infos),
       collect_hubs(Infos, Hubs),
-      findall(SortedCombo,
-              ( member(Hub, Hubs),
-                pool_with_hub(Infos, Hub, Pool),
-                length(Pool, PoolLen),
-                PoolLen >= K,
-                combos_for_hub(Pool, Hub, K, Combo),
-                sort(Combo, SortedCombo)
-              ),
-              RawCombos),
+      findall(
+          SortedCombo,
+          (
+              member(Hub, Hubs),
+              pool_with_hub(Infos, Hub, Pool),
+              length(Pool, PoolLen),
+              PoolLen >= K,
+              combos_for_hub(Pool, Hub, K, Combo),
+              sort(Combo, SortedCombo)
+          ),
+          RawCombos
+      ),
       sort(RawCombos, UniqueCombos),
-            maplist(normalize_combo_vars, UniqueCombos, NormalizedCombos),
-            maplist(wrap_conjunct, NormalizedCombos, WrappedCombos),
-            include(conjunct_has_engagement, WrappedCombos, Results)
+      maplist(normalize_combo_vars, UniqueCombos, NormalizedCombos),
+      maplist(wrap_conjunct, NormalizedCombos, WrappedCombos),
+      include(conjunct_has_engagement, WrappedCombos, Results)
     ).
 
-% STV-specific combination function
-unique_combinations_star_stv(Exprs, Size, Results) :-
-    parse_k(Size, K),
-    ( K =< 0
-    -> Results = []
-    ; length(Exprs, N),
-      K > N
-    -> Results = []
-    ; build_infos_stv(Exprs, Infos),
-      collect_hubs(Infos, Hubs),
-      findall(SortedCombo,
-              ( member(Hub, Hubs),
-                pool_with_hub(Infos, Hub, Pool),
-                length(Pool, PoolLen),
-                PoolLen >= K,
-                combos_for_hub(Pool, Hub, K, Combo),
-                sort(Combo, SortedCombo)
-              ),
-              RawCombos),
-      sort(RawCombos, UniqueCombos),
-            maplist(normalize_combo_vars_stv, UniqueCombos, NormalizedCombos),
-            maplist(wrap_conjunct, NormalizedCombos, WrappedCombos),
-            include(conjunct_has_engagement, WrappedCombos, Results)
-    ).
-
-% Build info structures for STV patterns
-build_infos_stv([], []).
-build_infos_stv([Expr|Rest], [info(Expr, VarsSet, Functor)|Infos]) :-
-    extract_var_keys(Expr, VarsSet),
-    expr_functor(Expr, Functor),
-    build_infos_stv(Rest, Infos).
-
-% Normalize combo variables for STV patterns
-normalize_combo_vars_stv(Combo, NormalizedCombo) :-
-    normalize_combo_vars(Combo, NormalizedCombo).
-
+% Parse Size input into integer K
 parse_k(Size, K) :-
     ( integer(Size) -> K = Size
     ; number(Size) -> K is floor(Size)
@@ -72,27 +40,27 @@ parse_k(Size, K) :-
     ; K = 0
     ).
 
-% cut-first-char(+Input, -Output)
-% Drops the first character from an atom/string like l$x -> $x.
+% Cut first character from atom/string
 'cut-first-char'(Input, Output) :-
-    ( var(Input)
-    -> Output = Input
-    ; atom(Input)
-    -> atom_chars(Input, Chars),
-       drop_first_char(Chars, RestChars),
-       atom_chars(RestAtom, RestChars),
-       Output = RestAtom
-    ; string(Input)
-    -> string_chars(Input, Chars),
-       drop_first_char(Chars, RestChars),
-       string_chars(RestString, RestChars),
-       Output = RestString
+    ( var(Input) ->
+        Output = Input
+    ; atom(Input) ->
+        atom_chars(Input, Chars),
+        drop_first_char(Chars, RestChars),
+        atom_chars(RestAtom, RestChars),
+        Output = RestAtom
+    ; string(Input) ->
+        string_chars(Input, Chars),
+        drop_first_char(Chars, RestChars),
+        string_chars(RestString, RestChars),
+        Output = RestString
     ; Output = Input
     ).
 
 drop_first_char([_|Rest], Rest) :- !.
 drop_first_char([], []).
 
+% Build info structure for each expression
 build_infos([], []).
 build_infos([Expr|Rest], [info(Expr, VarsSet, Functor)|Infos]) :-
     extract_var_keys(Expr, VarsSet),
@@ -100,17 +68,19 @@ build_infos([Expr|Rest], [info(Expr, VarsSet, Functor)|Infos]) :-
     build_infos(Rest, Infos).
 
 expr_functor([F|_], Functor) :-
-    atom(F),
-    !,
+    atom(F), !,
     Functor = F.
 expr_functor(_, '').
 
 collect_hubs(Infos, Hubs) :-
-    findall(V,
-            ( member(info(_, Vars, _), Infos),
-              member(V, Vars)
-            ),
-            Vars),
+    findall(
+        V,
+        (
+            member(info(_, Vars, _), Infos),
+            member(V, Vars)
+        ),
+        Vars
+    ),
     list_to_set(Vars, Hubs).
 
 pool_with_hub(Infos, Hub, Pool) :-
@@ -123,13 +93,26 @@ combos_for_hub(Pool, Hub, K, Combo) :-
     choose_combo(Pool, Hub, K, [], [], Combo).
 
 choose_combo(_, _, 0, SelectedInfos, _, Combo) :-
-    findall(Expr, member(info(Expr, _, _), SelectedInfos), Combo).
-choose_combo([Info|Rest], Hub, K, SelectedInfos, UsedFunctors, Combo) :-
+    findall(
+        Expr,
+        member(info(Expr, _, _), SelectedInfos),
+        Combo
+    ).
+choose_combo(
+    [Info|Rest],
+    Hub,
+    K,
+    SelectedInfos,
+    UsedFunctors,
+    Combo
+) :-
     K > 0,
-    ( can_add_info(Hub, Info, SelectedInfos, UsedFunctors, NewUsedFunctors),
-      K1 is K - 1,
-      choose_combo(Rest, Hub, K1, [Info|SelectedInfos], NewUsedFunctors, Combo)
-    ; choose_combo(Rest, Hub, K, SelectedInfos, UsedFunctors, Combo)
+    (
+        can_add_info(Hub, Info, SelectedInfos, UsedFunctors, NewUsedFunctors),
+        K1 is K - 1,
+        choose_combo(Rest, Hub, K1, [Info|SelectedInfos], NewUsedFunctors, Combo)
+    ;
+        choose_combo(Rest, Hub, K, SelectedInfos, UsedFunctors, Combo)
     ).
 
 can_add_info(Hub, info(_, Vars, Functor), SelectedInfos, UsedFunctors, NewUsedFunctors) :-
@@ -151,39 +134,38 @@ only_hub_shared(Hub, Vars1, Vars2) :-
     Inter == [Hub].
 
 shared_vars(Vars1, Vars2, Shared) :-
-    findall(V,
-            ( member(V, Vars1),
-              member(V2, Vars2),
-              V == V2
-            ),
-            Shared0),
+    findall(
+        V,
+        (
+            member(V, Vars1),
+            member(V2, Vars2),
+            V == V2
+        ),
+        Shared0
+    ),
     list_to_set(Shared0, Shared).
 
+% Extract variable keys from terms
 extract_var_keys(Term, Keys) :-
     extract_var_keys(Term, [], Keys0),
     list_to_set(Keys0, Keys).
 
 extract_var_keys(Var, Acc, [Key|Acc]) :-
-    var(Var),
-    !,
+    var(Var), !,
     term_to_atom(Var, Name),
     atom_concat('$', Name, Key).
 extract_var_keys(Atom, Acc, [Atom|Acc]) :-
     atom(Atom),
-    atom_chars(Atom, ['$'|_]),
-    !.
+    atom_chars(Atom, ['$'|_]), !.
 extract_var_keys(Str, Acc, [StrKey|Acc]) :-
     string(Str),
-    string_chars(Str, ['$'|_]),
-    !,
+    string_chars(Str, ['$'|_]), !,
     atom_string(StrKey, Str).
 extract_var_keys(List, Acc, Keys) :-
-    is_list(List),
-    !,
+    is_list(List), !,
     extract_var_keys_list(List, Acc, Keys).
 extract_var_keys(Term, Acc, Keys) :-
-    compound(Term),
-    !,
+    compound(Term), !,
     Term =.. [_|Args],
     extract_var_keys_list(Args, Acc, Keys).
 extract_var_keys(_, Acc, Acc).
@@ -193,94 +175,7 @@ extract_var_keys_list([H|T], Acc, Keys) :-
     extract_var_keys(H, Acc, Acc1),
     extract_var_keys_list(T, Acc1, Keys).
 
-% STV-specific functions
-extract_stv_var_keys(Term, Keys) :-
-    extract_stv_var_keys(Term, [], Keys0),
-    list_to_set(Keys0, Keys).
-
-extract_stv_var_keys(Var, Acc, [Key|Acc]) :-
-    var(Var),
-    !,
-    term_to_atom(Var, Name),
-    atom_concat('$', Name, Key).
-extract_stv_var_keys(Atom, Acc, [Atom|Acc]) :-
-    atom(Atom),
-    atom_chars(Atom, ['$'|_]),
-    % Check if this is an STV pattern
-    ( has_stv_tuple(Atom) ->
-        % Handle STV pattern - extract STV variables separately
-        extract_stv_components(Atom, STVVars, Acc),
-        extract_stv_var_keys(Atom, Acc, Keys)
-    ;   % handle regular pattern
-        extract_stv_var_keys(Atom, Acc, Keys)
-    ).
-extract_stv_var_keys(Str, Acc, [StrKey|Acc]) :-
-    string(Str),
-    string_chars(Str, ['$'|_]),
-    !,
-    atom_string(StrKey, Str).
-extract_stv_var_keys(List, Acc, Keys) :-
-    is_list(List),
-    !,
-    extract_stv_var_keys_list(List, Acc, Keys).
-extract_stv_var_keys(Term, Acc, Keys) :-
-    compound(Term),
-    !,
-    Term =.. [_|Args],
-    extract_stv_var_keys_list(Args, Acc, Keys).
-extract_stv_var_keys(_, Acc, Acc).
-
-extract_stv_var_keys_list([], Acc, Acc).
-extract_stv_var_keys_list([H|T], Acc, Keys) :-
-    extract_stv_var_keys(H, Acc, Acc1),
-    extract_stv_var_keys_list(T, Acc1, Keys).
-
-% Helper to detect STV patterns
-has_stv_tuple(Atom) :-
-    atom(Atom),
-    atom_string(Atom, AtomStr),
-    sub_string(AtomStr, "(STV", _).
-
-% Extract STV components (strength and confidence variables)
-extract_stv_components(Atom, STVVars, Acc) :-
-    atom(Atom),
-    atom_string(Atom, AtomStr),
-    % Remove everything before (STV
-    sub_string(AtomStr, "(STV", AfterSTV),
-    % Extract everything after (STV to get STV variables
-    sub_string(AfterSTV, STVPart),
-    % Parse STV variables like $strength $confidence
-    parse_stv_vars(STVPart, STVVars, Acc).
-
-% Parse STV variables from STV part
-parse_stv_vars("", Acc, Acc).
-parse_stv_vars(STVStr, [Var|Acc]) :-
-    string_chars(STVStr, Chars),
-    ( append_to_var(Chars, Var, RestChars) ->
-        parse_stv_vars(RestChars, [Var|Acc])
-    ;   Acc = [Var|Acc]
-    ).
-
-append_to_var([], Var, []).
-append_to_var([Ch|Rest], Var, [Var|Rest]) :-
-    char_code(Ch, Code),
-    ( Code >= 97, Code =< 123 ->  % lowercase letters
-        atom_number(VarNum, VarAtom),
-        atom_concat(VarAtom, VarNum, NewVar),
-        append_to_var(Rest, NewVar, [])
-    ;   append_to_var(Rest, Var, [])
-    ).
-
-extract_stv_var_keys_list([], Acc, Acc).
-extract_stv_var_keys_list([H|T], Acc, Keys) :-
-    extract_stv_var_keys(H, Acc, Acc1),
-    extract_stv_var_keys_list(T, Acc1, Keys).
-
-extract_var_keys_list([], Acc, Acc).
-extract_var_keys_list([H|T], Acc, Keys) :-
-    extract_var_keys(H, Acc, Acc1),
-    extract_var_keys_list(T, Acc1, Keys).
-
+% Normalize variables in combination
 normalize_combo_vars(Combo, Normalized) :-
     normalize_terms(Combo, [], _, Normalized).
 
@@ -289,49 +184,51 @@ normalize_terms([T|Ts], Map0, Map, [N|Ns]) :-
     normalize_term(T, Map0, Map1, N),
     normalize_terms(Ts, Map1, Map, Ns).
 
-normalize_term(Var, Map, Map, Var) :-
-    var(Var),
-    !.
+normalize_term(Var, Map, Map, Var) :- var(Var), !.
 normalize_term(Atom, Map0, Map, Var) :-
     atom(Atom),
-    atom_chars(Atom, ['$'|_]),
-    !,
+    atom_chars(Atom, ['$'|_]), !,
     lookup_or_add_var(Atom, Map0, Map, Var).
 normalize_term(Str, Map0, Map, Var) :-
     string(Str),
-    string_chars(Str, ['$'|_]),
-    !,
+    string_chars(Str, ['$'|_]), !,
     atom_string(Atom, Str),
     lookup_or_add_var(Atom, Map0, Map, Var).
 normalize_term(List, Map0, Map, Normalized) :-
-    is_list(List),
-    !,
+    is_list(List), !,
     normalize_terms(List, Map0, Map, Normalized).
 normalize_term(Term, Map0, Map, Normalized) :-
-    compound(Term),
-    !,
+    compound(Term), !,
     Term =.. [F|Args],
     normalize_terms(Args, Map0, Map, NormArgs),
     Normalized =.. [F|NormArgs].
 normalize_term(Term, Map, Map, Term).
 
 lookup_or_add_var(Key, Map0, Map, Var) :-
-    ( memberchk(Key-Var0, Map0)
-    -> Var = Var0,
-       Map = Map0
-    ; Var = _,
-      Map = [Key-Var|Map0]
+    ( memberchk(Key-Var0, Map0) ->
+        Var = Var0,
+        Map = Map0
+    ;
+        Var = _,
+        Map = [Key-Var|Map0]
     ).
 
+% Wrap combination as MeTTa conjunct
 wrap_conjunct(Combo, [conjunct, [','|Combo]]).
 
-required_functor_keywords([engagement]).
+% Keywords required in every conjunction for filtering
+required_functor_keywords([engagement, 'audience-expertise']).
 
+% Filter conjunctions: must include both engagement and audience-expertise
 conjunct_has_engagement([conjunct, [','|Clauses]]) :-
     required_functor_keywords(Keywords),
-    member(Clause, Clauses),
-    clause_has_required_keyword(Clause, Keywords),
-    !.
+    forall(
+        member(Keyword, Keywords),
+        (
+            member(Clause, Clauses),
+            clause_has_required_keyword(Clause, [Keyword])
+        )
+    ), !.
 conjunct_has_engagement(_) :- false.
 
 clause_has_required_keyword([Functor|_], Keywords) :-
@@ -340,13 +237,19 @@ clause_has_required_keyword([Functor|_], Keywords) :-
     sub_atom(Functor, 0, _, _, Keyword).
 
 % promote_engagement_conj(+Conjunction, -Result)
-% Move engagement-related clauses to the end of a conjunction.
+% Move engagement-related clauses to the end of a conjunction (kept unchanged)
 promote_engagement_conj(Conjunction, Promoted) :-
-    ( Conjunction = [','|Clauses]
-    -> required_functor_keywords(Keywords),
-       partition(has_required_keyword(Keywords), Clauses, Matches, Others),
-         append(Others, Matches, Promoted)
-    ; Promoted = Conjunction
+    ( Conjunction = [','|Clauses] ->
+        required_functor_keywords(Keywords),
+        partition(
+            has_required_keyword(Keywords),
+            Clauses,
+            Matches,
+            Others
+        ),
+        append(Others, Matches, Promoted)
+    ;
+        Promoted = Conjunction
     ).
 
 has_required_keyword(Keywords, Clause) :-

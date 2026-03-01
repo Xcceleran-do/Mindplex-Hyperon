@@ -54,14 +54,14 @@ METTA_SETUP = f"""
 !(import! &self {PROJECT_ROOT_WSL}/PeTTa/lib/lib_import.metta)
 !(import_prolog_functions_from_file "{PROJECT_ROOT_WSL}/experiments/frequent-pattern-miner/conj_exp.pl" (unique_combinations_star cut-first-char promote_engagement_conj))
 
+!(import! &self {PROJECT_ROOT_WSL}/experiments/utils/common-utils)
 !(import! &self {PROJECT_ROOT_WSL}/experiments/frequent-pattern-miner/frequent-pattern-miner)
 !(import! &self {PROJECT_ROOT_WSL}/experiments/pattern-miner/pattern-miner)
-!(import! &self {PROJECT_ROOT_WSL}/experiments/utils/common-utils)
-!(import! &tempo {PROJECT_ROOT_WSL}/experiments/atomspace_visualizer/public/data)
 !(import! &self {PROJECT_ROOT_WSL}/experiments/chainer/main)
+!(import! &tempo {PROJECT_ROOT_WSL}/experiments/atomspace_visualizer/public/data)
+!(import! &stv-formulas {PROJECT_ROOT_WSL}/experiments/PLN/Formulas)
 
 !(let $atom (let $fact (get-atoms &tempo) (: (fact:- $fact) $fact)) (add-atom &res1 $atom))
-
 !(let $atom (get-atoms &tempo) (add-atom &purifiedDbSpace $atom))
 """
 
@@ -220,7 +220,9 @@ def run_metta_with_petta(metta_code: str) -> str:
     with tempfile.NamedTemporaryFile(mode='w', suffix='.metta', delete=False) as tf:
         tf.write(full_metta_script)
         temp_file_path = tf.name
-    print(full_metta_script)  # Debug: print the full MeTTa script being executed
+    print("=== DEBUG: Full MeTTa Script ===")
+    print(full_metta_script)
+    print("=== END DEBUG ===")
     print(f"DEBUG: Temporary file created at: {temp_file_path}")
 
     try:
@@ -233,6 +235,7 @@ def run_metta_with_petta(metta_code: str) -> str:
         return result.stdout
     except subprocess.CalledProcessError as e:
         print(f"ERROR: Petta execution failed: {e.stderr}")
+        print(f"ERROR: Exit code: {e.returncode}")
         raise Exception(f"Petta execution failed: {e.stderr}")
     finally:
         if os.path.exists(temp_file_path):
@@ -500,56 +503,44 @@ def getAllFactsAndRules():
     return {"status": "success", "facts": normalized}
 
 
-def handle_backward_chain_for_message(message: str):
-    """Detect simple 'why' questions about an article and run the
-    required automatic workflow: fetch facts, rewrite query to canonical
-    form, then call the chainer. Returns (response_text, function_calls) or
-    (None, None) if not applicable.
-    """
-    # Quick heuristic: look for 'why' and an article id
-    if not re.search(r'\bwhy\b|explain why|prove that', message, re.I):
-        return None, None
-
-    m = re.search(r'article\s+(\d+)', message, re.I)
-    if not m:
-        return None, None
-
-    article_id = m.group(1)
-
-    # Call getAllFactsAndRules to obtain canonical atoms
+def handle_backward_chain_for_message(message: str) -> dict:
+    """Handle natural language queries using backward chaining with STV support."""
+    print(f" DEBUG: Received message: {message}")
+    
+    # First call getAllFactsAndRules to get canonical atoms
     print("DEBUG: handle_backward_chain_for_message - calling getAllFactsAndRules()")
     facts_res = getAllFactsAndRules()
     print("DEBUG: facts_res type:", type(facts_res))
     print("DEBUG: facts_res preview:", (facts_res.get('facts')[:5] if isinstance(facts_res, dict) else str(facts_res)[:200]))
-    function_calls = [{'name': 'getAllFactsAndRules', 'args': {}, 'result': facts_res}]
-
+    
+    # If we couldn't get facts/rules, return early
     if not isinstance(facts_res, dict) or facts_res.get('status') != 'success':
         return None, None
-
+    
     facts = facts_res.get('facts', []) or []
+    facts_text = "\n".join(facts[:200]) if isinstance(facts, list) else str(facts)
 
     # Ask the LLM to rewrite the user's question into a canonical MeTTa query
-    # using the facts we retrieved. The model must output only a single MeTTa
+    # using the facts we retrieved. The model must output only a single MeTTa expression.
+    rewrite_prompt = f"""
+        You are given the following KB atoms (facts/rules), one per line:
+            {facts_text}
+        
+        User question: "{message}"
+        
+        Task (STRICT):
+        - Do NOT narrate or describe any internal steps.
+        - Do NOT output anything except a SINGLE canonical MeTTa expression that uses predicate and constant names from the KB above.
+        - If you cannot produce a valid MeTTa expression, output: only a single token NO_QUERY and NOTHING ELSE.
+        - If mapping is ambiguous, pick the most semantically likely predicate present in the KB.
+        - If you cannot produce a valid MeTTa expression, output: single token NO_QUERY and NOTHING ELSE.
+        
+        Example mapping (for clarity only, do not output this): facts contain (engagement_level 1 high) -> question "Why is article 1 high?" -> output: (engagement_level 1 $what)
+    """
+    
+    # Use the facts we retrieved. The model must output only a single MeTTa
     # expression (e.g. (engagement_level 1 $what)).
     try:
-        facts_text = "\n".join(facts[:200]) if isinstance(facts, list) else str(facts)
-        rewrite_prompt = f"""
-            You are given the following KB atoms (facts/rules), one per line:
-            {facts_text}
-
-            User question: "{message}"
-
-            Task (STRICT):
-            - Do NOT narrate or describe any internal steps.
-            - Do NOT output anything except a SINGLE canonical MeTTa expression that uses predicate and constant names from the KB above.
-            - If mapping is ambiguous, pick the most semantically likely predicate present in the KB.
-            - If you cannot produce a valid MeTTa expression, output the single token NO_QUERY and NOTHING ELSE.
-
-            Example mapping (for clarity only, do not output this): facts contain (engagement_level 1 high) -> question "Why is article 1 high?" -> output: (engagement_level 1 $what)
-
-            OUTPUT ONLY the MeTTa expression or NO_QUERY.
-            """
-        print("DEBUG: sending rewrite prompt to LLM (first 300 chars):", rewrite_prompt[:300])
         messages = [
             {"role": "system", "content": SYSTEM_INSTRUCTION},
             {"role": "user", "content": rewrite_prompt}
@@ -558,13 +549,14 @@ def handle_backward_chain_for_message(message: str):
         candidate_query = None
         if 'choices' in response_data and response_data['choices']:
             candidate_query = response_data['choices'][0]['message'].get('content', '').strip()
-
+        
         print("DEBUG: rewrite result:", candidate_query)
         function_calls.append({'name': 'rewrite_query', 'args': {'message': message}, 'result': candidate_query})
     except Exception as e:
         print('DEBUG: rewrite error:', e)
         return None, None
 
+    # If no valid query was produced, return early
     if not candidate_query or candidate_query.upper() == 'NO_QUERY':
         print('DEBUG: no candidate query produced by LLM')
         return None, None
@@ -574,8 +566,7 @@ def handle_backward_chain_for_message(message: str):
     mexpr = re.search(r"\([^\)]*\)", candidate_query)
     if mexpr:
         candidate_query = mexpr.group(0).strip()
-
-    print('DEBUG: final candidate_query to send to chainer:', candidate_query)
+        print('DEBUG: final candidate_query to send to chainer:', candidate_query)
 
     # Call the chainer with the rewritten query and include debug output
     try:
@@ -703,7 +694,7 @@ def run_mining_task(job_id: str, conjunction_count: int):
     Run the mining task for a given job.
     Args:
         job_id (str): Unique identifier for the mining job.
-        conjunction_count (int): Number of conjunctions to use in the mining process.
+        conjunction_count (iMining failed or no answernt): Number of conjunctions to use in the mining process.
     Returns:
         dict: A dictionary containing the job status, result, error (if any), and timestamps.
     """
@@ -779,16 +770,13 @@ def formatter(mined_patterns):
     metta4Miner.run(f""" !(let $atom (main {mined_patterns}) (add-atom &res1 $atom)) """)
     print("formatter ended :-_-:")
 
-def backWardChainer(whatToCheck, depth=5):
-    whatToCheck = metta4Miner.parse_single(whatToCheck)
-    answer = metta4Miner.run(f""" !(backward-chain &res1 (S (S Z)) (: $prf {whatToCheck})) """)
-    return answer
 
 def getChainerResult(whatToCheck, depth=5):
     """ Get the result of backward chaining for a specific query. 
     Args:
-        whatToCheck (str): The query to check, e.g., '(reputation 0 high)'
+        whatToCheck (str): The query to check, e.g., '(reputation 0 "High")'
         depth (int): The depth limit for backward chaining. (default 5)
+    
     Returns:
         The justification of the backward chaining operation.
     """
@@ -799,16 +787,17 @@ def getChainerResult(whatToCheck, depth=5):
         return {
             "query": whatToCheck,
             "status": "no_proof",
-            "justification": f"No logical proof could be found for the query '{whatToCheck}' within depth {depth}. This means the query cannot be deduced from the available rules and facts in the knowledge base."
+            "justification": f"No logical proof could be found for the query '{whatToCheck}' within depth {depth}. This means that the query cannot be deduced from the available rules and facts in the knowledge base."
         }
     
     # Simple prompt that relies on system instruction for formatting guidance
     prompt = f"""
         Analyze this backward chaining result and provide a clear justification:
-
+        
         **Query:** {whatToCheck}
+        
         **Backward Chaining Results:** {chainAnswer}
-
+        
         **Backward Chaining Example:**
         When user asks "why is article 1 did get high engagement?", format query as "(engagement_level 1 high)" and call getChainerResult. 
         
@@ -818,13 +807,13 @@ def getChainerResult(whatToCheck, depth=5):
         
         **Proof 1:** Based on the rule that states 'if an article is about AI, then it has high engagement', and since we have the fact that 'article 1 is about AI', we can conclude that article 1 has high engagement.
         
-        **Proof 2:** Based on the rule that states 'if an article is short (low length), then it has high engagement', and since we have the fact that 'article 1 has low length', we can also conclude that article 1 has high engagement.
+        **Proof 2:** Another supporting rule indicates that 'if an article is short (low length), then it has high engagement', and since we have the fact that 'article 1 has low length', we can also conclude that article 1 has high engagement.
         
         **Overall Justification:** Article 1's high engagement is well-supported by two independent logical proofs - both its AI topic and its concise length contribute to high engagement according to the rules in our knowledge base."
-
+        
         The backward chaining system tried to prove the query "{whatToCheck}" and found the above results. Please analyze these results and explain the logical reasoning behind the proof(s).
         """
-
+    
     try:
         messages = [
             {"role": "system", "content": SYSTEM_INSTRUCTION},
@@ -834,7 +823,7 @@ def getChainerResult(whatToCheck, depth=5):
         justification = None
         if 'choices' in response_data and response_data['choices']:
             justification = response_data['choices'][0]['message'].get('content', '')
-
+        
         return {
             "query": whatToCheck,
             "status": "success",
@@ -849,13 +838,13 @@ def getChainerResult(whatToCheck, depth=5):
         proof_count = len(chainAnswer)
         basic_justification = f"""
         **Query Analysis:** {whatToCheck}
-
+        
         **Result:** Found {proof_count} logical proof(s) supporting this query.
-
+        
         **Raw Evidence:** {chainAnswer}
-
+        
         **Basic Interpretation:** The backward chaining system discovered {proof_count} different logical path(s) that support the query "{whatToCheck}". Each proof represents a combination of rules and facts from the knowledge base that logically leads to this conclusion.
-
+        
         **Note:** Advanced analysis unavailable due to processing error: {str(e)}
         """
         
@@ -869,6 +858,42 @@ def getChainerResult(whatToCheck, depth=5):
             "error": str(e)
         }
 
+def backWardChainer(whatToCheck, depth=5):
+    whatToCheck = metta4Miner.parse_single(whatToCheck)
+    # Use dynamic depth parameter
+    peano_depth = depth_to_peano(depth)
+    answer = metta4Miner.run(f"""!(backward-chain &res1 {peano_depth} (: $prf {whatToCheck}))""")
+    return answer
+
+def depth_to_peano(depth):
+    """Convert integer depth to Peano notation."""
+    if depth <= 0:
+        return "Z"
+    result = "S"
+    for _ in range(depth):
+        result += "(S " + result
+    return result + ")"
+
+def parse_stv_proof(answer):
+    """Parse proofs containing STV variables."""
+    return extract_proof_patterns(answer)
+
+def extract_stv_variables(answer):
+    """Extract STV variables $s and $c from proofs."""
+    return find_stv_bindings(answer)
+
+def find_stv_bindings(answer):
+    """Find STV variable bindings in proof."""
+    import re
+    stv_vars = []
+    if isinstance(answer, list):
+        for item in answer:
+            if isinstance(item, str):
+                # Look for STV patterns like (predicate $x "value" (STV $s $c))
+                stv_match = re.search(r'\(STV\s+(\$\w+)\s+(\$\w+)\s*)\)', item)
+                if stv_match:
+                    stv_vars.extend([stv_match.group(1), stv_match.group(2)])
+    return list(set(stv_vars))
 
 def summarize_patterns(patterns: list) -> str:
     """Use the Gemini model to create a single comprehensive summary of the
@@ -1056,28 +1081,34 @@ def start_mining():
     run_mining_task(job_id, conjunction_count)
     print(f"🔍 DEBUG: Starting mining job {job_id} with conjunction count {conjunction_count}")
     result = mining_jobs[job_id].result
-    # Start formatting in background thread
-    print("🔍 DEBUG: Starting formatting thread")
-    print("🔍 DEBUG: Result before formatting =", result)
-    thread = threading.Thread(
-        target=formatter,
-        args=(f"{result['answer']}",),
-        daemon=True
-    )
-    thread.start()
+    
+    # Check if mining was successful before starting formatter
+    if isinstance(result, dict) and result.get('status') == 'success' and result.get('answer'):
+        # Start formatting in background thread
+        print("🔍 DEBUG: Starting formatting thread")
+        print("🔍 DEBUG: Result before formatting =", result)
+        thread = threading.Thread(
+            target=formatter,
+            args=(f"{result['answer']}",),
+            daemon=True
+        )
+        thread.start()
+    else:
+        print("🔍 DEBUG: Mining failed or no answer, skipping formatter")
     
     print(f"🔍 DEBUG: result type = {type(result)}")
     print(f"🔍 DEBUG: result = {result}")
     
     # Check if mining was successful
-    if isinstance(result, dict) and result.get('status') == 'success':
+    if isinstance(result, dict) and result.get('status') in ['success', 'no_results']:
         rules = result.get('patterns', [])
-        print(f"✅ Mining job {job_id} finished with {len(rules)} patterns")
+        status_msg = 'finished successfully' if result.get('status') == 'success' else 'completed with no patterns found'
+        print(f"✅ Mining job {job_id} {status_msg} with {len(rules)} patterns")
         return jsonify({
             'jobId': job_id,
             'status': 'finished',
             'conjunction_count': conjunction_count,
-            'message': 'Mining job finished successfully',
+            'message': f'Mining job {status_msg}',
             'result': rules
         })
         
