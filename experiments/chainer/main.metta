@@ -6,8 +6,8 @@
 )
 
 (= (main $rules) 
-     (let (supportOf $rule $num) (superpose $rules)
-          (let $formattedRule (convertIncomingDataHelper (cdr-atom $rule)) (: (rule:- $formattedRule) (convertIncomingDataHelper (cdr-atom $rule))))
+     (let (supportOf ($rule $stv) $num) (superpose $rules)
+          (let $formattedRule (convertIncomingDataHelper (cdr-atom $rule)) (: (rule:- $formattedRule) $formattedRule $stv))
      )
 )
 
