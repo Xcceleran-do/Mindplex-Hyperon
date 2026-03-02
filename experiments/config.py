@@ -15,6 +15,6 @@ if not os.path.exists('.env.local') and os.path.exists('../.env.local'):
     load_dotenv('../.env.local')
 
 # API Configuration
-API_BASE_URL = os.getenv('API_BASE_URL', 'http://localhost:5000')
-FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+API_BASE_URL = os.getenv('API_BASE_URL', 'https://super-duper-winner-97q9rxp6vvx9hxq5q-5000.app.github.dev')
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'https://super-duper-winner-97q9rxp6vvx9hxq5q-3000.app.github.dev/')
 
