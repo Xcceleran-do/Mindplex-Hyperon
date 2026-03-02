@@ -55,6 +55,7 @@ METTA_SETUP = f"""
 !(import_prolog_functions_from_file "{PROJECT_ROOT_WSL}/experiments/frequent-pattern-miner/conj_exp.pl" (unique_combinations_star cut-first-char promote_engagement_conj))
 
 !(import! &self {PROJECT_ROOT_WSL}/experiments/utils/common-utils)
+!(import! &self {PROJECT_ROOT_WSL}/experiments/frequent-pattern-miner/etv-utils)
 !(import! &self {PROJECT_ROOT_WSL}/experiments/frequent-pattern-miner/frequent-pattern-miner)
 !(import! &self {PROJECT_ROOT_WSL}/experiments/pattern-miner/pattern-miner)
 !(import! &self {PROJECT_ROOT_WSL}/experiments/chainer/main)
@@ -62,7 +63,7 @@ METTA_SETUP = f"""
 !(import! &stv-formulas {PROJECT_ROOT_WSL}/experiments/PLN/Formulas)
 
 !(let $atom (match &tempo ($fact $stv) (: (fact:- $fact) $fact $stv)) (add-atom &res1 $atom))
-!(let $atom (match &tempo ($fact $stv) $fact) (add-atom &purifiedDbSpace $atom))    
+!(let $atom (match &tempo ($fact $stv) $fact) (add-atom &purifiedDbSpace $atom))
 """
 
 metta4Miner.run(METTA_SETUP)
@@ -770,13 +771,17 @@ def formatter(mined_patterns):
     metta4Miner.run(f""" !(let $atom (main {mined_patterns}) (add-atom &res1 $atom)) """)
     print("formatter ended :-_-:")
 
+def backWardChainer(whatToCheck, depth=5):
+    whatToCheck = metta4Miner.parse_single(whatToCheck)
+    answer = metta4Miner.run(f""" !(backward-chain &res1 (S (S (S Z))) (: $prf {whatToCheck})) """)
+    return answer
+
 
 def getChainerResult(whatToCheck, depth=5):
     """ Get the result of backward chaining for a specific query. 
     Args:
-        whatToCheck (str): The query to check, e.g., '(reputation 0 "High")'
+        whatToCheck (str): The query to check, e.g., '(engagement 0 "High")'
         depth (int): The depth limit for backward chaining. (default 5)
-    
     Returns:
         The justification of the backward chaining operation.
     """
@@ -787,49 +792,49 @@ def getChainerResult(whatToCheck, depth=5):
         return {
             "query": whatToCheck,
             "status": "no_proof",
-            "justification": f"No logical proof could be found for the query '{whatToCheck}' within depth {depth}. This means that the query cannot be deduced from the available rules and facts in the knowledge base."
+            "justification": f"No logical proof could be found for the query '{whatToCheck}' within depth {depth}. This means the query cannot be deduced from the available rules and facts in the knowledge base."
         }
     
     # Simple prompt that relies on system instruction for formatting guidance
     prompt = f"""
         Analyze this backward chaining result and provide a clear justification:
-        
+
         **Query:** {whatToCheck}
-        
         **Backward Chaining Results:** {chainAnswer}
-        
+
         **Backward Chaining Example:**
-        When user asks "why is article 1 did get high engagement?", format query as "(engagement_level 1 high)" and call getChainerResult. 
+        When user asks "why is article 1 did get high engagement?", format query as "(engagement 1 "High")" and call getChainerResult. 
         
-        If backward chaining returns: [(: ((rule:- (, (engagement_level 1 high) (topic 1 AI))) (fact:- (topic 1 AI))) (engagement_level 1 high)), (: ((rule:- (, (engagement_level 1 high) (length 1 low))) (fact:- (length 1 low))) (engagement_level 1 high))]
+        If backward chaining returns: [(: ((rule:- (, (engagement 1 "High") (topic 1 AI))) (fact:- (topic 1 AI))) (engagement 1 "High")), (: ((rule:- (, (engagement 1 "High") (length 1 low))) (fact:- (length 1 low))) (engagement 1 "High"))]
         
         Analyze as: "I found 2 proofs for why article 1 has high engagement:
         
         **Proof 1:** Based on the rule that states 'if an article is about AI, then it has high engagement', and since we have the fact that 'article 1 is about AI', we can conclude that article 1 has high engagement.
         
-        **Proof 2:** Another supporting rule indicates that 'if an article is short (low length), then it has high engagement', and since we have the fact that 'article 1 has low length', we can also conclude that article 1 has high engagement.
+        **Proof 2:** Based on the rule that states 'if an article is short (low length), then it has high engagement', and since we have the fact that 'article 1 has low length', we can also conclude that article 1 has high engagement.
         
         **Overall Justification:** Article 1's high engagement is well-supported by two independent logical proofs - both its AI topic and its concise length contribute to high engagement according to the rules in our knowledge base."
-        
+
         The backward chaining system tried to prove the query "{whatToCheck}" and found the above results. Please analyze these results and explain the logical reasoning behind the proof(s).
         """
-    
+
     try:
+        # Use ASI1 to analyze the results
         messages = [
             {"role": "system", "content": SYSTEM_INSTRUCTION},
             {"role": "user", "content": prompt}
         ]
         response_data = call_asi_api(messages)
-        justification = None
+        justification = "Unable to generate justification analysis."
         if 'choices' in response_data and response_data['choices']:
-            justification = response_data['choices'][0]['message'].get('content', '')
+             justification = response_data['choices'][0]['message'].get('content', '')
         
         return {
             "query": whatToCheck,
             "status": "success",
             "raw_proofs": str(chainAnswer),
             "proof_count": len(chainAnswer),
-            "justification": justification or "Unable to generate justification analysis.",
+            "justification": justification,
             "depth_used": depth
         }
         
@@ -838,13 +843,13 @@ def getChainerResult(whatToCheck, depth=5):
         proof_count = len(chainAnswer)
         basic_justification = f"""
         **Query Analysis:** {whatToCheck}
-        
+
         **Result:** Found {proof_count} logical proof(s) supporting this query.
-        
+
         **Raw Evidence:** {chainAnswer}
-        
+
         **Basic Interpretation:** The backward chaining system discovered {proof_count} different logical path(s) that support the query "{whatToCheck}". Each proof represents a combination of rules and facts from the knowledge base that logically leads to this conclusion.
-        
+
         **Note:** Advanced analysis unavailable due to processing error: {str(e)}
         """
         
@@ -857,43 +862,6 @@ def getChainerResult(whatToCheck, depth=5):
             "depth_used": depth,
             "error": str(e)
         }
-
-def backWardChainer(whatToCheck, depth=5):
-    whatToCheck = metta4Miner.parse_single(whatToCheck)
-    # Use dynamic depth parameter
-    peano_depth = depth_to_peano(depth)
-    answer = metta4Miner.run(f"""!(backward-chain &res1 {peano_depth} (: $prf {whatToCheck}))""")
-    return answer
-
-def depth_to_peano(depth):
-    """Convert integer depth to Peano notation."""
-    if depth <= 0:
-        return "Z"
-    result = "S"
-    for _ in range(depth):
-        result += "(S " + result
-    return result + ")"
-
-def parse_stv_proof(answer):
-    """Parse proofs containing STV variables."""
-    return extract_proof_patterns(answer)
-
-def extract_stv_variables(answer):
-    """Extract STV variables $s and $c from proofs."""
-    return find_stv_bindings(answer)
-
-def find_stv_bindings(answer):
-    """Find STV variable bindings in proof."""
-    import re
-    stv_vars = []
-    if isinstance(answer, list):
-        for item in answer:
-            if isinstance(item, str):
-                # Look for STV patterns like (predicate $x "value" (STV $s $c))
-                stv_match = re.search(r'\(STV\s+(\$\w+)\s+(\$\w+)\s*)\)', item)
-                if stv_match:
-                    stv_vars.extend([stv_match.group(1), stv_match.group(2)])
-    return list(set(stv_vars))
 
 def summarize_patterns(patterns: list) -> str:
     """Use the Gemini model to create a single comprehensive summary of the
