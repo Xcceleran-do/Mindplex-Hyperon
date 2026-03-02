@@ -106,6 +106,7 @@ class ArticleAnalyzer:
                 "audience_sentiment": {"value": "Unknown", "strength": 0.0, "confidence": 0.0}
             }
 
+
         # Prepare content snippet (first 2000 chars)
         raw_content = article.get('content', [])
         if isinstance(raw_content, list):
@@ -176,6 +177,7 @@ class ArticleAnalyzer:
                 "audience_sentiment": {"value": "Unknown", "strength": 0.0, "confidence": 0.0}
             }
 
+
     def process(self, article, rank_stats=None):
         """Main processing method."""
         # 1. Intrinsic (Calculated) with proportional STVs
@@ -240,6 +242,7 @@ class ArticleAnalyzer:
             metadata['popularity'] = {"value": popularity_val, "stv": DETERMINISTIC_STV}
         else:
             metadata['popularity'] = {"value": "Unknown", "stv": UNKNOWN_STV}
+
 
         # 3. AI Enrichment with AI-assigned STV values
         ai_data = self.enrich_with_ai(article)
