@@ -682,6 +682,8 @@
  ;; Count the number of instances of a given pattern
 ;;(: counter (-> hyperon::space::DynSpace Atom Number))
 
+(= (counter $db $ptrn)
+    (let $got (collapse (match $db $ptrn 1)) (size-atom $got))) 
 
  ; Count the number of instances of a given pattern
 (= (count $pattern $db)
