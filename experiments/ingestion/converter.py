@@ -25,7 +25,7 @@ class JsonToMetta:
                         # Sanitize string for MeTTa
                         safe_val = str(value).replace('"', '\\"').replace('\n', ' ')
                         strength, confidence = stv
-                        metta_lines.append(f"(({prop} {art_id} \"{safe_val}\") (STV {strength} {confidence}))")
+                        metta_lines.append(f"({prop} {art_id} \"{safe_val}\" (STV {strength} {confidence}))")
 
             # Add all properties with their STVs
             add_prop("length", "length")
@@ -52,6 +52,6 @@ class JsonToMetta:
                     if value and value != "unknown":
                         safe_val = str(value).replace('"', '\\"').replace('\n', ' ')
                         strength, confidence = stv
-                        metta_lines.append(f"((authored-by {art_id} \"{safe_val}\") (STV {strength} {confidence}))")
+                        metta_lines.append(f"(authored-by {art_id} \"{safe_val}\" (STV {strength} {confidence}))")
 
         return "\n".join(metta_lines)
