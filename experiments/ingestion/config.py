@@ -97,5 +97,6 @@ STV Assignment Guidelines:
 - If you're very confident based on clear evidence, use higher confidence
 - Consider content clarity, explicit indicators, and your expertise in the domain
 
+
 Consider the content's language, structure, purpose, and target audience when assigning both classifications and STV values.
 """
