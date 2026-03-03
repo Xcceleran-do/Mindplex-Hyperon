@@ -228,9 +228,6 @@ Health check
 
 ### Google Gemini API Key
 Located in: `experiments/chat_api.py`
-```python
-GOOGLE_API_KEY = "AIzaSyChGxk4M-RrG4q7_Oi-sPQgGIRBx8snHcs"
-```
 
 ### Port Configuration
 - Frontend: `3000` (Vite dev server)
