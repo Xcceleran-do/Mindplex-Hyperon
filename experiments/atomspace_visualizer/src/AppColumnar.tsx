@@ -59,7 +59,7 @@ const buildVisualizationSubset = (mettaText: string, maxArticles: number) => {
       continue;
     }
 
-    const match = line.match(/^\([^\s()]+\s+([^\s()]+)\s+/);
+    const match = line.match(/^\(\s*(?:\(\s*)?[^\s()]+\s+([^\s()]+)\s+/);
     if (!match) {
       continue;
     }

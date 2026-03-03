@@ -237,6 +237,20 @@ export class MettaParserImpl implements MettaParser {
     const content = trimmed.slice(1, -1).trim();
     const tokens = this.tokenize(content);
 
+    if (tokens.length < 1) {
+      return null;
+    }
+
+    // Support wrapped representation like:
+    // ((predicate subject object) (STV confidence strength))
+    // In this case we treat the first nested expression as the actual triple.
+    if (tokens[0].charAt(0) === '(' && tokens[0].charAt(tokens[0].length - 1) === ')') {
+      const wrappedExpression = this.parseExpression(tokens[0]);
+      if (wrappedExpression) {
+        return wrappedExpression;
+      }
+    }
+
     if (tokens.length < 2) {
       return null;
     }
