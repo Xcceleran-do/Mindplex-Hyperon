@@ -1,4 +1,5 @@
 # experiments/ingestion/converter.py
+from .config import DETERMINISTIC_STV, UNKNOWN_STV
 
 class JsonToMetta:
     def convert(self, articles):
@@ -8,39 +9,49 @@ class JsonToMetta:
             art_id = f"A_{article.get('id')}"
             meta = article.get('enriched_metadata', {})
             
-            # Helper to add line
-            def add_prop(prop, value):
-                if value and value != "Unknown":
-                    # Sanitize string for MeTTa
-                    safe_val = str(value).replace('"', '\\"').replace('\n', ' ')
-                    metta_lines.append(f"({prop} {art_id} \"{safe_val}\")")
+            # Helper to add line with STV
+            def add_prop(prop, meta_key, default_stv=UNKNOWN_STV):
+                if meta_key in meta:
+                    prop_data = meta[meta_key]
+                    if isinstance(prop_data, dict) and 'value' in prop_data and 'stv' in prop_data:
+                        value = prop_data['value']
+                        stv = prop_data['stv']
+                    else:
+                        # Fallback for old format
+                        value = prop_data
+                        stv = default_stv
+                    
+                    if value and value != "Unknown":
+                        # Sanitize string for MeTTa
+                        safe_val = str(value).replace('"', '\\"').replace('\n', ' ')
+                        strength, confidence = stv
+                        metta_lines.append(f"(({prop} {art_id} \"{safe_val}\") (STV {strength} {confidence}))")
 
-            # Intrinsic
-            add_prop("length", meta.get('length'))
-            add_prop("reading-time", meta.get('reading_time'))
-            add_prop("tone", meta.get('tone'))
-            add_prop("audience-expertise", meta.get('audience_expertise'))
-            add_prop("content-type", meta.get('content_type'))
-            add_prop("date-period", meta.get('date_period'))
-            add_prop("primary-goal", meta.get('primary_goal'))
+            # Add all properties with their STVs
+            add_prop("length", "length")
+            add_prop("reading-time", "reading_time")
+            add_prop("tone", "tone")
+            add_prop("audience-expertise", "audience_expertise")
+            add_prop("content-type", "content_type")
+            add_prop("date-period", "date_period")
+            add_prop("primary-goal", "primary_goal")
+            add_prop("audience-sentiment", "audience_sentiment")
+            add_prop("popularity", "popularity")
+            add_prop("engagement", "engagement")
+            add_prop("author", "author")
+            add_prop("category", "category")
+            add_prop("title", "title")
+            add_prop("topic", "topic")
             
-            # Category is a list in the JSON, take the first one or slug
-            # "categories": [{"name": "AI", "slug": "ai"}]
-            categories = article.get('categories', [])
-            if categories:
-                cat_slug = categories[0].get('slug')
-                add_prop("category", cat_slug)
-
-            # Relational
-            add_prop("popularity", meta.get('popularity'))
-            add_prop("engagement", meta.get('engagement'))
-            add_prop("audience-sentiment", meta.get('audience_sentiment'))
-            
-            # Author
-            author_username = article.get('author_username', 'unknown')
-            add_prop("authored-by", author_username)
-            
-            # Title (optional, good for debugging)
-            add_prop("title", article.get('post_title'))
+            # Add authored-by as alias for author
+            if 'author' in meta:
+                author_data = meta['author']
+                if isinstance(author_data, dict) and 'value' in author_data:
+                    value = author_data['value']
+                    stv = author_data['stv']
+                    if value and value != "unknown":
+                        safe_val = str(value).replace('"', '\\"').replace('\n', ' ')
+                        strength, confidence = stv
+                        metta_lines.append(f"((authored-by {art_id} \"{safe_val}\") (STV {strength} {confidence}))")
 
         return "\n".join(metta_lines)

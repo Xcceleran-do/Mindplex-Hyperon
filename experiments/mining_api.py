@@ -85,30 +85,32 @@ METTA_SETUP_WSL = f"""
 !(import! &self {PROJECT_ROOT_WSL}/PeTTa/lib/lib_import.metta)
 !(import_prolog_functions_from_file "{PROJECT_ROOT_WSL}/experiments/frequent-pattern-miner/conj_exp.pl" (unique_combinations_star cut-first-char promote_engagement_conj))
 
+!(import! &self {PROJECT_ROOT_WSL}/experiments/utils/common-utils)
+!(import! &self {PROJECT_ROOT_WSL}/experiments/frequent-pattern-miner/etv-utils)
 !(import! &self {PROJECT_ROOT_WSL}/experiments/frequent-pattern-miner/frequent-pattern-miner)
 !(import! &self {PROJECT_ROOT_WSL}/experiments/pattern-miner/pattern-miner)
-!(import! &self {PROJECT_ROOT_WSL}/experiments/utils/common-utils)
-!(import! &tempo {PROJECT_ROOT_WSL}/experiments/atomspace_visualizer/public/data)
 !(import! &self {PROJECT_ROOT_WSL}/experiments/chainer/main)
+!(import! &tempo {PROJECT_ROOT_WSL}/experiments/atomspace_visualizer/public/data)
+!(import! &stv-formulas {PROJECT_ROOT_WSL}/experiments/PLN/Formulas)
 
-!(let $atom (let $fact (get-atoms &tempo) (: (fact:- $fact) $fact)) (add-atom &res1 $atom))
-
-!(let $atom (get-atoms &tempo) (add-atom &purifiedDbSpace $atom))
+!(let $atom (match &tempo ($fact $stv) (: (fact:- $fact) $fact $stv)) (add-atom &res1 $atom))
+!(let $atom (match &tempo ($fact $stv) $fact) (add-atom &purifiedDbSpace $atom))
 """
 
 METTA_SETUP_PETTA = f"""
-!(import! &self {PROJECT_ROOT_PETTA}/PeTTa/lib/lib_import.metta)
-!(import_prolog_functions_from_file "{PROJECT_ROOT_PETTA}/experiments/frequent-pattern-miner/conj_exp.pl" (unique_combinations_star cut-first-char promote_engagement_conj))
+!(import! &self {PROJECT_ROOT_WSL}/PeTTa/lib/lib_import.metta)
+!(import_prolog_functions_from_file "{PROJECT_ROOT_WSL}/experiments/frequent-pattern-miner/conj_exp.pl" (unique_combinations_star cut-first-char promote_engagement_conj))
 
-!(import! &self {PROJECT_ROOT_PETTA}/experiments/frequent-pattern-miner/frequent-pattern-miner)
-!(import! &self {PROJECT_ROOT_PETTA}/experiments/pattern-miner/pattern-miner)
-!(import! &self {PROJECT_ROOT_PETTA}/experiments/utils/common-utils)
-!(import! &tempo {PROJECT_ROOT_PETTA}/experiments/atomspace_visualizer/public/data)
-!(import! &self {PROJECT_ROOT_PETTA}/experiments/chainer/main)
+!(import! &self {PROJECT_ROOT_WSL}/experiments/utils/common-utils)
+!(import! &self {PROJECT_ROOT_WSL}/experiments/frequent-pattern-miner/etv-utils)
+!(import! &self {PROJECT_ROOT_WSL}/experiments/frequent-pattern-miner/frequent-pattern-miner)
+!(import! &self {PROJECT_ROOT_WSL}/experiments/pattern-miner/pattern-miner)
+!(import! &self {PROJECT_ROOT_WSL}/experiments/chainer/main)
+!(import! &tempo {PROJECT_ROOT_WSL}/experiments/atomspace_visualizer/public/data)
+!(import! &stv-formulas {PROJECT_ROOT_WSL}/experiments/PLN/Formulas)
 
-!(let $atom (let $fact (get-atoms &tempo) (: (fact:- $fact) $fact)) (add-atom &res1 $atom))
-
-!(let $atom (get-atoms &tempo) (add-atom &purifiedDbSpace $atom))
+!(let $atom (match &tempo ($fact $stv) (: (fact:- $fact) $fact $stv)) (add-atom &res1 $atom))
+!(let $atom (match &tempo ($fact $stv) $fact) (add-atom &purifiedDbSpace $atom))
 """
 
 # Keep the original WSL-based setup for the existing MeTTa (hyperon) flow.
@@ -341,7 +343,9 @@ def run_metta_with_petta(metta_code: str) -> str:
     with tempfile.NamedTemporaryFile(mode='w', suffix='.metta', delete=False) as tf:
         tf.write(full_metta_script)
         temp_file_path = tf.name
-    print(full_metta_script)  # Debug: print the full MeTTa script being executed
+    print("=== DEBUG: Full MeTTa Script ===")
+    print(full_metta_script)
+    print("=== END DEBUG ===")
     print(f"DEBUG: Temporary file created at: {temp_file_path}")
 
     try:
@@ -354,6 +358,7 @@ def run_metta_with_petta(metta_code: str) -> str:
         return result.stdout
     except subprocess.CalledProcessError as e:
         print(f"ERROR: Petta execution failed: {e.stderr}")
+        print(f"ERROR: Exit code: {e.returncode}")
         raise Exception(f"Petta execution failed: {e.stderr}")
     finally:
         if os.path.exists(temp_file_path):
@@ -702,33 +707,22 @@ def getAllFactsAndRules():
     return {"status": "success", "facts": normalized}
 
 
-def handle_backward_chain_for_message(message: str):
-    """Detect simple 'why' questions about an article and run the
-    required automatic workflow: fetch facts, rewrite query to canonical
-    form, then call the chainer. Returns (response_text, function_calls) or
-    (None, None) if not applicable.
-    """
-    # Quick heuristic: look for 'why' and an article id
-    if not re.search(r'\bwhy\b|explain why|prove that', message, re.I):
-        return None, None
-
-    m = re.search(r'article\s+(\d+)', message, re.I)
-    if not m:
-        return None, None
-
-    article_id = m.group(1)
-
-    # Call getAllFactsAndRules to obtain canonical atoms
+def handle_backward_chain_for_message(message: str) -> dict:
+    """Handle natural language queries using backward chaining with STV support."""
+    print(f" DEBUG: Received message: {message}")
+    
+    # First call getAllFactsAndRules to get canonical atoms
     print("DEBUG: handle_backward_chain_for_message - calling getAllFactsAndRules()")
     facts_res = getAllFactsAndRules()
     print("DEBUG: facts_res type:", type(facts_res))
     print("DEBUG: facts_res preview:", (facts_res.get('facts')[:5] if isinstance(facts_res, dict) else str(facts_res)[:200]))
-    function_calls = [{'name': 'getAllFactsAndRules', 'args': {}, 'result': facts_res}]
-
+    
+    # If we couldn't get facts/rules, return early
     if not isinstance(facts_res, dict) or facts_res.get('status') != 'success':
         return None, None
-
+    
     facts = facts_res.get('facts', []) or []
+    facts_text = "\n".join(facts[:200]) if isinstance(facts, list) else str(facts)
 
     # Ask the LLM to rewrite the user's question into a canonical MeTTa query
     # using the facts we retrieved. The model must output only a single MeTTa
@@ -752,6 +746,7 @@ def handle_backward_chain_for_message(message: str):
             OUTPUT ONLY the MeTTa expression or NO_QUERY.
             """
         print("DEBUG: sending rewrite prompt to LLM (first 300 chars):", rewrite_prompt[:300])
+
         messages = [
             {"role": "system", "content": SYSTEM_INSTRUCTION},
             {"role": "user", "content": rewrite_prompt}
@@ -760,13 +755,14 @@ def handle_backward_chain_for_message(message: str):
         candidate_query = None
         if 'choices' in response_data and response_data['choices']:
             candidate_query = response_data['choices'][0]['message'].get('content', '').strip()
-
+        
         print("DEBUG: rewrite result:", candidate_query)
         function_calls.append({'name': 'rewrite_query', 'args': {'message': message}, 'result': candidate_query})
     except Exception as e:
         print('DEBUG: rewrite error:', e)
         return None, None
 
+    # If no valid query was produced, return early
     if not candidate_query or candidate_query.upper() == 'NO_QUERY':
         print('DEBUG: no candidate query produced by LLM')
         return None, None
@@ -776,8 +772,7 @@ def handle_backward_chain_for_message(message: str):
     mexpr = re.search(r"\([^\)]*\)", candidate_query)
     if mexpr:
         candidate_query = mexpr.group(0).strip()
-
-    print('DEBUG: final candidate_query to send to chainer:', candidate_query)
+        print('DEBUG: final candidate_query to send to chainer:', candidate_query)
 
     # Call the chainer with the rewritten query and include debug output
     try:
@@ -905,7 +900,7 @@ def run_mining_task(job_id: str, conjunction_count: int):
     Run the mining task for a given job.
     Args:
         job_id (str): Unique identifier for the mining job.
-        conjunction_count (int): Number of conjunctions to use in the mining process.
+        conjunction_count (iMining failed or no answernt): Number of conjunctions to use in the mining process.
     Returns:
         dict: A dictionary containing the job status, result, error (if any), and timestamps.
     """
@@ -1012,10 +1007,11 @@ def backWardChainer(whatToCheck, depth=5):
     answer = metta4Miner.run(f""" !(backward-chain &res1 (fromNumber 5) (: $prf {whatToCheck})) """)
     return answer
 
+
 def getChainerResult(whatToCheck, depth=5):
     """ Get the result of backward chaining for a specific query. 
     Args:
-        whatToCheck (str): The query to check, e.g., '(reputation 0 high)'
+        whatToCheck (str): The query to check, e.g., '(engagement 0 "High")'
         depth (int): The depth limit for backward chaining. (default 5)
     Returns:
         The justification of the backward chaining operation.
@@ -1041,6 +1037,7 @@ def getChainerResult(whatToCheck, depth=5):
         When user asks "why is article 1 did get high engagement?", format query as "(engagement 1 high)" and call getChainerResult. 
         
         If backward chaining returns: [(: ((rule:- (, (engagement 1 high) (topic 1 AI))) (fact:- (topic 1 AI))) (engagement 1 high)), (: ((rule:- (, (engagement 1 high) (length 1 low))) (fact:- (length 1 low))) (engagement 1 high))]
+
         
         Analyze as: "I found 2 proofs for why article 1 has high engagement:
         
@@ -1054,21 +1051,22 @@ def getChainerResult(whatToCheck, depth=5):
         """
 
     try:
+        # Use ASI1 to analyze the results
         messages = [
             {"role": "system", "content": SYSTEM_INSTRUCTION},
             {"role": "user", "content": prompt}
         ]
         response_data = call_asi_api(messages)
-        justification = None
+        justification = "Unable to generate justification analysis."
         if 'choices' in response_data and response_data['choices']:
-            justification = response_data['choices'][0]['message'].get('content', '')
-
+             justification = response_data['choices'][0]['message'].get('content', '')
+        
         return {
             "query": whatToCheck,
             "status": "success",
             "raw_proofs": str(chainAnswer),
             "proof_count": len(chainAnswer),
-            "justification": justification or "Unable to generate justification analysis.",
+            "justification": justification,
             "depth_used": depth
         }
         
@@ -1096,7 +1094,6 @@ def getChainerResult(whatToCheck, depth=5):
             "depth_used": depth,
             "error": str(e)
         }
-
 
 def summarize_patterns(patterns: list) -> str:
     """Use the Gemini model to create a single comprehensive summary of the
@@ -1292,13 +1289,14 @@ def start_mining():
     print("🔍 DEBUG: Starting formatting thread")
     print("🔍 DEBUG: Result before formatting =", result)
     if isinstance(result, dict) and result.get('answer'):
+
         thread = threading.Thread(
             target=formatter,
             args=(f"{result['answer']}",),
             daemon=True
         )
         thread.start()
-    
+
     print(f"🔍 DEBUG: result type = {type(result)}")
     print(f"🔍 DEBUG: result = {result}")
     
@@ -1337,6 +1335,7 @@ def start_mining():
         'status': 'error',
         'message': error_msg
     }), 500
+
     
 
 @app.route('/api/mine/<job_id>', methods=['GET'])

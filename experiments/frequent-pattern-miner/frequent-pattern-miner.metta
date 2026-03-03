@@ -3,8 +3,6 @@
         (>= (size-atom $matches) $minSup)
     )
 )
-(= (counter $db $ptrn)
-    (let $got (collapse (match $db $ptrn 1)) (size-atom $got))) 
 ;; candidatePatternMaker
 ;; ---------------------------------
 ;; Filters specialized link templates using minimum support.
@@ -56,7 +54,7 @@
 ;;  3:- Use candidatePatternMaker to instantiate open sides and keep only those
 ;;     meeting $minsup
 ( = (absSpeCan $dbspace $minsup)
-    (let $specializedPattern (unique-atom (collapse (createSpecials (match $dbspace ($link $x $y) ($link $x $y)))))
+    (let $specializedPattern (only_unique (collapse (createSpecials (match $dbspace ($link $x $y) ($link $x $y)))))
         (candidatePatternMaker $dbspace (superpose $specializedPattern) $minsup))
 )
 
@@ -70,15 +68,15 @@
 ;(: formatter (-> SpaceType SpaceType Number Atom ))
 
 (= (formatter (conjunct $conjunct) $dbspace $minSup) 
-        (let $cnt (counter $dbspace $conjunct)
-                    (if (>= $cnt $minSup)
-                        (let $organized (promote_engagement_conj $conjunct)
-                                (trace! $organized (supportOf $organized $cnt)))
-                                (empty))))
+    (let $cnt (counter $dbspace $conjunct)
+        ;; calculate EMPTV
+        (let $EMPTV (trace! $conjunct (emp-tv $conjunct $dbspace))
+            (if (>= $cnt $minSup)
+                (let $organized (promote_engagement_conj $conjunct)
+                    (trace! $organized (supportOf ($organized $EMPTV) $cnt)))
+                (empty)))))
         
 ; --------------------------------------------------------
-;; frequency-pattern-miner
-; ---------------------------------------------------------
 ;; End-to-end frequent pattern mining pipeline.
 ;; Steps:
 ;;  1:- Build specialization templates from DB and filter to candidates (absSpeCan)

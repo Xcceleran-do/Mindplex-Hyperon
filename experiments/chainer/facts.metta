@@ -1,15 +1,30 @@
 ; --- 80 facts with all features ---
 
-(: (fact:- (engagement_level 9 "high")) (engagement_level 9 "high"))
-(: (fact:- (engagement_level 8 "high")) (engagement_level 8 "high"))
-(: (fact:- (engagement_level 7 "high")) (engagement_level 7 "high"))
-(: (fact:- (engagement_level 6 "high")) (engagement_level 6 "high"))
-(: (fact:- (engagement_level 5 "high")) (engagement_level 5 "high"))
-(: (fact:- (engagement_level 4 "medium")) (engagement_level 4 "medium"))
-(: (fact:- (engagement_level 3 "medium")) (engagement_level 3 "medium"))
-(: (fact:- (engagement_level 2 "high")) (engagement_level 2 "high"))
-(: (fact:- (engagement_level 1 "high")) (engagement_level 1 "high"))
-(: (fact:- (engagement_level 0 "high")) (engagement_level 0 "high"))
+; --- Load STV data from ingestion pipeline ---
+; Enhanced to load 4-argument STV facts instead of hardcoded 3-argument facts
+
+; Import STV data from atomspace visualizer
+!(import! &self ../atomspace_visualizer/public/data)
+
+; Add some test STV facts for demonstration
+!(add-atom &res1 (length A_16624 "Medium" (STV 0.8 0.9)))
+!(add-atom &res1 (tone A_16624 "Instructional" (STV 0.95 0.98)))
+!(add-atom &res1 (engagement A_16624 "Low" (STV 0.1 0.4)))
+
+; Legacy 3-argument facts (commented out for backward compatibility)
+; (: (fact:- (engagement 9 "high")) (engagement 9 "high"))
+; (: (fact:- (length 9 "medium")) (length 9 "medium"))
+; (: (fact:- (tone 9 "Analytical")) (tone 9 "Analytical"))
+
+(: (fact:- (engagement 8 "high")) (engagement 8 "high"))
+(: (fact:- (engagement 7 "high")) (engagement 7 "high"))
+(: (fact:- (engagement 6 "high")) (engagement 6 "high"))
+(: (fact:- (engagement 5 "high")) (engagement 5 "high"))
+(: (fact:- (engagement 4 "medium")) (engagement 4 "medium"))
+(: (fact:- (engagement 3 "medium")) (engagement 3 "medium"))
+(: (fact:- (engagement 2 "high")) (engagement 2 "high"))
+(: (fact:- (engagement 1 "high")) (engagement 1 "high"))
+(: (fact:- (engagement 0 "high")) (engagement 0 "high"))
 (: (fact:- (writing_style 9 "Gentle")) (writing_style 9 "Gentle"))
 (: (fact:- (writing_style 8 "Simplified Technical")) (writing_style 8 "Simplified Technical"))
 (: (fact:- (writing_style 7 "Descriptive")) (writing_style 7 "Descriptive"))
@@ -29,7 +44,6 @@
 (: (fact:- (tone 2 "Analytical")) (tone 2 "Analytical"))
 (: (fact:- (tone 1 "Analytical")) (tone 1 "Analytical"))
 (: (fact:- (tone 0 "Analytical")) (tone 0 "Analytical"))
-(: (fact:- (length 9 "medium")) (length 9 "medium"))
 (: (fact:- (length 8 "low")) (length 8 "low"))
 (: (fact:- (length 7 "low")) (length 7 "low"))
 (: (fact:- (length 6 "medium")) (length 6 "medium"))
