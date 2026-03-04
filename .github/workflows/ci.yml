@@ -18,6 +18,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run PeTTa test
+      - name: Install Python test dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install pytest pytest-cov pytest-mock requests python-dotenv
+
+      - name: Run PeTTa tests
         run: |
           python3 run-tests.py
+
+      - name: Run Python ingestion tests
+        run: |
+          python3 -m pytest experiments/ingestion/tests/ -v --tb=short

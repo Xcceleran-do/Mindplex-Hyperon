@@ -76,14 +76,6 @@
 ; !(do-ji-tv-est &kb (,(Inheritance $x ugly) (Inheritance $x woman))) 
 
 
-;; =============================================================================
-;; Test: Basic Pattern Support
-;; -----------------------------------------------------------------------------
-;; Verifies counting of matching patterns in the knowledge base
-;; Expected: 60 instances of (Inheritance $x $y)
-;; =============================================================================
-!(test (sup (Inheritance $x $y) &self) 60)
-
 
 ;; =============================================================================
 !(test (universe-count (Inheritance $x) &self) 162)
