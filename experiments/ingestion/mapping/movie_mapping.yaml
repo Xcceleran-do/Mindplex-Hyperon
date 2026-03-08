@@ -1,0 +1,9 @@
+entity_type: Movie
+
+id_field: id
+
+mappings:
+  title: hasTitle
+  averageRating: hasAverageRating
+  director: hasDirector
+  releaseYear: hasReleaseYear

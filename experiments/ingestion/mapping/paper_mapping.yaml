@@ -1,0 +1,11 @@
+id_field: "id"
+mappings:
+  post_title: "hasTitle"
+  overview: "hasOverview"
+  category: "hasCategory"
+  likes: "hasLikes"
+  views: "hasViews"
+  author_display_name: "hasAuthor"
+  published_at: "wasPublishedOn"
+  sentiment: "hasSentiment"
+  writing_level: "hasWritingLevel"

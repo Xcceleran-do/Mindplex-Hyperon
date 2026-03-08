@@ -2,7 +2,7 @@
 import datetime
 import json
 import re
-import google.generativeai as genai
+import google.genai as genai
 from .config import (
     LENGTH_BUCKETS, READING_TIME_BUCKETS, ENGAGEMENT_BUCKETS, 
     RETENTION_BUCKETS, ANALYSIS_PROMPT_TEMPLATE
@@ -12,11 +12,10 @@ class ArticleAnalyzer:
     def __init__(self, api_key):
         if not api_key:
             print("Warning: No Gemini API key provided. AI enrichment will be skipped.")
-            self.model = None
+            self.client = None
         else:
-            genai.configure(api_key=api_key)
-            # Updated model name to a currently supported version
-            self.model = genai.GenerativeModel('gemini-2.0-flash')
+            self.client = genai.Client(api_key=api_key)
+            self.model_name = 'gemini-2.5-flash'
 
     def discretize_value(self, value, buckets):
         if value is None:
@@ -57,7 +56,7 @@ class ArticleAnalyzer:
 
     def enrich_with_ai(self, article):
         """Uses Gemini to extract Tone, Complexity, etc."""
-        if not self.model:
+        if not self.client:
             return {
                 "tone": "Unknown", "complexity": "Unknown", 
                 "content_type": "Unknown", "primary_goal": "Unknown", 
@@ -80,7 +79,10 @@ class ArticleAnalyzer:
         )
 
         try:
-            response = self.model.generate_content(prompt)
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=prompt
+            )
             # Clean up json string if markdown is present
             text = response.text.replace('```json', '').replace('```', '')
             ai_metadata = json.loads(text)

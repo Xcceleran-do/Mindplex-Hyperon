@@ -1,0 +1,9 @@
+source:
+  type: pdf
+  config:
+    path: tests/sample_data/sample.pdf
+
+mapping:
+  file: mapping/paper_mapping.yaml
+
+output_file: output/pdf_knowledge.metta

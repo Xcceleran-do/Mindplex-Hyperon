@@ -1,0 +1,7 @@
+entity_type: Post
+id_field: id
+
+mappings:
+  title: hasTitle
+  body: hasBody
+  userId: hasAuthorId
