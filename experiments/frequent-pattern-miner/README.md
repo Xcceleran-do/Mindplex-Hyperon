@@ -61,4 +61,7 @@ See tests/frequent-pattern-miner-test.metta for a runnable check.
 	so results are easier to scan.
 - Support is computed with sup-num from experiments/utils/common-utils.metta.
 
+## Benchmarks
+- Book-Crossing benchmark (2026-03-09): `BOOKCROSSING_BENCHMARK_2026-03-09.md`
+
 

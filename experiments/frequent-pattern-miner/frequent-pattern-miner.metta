@@ -1,8 +1,3 @@
-(= (sup-eval $db $pattern $minSup) 
-    (let $matches (collapse (match $db $pattern $pattern)) 
-        (>= (size-atom $matches) $minSup)
-    )
-)
 ;; candidatePatternMaker
 ;; ---------------------------------
 ;; Filters specialized link templates using minimum support.
@@ -22,7 +17,7 @@
 ;; Output: the instantiated pattern with a variable on the open side, or Empty
 ; (:candidatePatternMaker (-> SpaceType (Specialized Pattern) Number Expression Expression))
 ( = (candidatePatternMaker $dbspace ($link left $rValue) $minsup)
-        (if (sup-eval $dbspace ($link $x $rValue) $minsup) ($link (cut-first-char l$x) $rValue) (empty))
+    (if (sup-eval $dbspace ($link $x $rValue) $minsup) ($link (cut-first-char l$x) $rValue) (empty))
 )
 
 ( = (candidatePatternMaker $dbspace ($link $lValue right) $minsup)
@@ -87,7 +82,7 @@
 (= (frequency-pattern-miner $dbspace $minsup $depth)
    (let $candidatePatterns (collapse (absSpeCan $dbspace $minsup))
         (let $conjuncts (unique_combinations_star $candidatePatterns $depth)
-        (collapse (formatter (superpose $conjuncts) $dbspace $minsup))))
+        $conjuncts))
 )
 
 ; !(unique_combinations_star ((length $x "high") (length $x "low") (length $x "medium") (tone $x "Conversational") (tone $x "Humorous") (tone $x "Motivational") (tone $x "Gentle") (tone $x "Educational") (tone $x "Analytical") (writing_style $x "Conversational") (writing_style $x "Descriptive") (writing_style $x "Informal") (writing_style $x "Narrative") (writing_style $x "Formal") ) 3)

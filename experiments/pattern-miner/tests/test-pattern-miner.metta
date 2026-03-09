@@ -1,13 +1,15 @@
-!(import! &self ../../pattern-miner/pattern-miner)
+
+!(import! &self /mnt/c/Users/HP/iCog/Mindplex-Hyperon/PeTTa/lib/lib_import)
+!(import_prolog_functions_from_file "/mnt/c/Users/HP/iCog/Mindplex-Hyperon/experiments/frequent-pattern-miner/conj_exp.pl" (unique_combinations_star cut-first-char promote_engagement_conj))
 !(import! &self ../../utils/common-utils)
-!(import! &self ../../frequent-pattern-miner/frequent-pattern-miner)
-!(import! &db ../../atomspace_visualizer/public/data)
+!(import! &self /mnt/c/Users/HP/iCog/Mindplex-Hyperon/experiments/frequent-pattern-miner/frequent-pattern-miner)
+!(import! &self ../../pattern-miner/pattern-miner)
+!(import! &temp /mnt/c/Users/HP/iCog/Mindplex-Hyperon/experiments/ingestion/outputs/bookcrossing_data)
 
-!(bind! purifiedDbSpace (new-space)) ; space to hold the database atoms
-!(let $atom (get-atoms &db) (add-atom purifiedDbSpace $atom))
+!(let $atom (match &temp ($fact $stv) (: (fact:- $fact) $fact $stv)) (add-atom &res1 $atom))
+!(let $atom (match &temp ($fact $stv) $fact) (add-atom &purifiedDbSpace $atom))
 
-;; space to hold the miner result
-!(bind! &res1 (new-space))
+
 ; !(memberChecker (engagement_level $x "high") () purifiedDbSpace 3)
 ; !(sup-eval purifiedDbSpace (engagement_level $x "high") 3)
 ; !(memberChecker (engagement_level $x "low") ( (engagement_level $x "low") (engagement_level $x "med")) purifiedDbSpace 3)
@@ -19,7 +21,7 @@
 ;; minimum support 3 -3rd arg
 ;; number of conjuncts 3 -4th arg
 
-!(pattern-miner purifiedDbSpace 3 4) 
+!(pattern-miner &purifiedDbSpace 900 5) 
 !(println! "============ end ================")
 ;; demo result structure
     ; ((supportOf (, (Inheritance $y human) (Inheritance $y man)) 3) 

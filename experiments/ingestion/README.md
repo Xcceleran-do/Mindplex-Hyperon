@@ -1,196 +1,122 @@
-# Source-Agnostic Data Ingestion and Multi-Agent Pipeline
+# Standalone Multi-Agent Ingestion Tool
 
-Building a source-agnostic recommender requires a flexible ETL pipeline that can pull from any endpoint (e.g. JSON APIs), extract useful metadata, and convert it into a uniform knowledge representation for pattern mining. For example, open-source frameworks like Singer and Meltano provide generic connectors (“taps” and “targets”) to move data from any source to any destination without custom code. Meltano, built atop Singer, supports 300+ connectors and uses simple YAML configurations to orchestrate extraction, conversion, and loading of diverse data. Other tools like Airbyte or Apache NiFi can similarly ingest from arbitrary APIs and databases. In practice, one would schedule these ingestion jobs (e.g. with Airflow or Cron) to pull raw data from each source (e.g. movie database API, research-paper repository API) into a landing store. The raw payloads (typically JSON) are passed to a supervising agent that coordinates downstream processing.
+This module ingests heterogeneous resources (JSON, CSV, text, HTML, URL, or directory), lets an agent infer which properties are relevant from the observed schema/value patterns, converts continuous values into symbolic buckets, assigns STV values, and writes MeTTa triples to a dedicated `.metta` file.
 
-A multi-agent architecture is ideal for heterogeneous data. As noted in AWS’s multi-agent pipeline for unstructured data, a central Supervisor Agent orchestrates the workflow and delegates tasks to specialized agents. The supervisor receives new data and routes it, invoking e.g. a Classification Agent to detect domain or data type, a Conversion Agent to normalize formats (e.g. PDF→text or XML→JSON), and then specialized Extractor Agents for each content type. Each agent is fine-tuned for one role: classification, format conversion, metadata parsing, semantic analysis, etc. This modular design scales gracefully, allowing new agents to be plugged in for new data types without disrupting the pipeline.
+## Output format
 
----
+Each generated line follows:
 
-## Supervisor / Orchestrator Agent
+```metta
+((predicate subject "object") (STV confidence strength))
+```
 
-Receives input records (e.g. JSON from an API) and dispatches them to appropriate sub-agents. It may use message queues or orchestration frameworks (e.g. AWS Step Functions, Kafka, or workflow engines) to track tasks. For example, upon a new research paper JSON, it sends it to a Domain Classifier Agent.
+Example:
 
----
+```metta
+((length A_16624 "Medium") (STV 0.694 0.9))
+```
 
-## Classification / Type Agent
+## Agent pipeline
 
-Examines the raw input (by schema or content) to identify domain/format (e.g. “movie”, “research paper”, “tweet”) and selects relevant downstream agents. This could be a rule-based or ML classifier.
+1. `SourceResolutionAgent`: Resolves files, URLs, directories, and fallback pseudo-sources.
+2. `RecordExtractionAgent`: Converts payloads into normalized record dictionaries.
+3. `SentimentAnalysisAgent`: Scores audience sentiment from textual evidence.
+4. `ContentClassificationAgent`: Classifies content style (instructional/analytical/opinionated/informational).
+5. `SemanticParsingAgent`: Extracts semantic keywords and condensed topical signals.
+6. `RecommendationSignalAgent`: Derives recommendation-oriented signals (utility, novelty, complexity).
+7. `SchemaProfilerAgent`: Profiles coverage, type shape, cardinality, and numeric distributions.
+8. `PropertySelectionAgent`: Chooses properties with sufficient observed coverage (no hardcoded domain list).
+9. `DiscretizationAgent`: Applies generic quantile bins for continuous fields.
+10. `TripleConstructionAgent`: Builds `(predicate subject object)` facts with STV.
+11. `FactValidationAgent`: Drops malformed or out-of-range STV facts.
+12. `FactPersistenceAgent`: Writes validated facts to `.metta`.
 
----
+All agents use explicit deterministic tools through a `ToolRouter`, so the pipeline does not depend on one general LLM for all tasks.
 
-## Format Conversion Agent
+## Module Layout
 
-Ensures all inputs are in a consistent internal format. For example, it might extract text from PDFs or normalize date fields. Tools like Apache Tika or pdf2text can extract raw text; JSON or CSV can be standardized via parsing libraries.
+- `pipeline.py`: Thin public API (`run_ingestion`) used by CLI/API.
+- `orchestrator.py`: Agent orchestration, execution guards, and runtime telemetry.
+- `agent_registry.py`: Ordered, pluggable registry used to compose the agent pipeline.
+- `tool_router.py`: Deterministic tools for source loading, parsing, profiling, scoring, and writing.
+- `models.py`: Shared dataclasses (`IngestionConfig`, `IngestionState`, `Fact`, etc.).
+- `constants.py`: Shared domain-agnostic constants and token sets.
+- `agents/base.py`: Base agent interface.
+- `agents/io_agents.py`: Source resolution, record extraction, and persistence agents.
+- `agents/analysis_agents.py`: Sentiment, classification, semantic parsing, recommendation signal agents.
+- `agents/schema_profiler_agent.py`: Schema profile agent.
+- `agents/property_selection_agent.py`: Property selection agent.
+- `agents/discretization_agent.py`: Numeric discretization agent.
+- `agents/triple_construction_agent.py`: Triple builder agent.
+- `agents/fact_validation_agent.py`: Fact validation agent.
+- `agents/transformation_agents.py`: Compatibility exports for transformation agents.
+- `multimedia_ingester.py`: Placeholder extension point for multimedia ingestion.
 
----
+## Extending With New Agents
 
-## Metadata Extraction Agents
+1. Implement a class that extends `agents.base.Agent`.
+2. Register it using `AgentRegistry.register(...)`, `insert_before(...)`, or `insert_after(...)`.
+3. Construct `MultiAgentIngestionOrchestrator` with your customized registry.
 
-For structured fields present in the data (titles, authors, genres, timestamps), dedicated agents parse and validate these fields. They can also enrich metadata via external APIs: e.g. querying CrossRef or SemanticScholar for paper abstracts and citation counts, or TMDB/OMDb for movie metadata. This yields triples like:
+This keeps feature growth modular and avoids editing the core orchestrator loop.
 
-(hasAuthor Paper X)
+## Run from repo root
 
-(hasGenre Movie Comedy)
+```bash
+python -m experiments.ingestion.cli --input experiments/atomspace_visualizer/public/data.metta --output experiments/ingestion/outputs/from_existing_data.metta
+```
 
----
+For structured ingestion:
 
-## Semantic Analysis Agent
+```bash
+python -m experiments.ingestion.cli --input datasets/MIND/train/news.tsv --output experiments/ingestion/outputs/mind_data.metta
+```
 
-Applies NLP models (e.g. Hugging Face transformers, spaCy) to unstructured content to derive higher-level attributes. For text (paper abstract or plot summary) it can perform topic classification or keyword extraction. It might label difficulty (e.g. “introductory” vs “advanced”) by a custom classifier or LLM prompt. Embedding models (BERT, Sentence Transformers) can vectorize content for similarity. The agent should be general: e.g. a “text analyzer” that takes any text blob and outputs topics, keywords, sentiment, readability scores, etc.
+For API compatibility fallback:
 
----
+```bash
+python -m experiments.ingestion.cli --username Hruy --output experiments/ingestion/outputs/user_profile.metta
+```
 
-## Sentiment / Opinion Agent
+Full runtime report:
 
-If content contains subjective text (reviews, comments), this agent scores sentiment or stance using a model (e.g. VADER or a fine-tuned BERT). The sentiment scores (positive/negative) become features in the knowledge base.
+```bash
+python -m experiments.ingestion.cli \
+  --input datasets/MIND/train/news.tsv \
+  --output experiments/ingestion/outputs/mind_data.metta \
+  --min-property-coverage 0.2 \
+  --include-agent-reports
+```
 
----
+## Real Data Test: Kaggle Book-Crossing
 
-## Entity Linking / Ontology Agent
+Dataset page:
+- `https://www.kaggle.com/datasets/arashnic/book-recommendation-dataset`
 
-Matches extracted terms to known ontologies (e.g. linking a paper’s field to a taxonomy, or a movie actor to a Wikidata entity). This can use tools like spaCy’s entity linker or DBpedia/Wikidata APIs. The result is canonical triples with consistent vocabulary.
+1. Download and extract the dataset so a folder contains:
+- `BX-Books.csv`
+- `BX-Users.csv`
+- `BX-Book-Ratings.csv`
 
----
-
-## Knowledge Graph Construction Agent
-
-Using Open Information Extraction (OpenIE) techniques, this agent turns textual statements into (subject, predicate, object) triples. For example:
-
-“Alice studied machine learning” → (Alice, studied, machine learning)
-
-Stanford OpenIE or similar systems can be used here. These triples feed into the miner or graph store.
-
----
-
-## Similarity / Clustering Agent
-
-Computes similarities among users or items. It might embed user profiles (from interaction history) and items (from content features) into a vector space (using neural collaborative filtering or pre-trained embeddings). A nearest-neighbor search (FAISS, Annoy) or graph community detection can identify clusters of similar users/items. These relationships inform collaborative patterns.
-
----
-
-## Quality & Issue Resolver Agent
-
-Monitors for missing or inconsistent metadata. It can trigger re-fetching from sources, or flag human review. Over time it can learn to auto-fix common issues (e.g. fill in missing fields by cross-referencing known entities).
-
----
-
-# Data Representation and Knowledge Integration
-
-The end goal is to produce a metadata-rich knowledge base that the Hyperon miner can process. This typically means a set of triplets or facts of the form:
-
-(property entity value)
-
-### Example: Movie
-
-(ie123 MovTitle "Inception")
-
-(hasDirector Movie123 "Christopher Nolan")
-
-(belongsToGenre Movie123 "Sci-Fi")
-
-(wasReleasedInYear Movie123 2010)
-
-(hasAverageRating Movie123 8.8)
-
-### Example: Research Paper
-
-(PaperABC hasAuthor "Alice Smith")
-
-(hasTopic PaperABC "Graph Mining")
-
-(hasCitationCount PaperABC  42)
-
-(hasDifficulty PaperABC "advanced")
-
-Unstructured text analysis yields triples like:
-
-(authored Alice PaperABC)
-
-(usesTechnique PaperABC "association rule mining")
-
-OpenIE and entity linking are key here. Sometimes dynamic knowledge graph techniques are used to handle streaming data, updating triples over time.
-
-Provenance is important: each triple should tag its confidence or source. The reasoning engine (PLN) can then assign uncertainty to rules. For example, an NLP-extracted fact might have 0.85 confidence. The pipeline can store:
-
-(entity relation object confidence)
-
-so downstream inference knows which premises are less certain.
-
----
-
-# Similarity and Embedding Agents
-
-Recommendation often relies on similarity: “Users who liked X also liked Y.” To support this, the pipeline can have agents that compute embeddings for items and users. For example, an Item Embedding Agent might run a neural model (e.g. item2vec or BERT on item descriptions) to generate vectors. A User Profiling Agent could aggregate embeddings of items a user has interacted with. An Affinity Agent then measures cosine similarities among these vectors. Clustering (e.g. K-means) or graph methods can identify groups.
-
-These similarity relations become additional edges in the knowledge graph, like:
-
-(similarToUser UserX UserY)
-
-(isLike MovieA MovieB)
-
-which the pattern miner can use for collaborative patterns.
-
----
-
-# Pattern Mining and Reasoning Integration
-
-Once facts are assembled, Hyperon-Miner finds frequent itemsets and association rules across the knowledge graph. These patterns (e.g. “Users who read about topic T also read about topic U”) are converted into logic rules.
-
-The upstream pipeline ensures all items and users are represented by feature triples. The reasoning engine (using probabilistic logic or forward/backward chaining) then chains these rules with current facts to recommend new items with confidence scores.
-
-Forward chaining produces candidate recommendations, while backward chaining justifies them against known user preferences. Uncertainties in facts/rules propagate to yield recommendation confidence.
-
-Throughout, data and agents remain domain-agnostic. Each agent is generic (e.g. “text tagger” vs “movie tagger”) but is instructed/contextualized per domain. The overall system can ingest any API-provided schema by having the Classification Agent first map raw fields to known property types.
-
----
-
-# Industry Practices (e.g. Twitter/X)
-
-Large platforms typically precompute heavy features offline. For example, Twitter’s “For You” feed uses an offline pipeline to build embeddings and graphs, then an online service fetches candidates and ranks them. They maintain real-time engagement graphs and periodically update community embeddings to quickly find relevant content.
-
-Similarly, this pipeline could periodically rebuild user/item embeddings and similarity graphs, caching them for fast lookup. Real-time updates (new likes or downloads) would incrementally update the knowledge graph and patterns. Many systems store a ranked list of recommendations per user for quick retrieval; a similar approach could be used here.
-
----
-
-# Tools and Implementation Details
-
-## Ingestion
-
-Use Singer/Meltano or Apache Airbyte to connect to APIs. Each source has a schema that the Classification Agent can inspect.
-
-## NLP / ML Libraries
-
-Use spaCy, NLTK, or Hugging Face Transformers for tokenization, NER, sentiment, topic classification.
-
-## OpenIE
-
-Stanford OpenIE or similar systems for extracting triples and confidence scores.
-
-## Graph Storage
-
-Store triples in a graph database or RDF store if needed. This forms the facts base for pattern mining.
-
-## Embeddings
-
-Use Sentence Transformers or word2vec to get vectors, and FAISS or Annoy to index them.
-
-## Orchestration
-
-Agents can run as independent services communicating over Kafka, RabbitMQ, or REST. Use Docker/Kubernetes for scalability.
-
-## Pattern Miner
-
-Ensure agent outputs are formatted as:
-
-(predicate subject object)
-
-which the miner expects.
-
----
-
-# Final Summary
-
-The ingestion pipeline uses a modular multi-agent architecture to extract structured metadata and semantic features from arbitrary sources. All extracted knowledge is converted into triples. Similarity agents add relational structure. The Hyperon pattern miner discovers frequent patterns, and the reasoning engine fuses these with facts to produce recommendations and explanations.
-
-This design uses generic agents (classification, NLP, conversion, graph-building) that call specialized tools. That is what makes the system source-agnostic and scalable.
-
+2. Run the dedicated adapter + ingestion pipeline:
+
+```bash
+python -m experiments.ingestion.run_bookcrossing_ingestion \
+  --dataset-dir <PATH_TO_EXTRACTED_FOLDER> \
+  --output-metta experiments/ingestion/outputs/bookcrossing_data.metta \
+  --prepared-jsonl experiments/ingestion/outputs/bookcrossing_prepared.jsonl
+```
+
+3. Optional test:
+
+```bash
+python -m unittest experiments.ingestion.tests.bookcrossing_adapter_test
+```
+
+## Notes
+
+- Multimedia ingestion is reserved for a future phase and currently exposed as a placeholder extension point in `multimedia_ingester.py`.
+- STV values use source reliability as strength and confidence from extraction mode/model certainty.
+- Continuous values are discretized so they are suitable for symbolic reasoning.
+- No fixed list like sentiment/read-time/category is required; extracted properties are inferred from the data itself.
+- The output JSON includes per-agent telemetry (`agent_reports`) for observability and debugging.
