@@ -42,6 +42,8 @@ class JsonToMetta:
             add_prop("category", "category")
             add_prop("title", "title")
             add_prop("topic", "topic")
+            add_prop("domain", "domain")
+            add_prop("sentiment", "sentiment")
             
             # Add authored-by as alias for author
             if 'author' in meta:
@@ -53,5 +55,25 @@ class JsonToMetta:
                         safe_val = str(value).replace('"', '\\"').replace('\n', ' ')
                         strength, confidence = stv
                         metta_lines.append(f"((authored-by {art_id} \"{safe_val}\") (STV {strength} {confidence}))")
+
+            # Add entities/topics
+            if 'entities' in meta:
+                for ent in meta['entities']:
+                    val = ent.get('value')
+                    if val:
+                        safe_val = str(val).replace('"', '\\"').replace('\n', ' ')
+                        strength = ent.get('strength', 0.5)
+                        confidence = ent.get('confidence', 0.5)
+                        metta_lines.append(f"((has-topic {art_id} \"{safe_val}\") (STV {strength} {confidence}))")
+
+            # Add OpenIE triples
+            if 'openie_triples' in meta:
+                for triple in meta['openie_triples']:
+                    s = str(triple.get('subject', '')).replace('"', '\\"').replace('\n', ' ')
+                    p = str(triple.get('predicate', '')).replace('"', '\\"').replace('\n', ' ')
+                    o = str(triple.get('object', '')).replace('"', '\\"').replace('\n', ' ')
+                    conf = triple.get('confidence', 0.5)
+                    if s and p and o:
+                        metta_lines.append(f"(({p} \"{s}\" \"{o}\") (STV 1.0 {conf}))")
 
         return "\n".join(metta_lines)

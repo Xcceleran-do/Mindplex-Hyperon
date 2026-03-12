@@ -94,10 +94,67 @@ Classification Guidelines:
 STV Assignment Guidelines:
 - strength (s): The probability or degree of truth in your classification [0.0-1.0]
 - confidence (c): Your certainty in that strength measurement [0.0-1.0]
-- Be honest about your certainty level - if you're guessing, use lower confidence
-- If you're very confident based on clear evidence, use higher confidence
-- Consider content clarity, explicit indicators, and your expertise in the domain
-
 
 Consider the content's language, structure, purpose, and target audience when assigning both classifications and STV values.
+"""
+
+ENTITY_EXTRACTION_PROMPT_TEMPLATE = """Extract the most relevant entities (topics, technologies, people, organizations) from the following article.
+
+Return ONLY a JSON object with the following structure:
+{{
+    "entities": [
+        {{"value": "entity_name", "type": "topic/tech/person/org", "strength": 0.0-1.0, "confidence": 0.0-1.0}},
+        ...
+    ]
+}}
+
+Limit to the top 5-7 most significant entities.
+
+Article Title: {title}
+Content Snippet: {content_snippet}
+
+STV Assignment Guidelines:
+- strength (s): How central this entity is to the article [0.0-1.0]
+- confidence (c): Your certainty that this entity is correctly identified [0.0-1.0]
+"""
+
+CLASSIFICATION_PROMPT_TEMPLATE = """Identify the domain and format of the following article.
+Possible domains: News, Research-Paper, Movie, Social-Media, Other.
+
+Return ONLY a JSON object:
+{{
+    "domain": "DomainName",
+    "format": "FormatName",
+    "confidence": 0.0-1.0
+}}
+
+Article Title: {title}
+Content Snippet: {content_snippet}
+"""
+
+SENTIMENT_PROMPT_TEMPLATE = """Analyze the sentiment of the following text.
+Categorize as: Positive, Negative, Neutral, or Mixed.
+
+Return ONLY a JSON object:
+{{
+    "sentiment": "Category",
+    "strength": 0.0-1.0,
+    "confidence": 0.0-1.0
+}}
+
+Text: {text}
+"""
+
+OPEN_IE_PROMPT_TEMPLATE = """Extract structured (Subject, Predicate, Object) triples from the following text.
+Focus on the most important factual statements.
+
+Return ONLY a JSON object:
+{{
+    "triples": [
+        {{"subject": "S", "predicate": "P", "object": "O", "confidence": 0.0-1.0}},
+        ...
+    ]
+}}
+
+Text: {text}
 """

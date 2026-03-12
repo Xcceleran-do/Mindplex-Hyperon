@@ -213,6 +213,27 @@ class TestJsonToMetta(unittest.TestCase):
         # Old format should use default STV
         self.assertIn("(STV 0.5 0.5)", result)
 
+    def test_convert_entities(self):
+        """Test converting entities to has-topic triples"""
+        articles = [
+            {
+                "id": 1,
+                "enriched_metadata": {
+                    "entities": [
+                        {"value": "AI", "strength": 0.9, "confidence": 0.8},
+                        {"value": "Hyperon", "strength": 0.95, "confidence": 0.9}
+                    ]
+                }
+            }
+        ]
+        
+        result = self.converter.convert(articles)
+        
+        self.assertIn("(has-topic A_1 \"AI\")", result)
+        self.assertIn("(STV 0.9 0.8)", result)
+        self.assertIn("(has-topic A_1 \"Hyperon\")", result)
+        self.assertIn("(STV 0.95 0.9)", result)
+
 
 class TestJsonToMettaEdgeCases(unittest.TestCase):
     """Test edge cases and error handling"""

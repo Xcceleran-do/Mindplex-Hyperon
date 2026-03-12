@@ -52,3 +52,34 @@ class MindplexFetcher:
             page += 1
             
         return articles[:limit]
+
+class FileFetcher:
+    """Fetcher for local files (PDF, CSV, JSON)"""
+    def __init__(self, directory):
+        self.directory = directory
+
+    def fetch_all(self, limit=50):
+        import os
+        supported_exts = ('.pdf', '.csv', '.json', '.txt')
+        files = []
+        if not os.path.exists(self.directory):
+            print(f"Directory not found: {self.directory}")
+            return []
+
+        # If directory is actually a file
+        if os.path.isfile(self.directory):
+            files = [self.directory]
+        else:
+            for f in os.listdir(self.directory):
+                if f.lower().endswith(supported_exts):
+                    files.append(os.path.join(self.directory, f))
+
+        articles = []
+        for i, file_path in enumerate(files[:limit]):
+            articles.append({
+                "id": f"file_{i}",
+                "post_title": os.path.basename(file_path),
+                "file_path": file_path,
+                "author_username": "local_system"
+            })
+        return articles
