@@ -763,12 +763,21 @@ def getAllFactsAndRules():
             lines = run_petta_query_lines("!(collapse (get-atoms &res1))")
             joined = " ".join(lines)
             facts = extract_parenthesized_expressions(joined) or lines
-            return {"status": "success", "facts": facts}
+            print("-----------------------------------------------------------------")
+            print(f"DEBUG: getAllFactsAndRules : {facts}")
+            aligned_facts = parse_facts_for_pettachainer(facts)
+            print("DEBUG: parsed facts count:", len(aligned_facts))
+            print("DEBUG: parsed facts preview:", aligned_facts[:5])
+            for fact in aligned_facts:
+                handler.add_atom(fact)
+            print("%%%%%%%%% facts are inserted &&&&&&&&&&&")
+            return {"status": "success", "facts": aligned_facts}
         except Exception as e:
             return {"status": "error", "error": str(e)}
 
     try:
         facts = metta4Miner.run("!(collapse (get-atoms &res1))")
+        print("DEBUG: getAllFactsAndRules  the first 10- raw lines:", facts[:10])
     except Exception as e:
         return {"status": "error", "error": str(e)}
 
@@ -798,7 +807,6 @@ def getAllFactsAndRules():
             return {"status": "success", "facts": [repr(facts)]}
 
     return {"status": "success", "facts": normalized}
-
 
 def handle_backward_chain_for_message(message: str):
     """Detect simple 'why' questions about an article and run the
