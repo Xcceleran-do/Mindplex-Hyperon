@@ -22,6 +22,15 @@ from dataclasses import dataclass
 from typing import Dict, Any, Optional, List
 from hyperon import MeTTa
 from dotenv import load_dotenv
+import logging  
+from petta import PeTTa  
+
+logging.basicConfig(  
+    format="%(asctime)s [%(levelname)s] %(message)s",  
+    level=logging.INFO  
+)  
+logger = logging.getLogger(__name__)  
+
 
 # Add workspace root to path to allow imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
@@ -75,7 +84,7 @@ def is_wsl_environment() -> bool:
         return "microsoft" in platform.release().lower()
     except Exception:
         return False
-from PeTTaChainer.pettachainer.pettachainer import PeTTaChainer
+
 PROJECT_ROOT_PETTA = PROJECT_ROOT_WSL if is_wsl_environment() else PROJECT_ROOT_NATIVE
 
 # Enable extra PeTTa debug probes for backward chaining when set to "1".
@@ -162,6 +171,84 @@ def init_petta_engine() -> bool:
         petta_setup_loaded = True
 
     return True
+
+
+LOADEDLIB = False  
+LOADED_LOCK = threading.Lock()  
+class PeTTaChainer:  
+    def __init__(self):  
+        global LOADEDLIB  
+        self.handler = PeTTa()  
+          
+        self.kb = "kb" + uuid.uuid4().hex  
+        self._base_dir = os.path.dirname(__file__) 
+        self.atomRe = re.compile(r'\([A-Za-z_][\w\-]*\s+\$[_\w\d]+\s+"[^"]*"\)')
+        self.stvRe = re.compile(r'\(STV\s+([0-9eE\.\-]+)\s+([0-9eE\.\-]+)\)')
+  
+        if not LOADEDLIB:
+            with LOADED_LOCK:
+                if not LOADEDLIB:
+                    metta_path = os.path.join(self._base_dir, "chainer", "petta_chainer.metta")
+                    logger.info("Loading MeTTa library from %s", metta_path)
+                    self.handler.load_metta_file(metta_path)
+                    LOADEDLIB = True
+
+  
+    def add_atom(self, atom: str) -> str:  
+        return self.handler.process_metta_string(f"!(compileadd {self.kb} {atom})")  
+  
+    def query(self, atom: str, depth: int = 10) -> List[str]:  
+        atoms = self.handler.process_metta_string(  
+            f"!(query (fromNumber {depth}) {self.kb} {atom})"  
+        )  
+        return atoms
+    
+    def normalizeVar(self, atom: str) -> str:
+        return re.sub(r'\$_\d+', '$x', atom)
+
+    def patternToRule(self, patternText: str, idx: int) -> str | None:
+        atoms = [self.normalizeVar(a) for a in self.atomRe.findall(patternText or "")]
+        if not atoms:
+            return None
+
+        stvMatch = self.stvRe.search(patternText or "")
+        strength, confidence = (stvMatch.group(1), stvMatch.group(2)) if stvMatch else ("1.0", "1.0")
+
+        consequent = next((a for a in atoms if a.startswith("(engagement ")), atoms[-1])
+        antecedents = [a for a in atoms if a != consequent]
+        lhs = antecedents[0] if len(antecedents) == 1 else f"(And {' '.join(antecedents)})"
+
+        return f'(: rule_{idx} (-> {lhs} {consequent}) (STV {strength} {confidence}))'
+
+    def formatter(self, minedPatterns):
+        """Insert mined patterns as rules."""
+        print("DEBUG: formatter received minedPatterns:", minedPatterns)
+        try:
+            payload = json.loads(minedPatterns) if isinstance(minedPatterns, str) else minedPatterns
+            patterns = payload.get("patterns", [])
+            insertedRules = []
+            for idx, p in enumerate(patterns, start=1):
+                patternText = str(p.get("pattern", ""))
+                ruleAtom = self.patternToRule(patternText, idx)
+                if not ruleAtom:
+                    continue
+                print("Adding rule:", ruleAtom)
+                self.add_atom(ruleAtom)
+                insertedRules.append(ruleAtom)
+
+            return {
+                "status": "success",
+                "insertedRuleCount": len(insertedRules),
+                "rules": insertedRules
+            }
+
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": str(e),
+                "insertedRuleCount": 0
+            }
+handler = PeTTaChainer()
 
 # Define tools for ASI API
 tools_schema = [
