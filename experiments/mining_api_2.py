@@ -107,18 +107,27 @@ METTA_SETUP_WSL = f"""
 """
 
 METTA_SETUP_PETTA = f"""
-!(import! &self {PROJECT_ROOT_PETTA}/PeTTa/lib/lib_import.metta)
-!(import_prolog_functions_from_file "{PROJECT_ROOT_PETTA}/experiments/frequent-pattern-miner/conj_exp.pl" (unique_combinations_star cut-first-char promote_engagement_conj))
+!(import! &self {PROJECT_ROOT_WSL}/PeTTa/lib/lib_import.metta)
+!(import_prolog_functions_from_file "{PROJECT_ROOT_WSL}/experiments/frequent-pattern-miner/conj_exp.pl" (unique_combinations_star cut-first-char promote_engagement_conj))
+!(import! &self {PROJECT_ROOT_WSL}/experiments/utils/common-utils)
+!(import! &self {PROJECT_ROOT_WSL}/experiments/frequent-pattern-miner/etv-utils)
+!(import! &self {PROJECT_ROOT_WSL}/experiments/frequent-pattern-miner/frequent-pattern-miner)
+!(import! &self {PROJECT_ROOT_WSL}/experiments/pattern-miner/pattern-miner)
+!(import! &self {PROJECT_ROOT_WSL}/experiments/chainer/main)
+!(import! &tempo {PROJECT_ROOT_WSL}/experiments/atomspace_visualizer/public/data)
+!(import! &stv-formulas {PROJECT_ROOT_WSL}/experiments/PLN/Formulas)
 
-!(import! &self {PROJECT_ROOT_PETTA}/experiments/frequent-pattern-miner/frequent-pattern-miner)
-!(import! &self {PROJECT_ROOT_PETTA}/experiments/pattern-miner/pattern-miner)
-!(import! &self {PROJECT_ROOT_PETTA}/experiments/utils/common-utils)
-!(import! &tempo {PROJECT_ROOT_PETTA}/experiments/atomspace_visualizer/public/data)
-!(import! &self {PROJECT_ROOT_PETTA}/experiments/chainer/main)
+!(bind! &fact-count (new-state 1))
+(= (get-next-fact-id)
+   (let $n (get-state &fact-count)
+   (progn (change-state! &fact-count (+ $n 1))
+          (atom_concat fact $n))))
 
-!(let $atom (let $fact (get-atoms &tempo) (: (fact:- $fact) $fact)) (add-atom &res1 $atom))
-
-!(let $atom (get-atoms &tempo) (add-atom &purifiedDbSpace $atom))
+!(let $atom (match &tempo ($fact $stv) 
+               (let $id (get-next-fact-id)
+                 (: $id $fact $stv)))
+   (add-atom &res1 $atom))
+!(let $atom (match &tempo ($fact $stv) $fact) (add-atom &purifiedDbSpace $atom))
 """
 
 # Keep the original WSL-based setup for the existing MeTTa (hyperon) flow.
