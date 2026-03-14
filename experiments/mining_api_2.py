@@ -1090,19 +1090,17 @@ def formatter(mined_patterns):
     print("formatter ended :-_-:")
 
 def backWardChainer(whatToCheck, depth=5):
-    if init_petta_engine():
-        debug_petta_chainer_state(whatToCheck)
-        query = f"!(backward-chain &res1 (fromNumber 5) (: $prf {whatToCheck}))"
-        lines = run_petta_query_lines(query)
-        if PETTA_DEBUG:
-            print("DEBUG: raw backward chaining output lines:", lines)
-        joined = " ".join(lines)
-        proofs = extract_parenthesized_expressions(joined)
-        return proofs or lines
-
-    whatToCheck = metta4Miner.parse_single(whatToCheck)
-    answer = metta4Miner.run(f""" !(backward-chain &res1 (fromNumber 5) (: $prf {whatToCheck})) """)
-    return answer
+    result = handler.query(whatToCheck.strip(), depth=depth)
+    print("DEBUG raw result:", repr(result), "type:", type(result))
+    if result is None:
+        print("DEBUG: result is None")
+        return []
+    if isinstance(result, (list, tuple)):
+        filtered = [str(x) for x in result if str(x).strip()]
+        print("DEBUG list len:", len(result), "filtered len:", len(filtered))
+        return filtered
+    out = str(result).strip()
+    return [out] if out else []
 
 def getChainerResult(whatToCheck, depth=5):
     """ Get the result of backward chaining for a specific query. 
