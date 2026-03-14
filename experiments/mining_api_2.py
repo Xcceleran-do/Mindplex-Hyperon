@@ -1361,13 +1361,16 @@ def health_check():
 def start_mining():
     """Start a new mining job"""
     print("🔍 DEBUG: Received mining request")
-
+    
     data = request.get_json() or {}
     conjunction_count = data.get('conjunction_count', 2)
+    min_support = data.get('min_support', 3)
     
     # Validate conjunction count
     if not isinstance(conjunction_count, int) or conjunction_count < 1:
         return jsonify({'error': 'conjunctionCount must be a positive integer'}), 400
+    if not isinstance(min_support, int) or min_support < 1:
+        return jsonify({'error': 'min_support must be a positive integer'}), 400
     
     # Generate unique job ID
     job_id = str(uuid.uuid4())
@@ -1376,48 +1379,76 @@ def start_mining():
     job = MiningJob(
         job_id=job_id,
         status='running',
-        conjunction_count=conjunction_count
+        conjunction_count=conjunction_count,
+        min_support=min_support,
     )
     mining_jobs[job_id] = job
     run_mining_task(job_id, conjunction_count)
-    print(f"🔍 DEBUG: Starting mining job {job_id} with conjunction count {conjunction_count}")
+    print(
+        f"🔍 DEBUG: Starting mining job {job_id} with conjunction count {conjunction_count} and min_support {min_support}"
+    )
     result = mining_jobs[job_id].result
     # Start formatting in background thread only if we have an answer payload
     print("🔍 DEBUG: Starting formatting thread")
     print("🔍 DEBUG: Result before formatting =", result)
-    if isinstance(result, dict) and result.get('answer'):
+    print(f"the patterns is :  {result.get('patterns', [])}")
+    print(handler.print())
+    if isinstance(result, dict) and result.get("answer"):
+        
+        minedPatterns = {
+        'patterns': result['patterns']
+        }
+
+        # Start the thread
         thread = threading.Thread(
-            target=formatter,
-            args=(f"{result['answer']}",),
+            target=handler.formatter,
+            args=(minedPatterns,),  
             daemon=True
         )
         thread.start()
-    
+   
+        
     print(f"🔍 DEBUG: result type = {type(result)}")
     print(f"🔍 DEBUG: result = {result}")
     
-    # Check if mining was successful
-    if isinstance(result, dict) and result.get('status') == 'success':
-        rules = result.get('patterns', [])
-        print(f"✅ Mining job {job_id} finished with {len(rules)} patterns")
-        return jsonify({
-            'jobId': job_id,
-            'status': 'finished',
-            'conjunction_count': conjunction_count,
-            'message': 'Mining job finished successfully',
-            'result': rules
-        })
-        
-    else:
-        # Handle error case
-        error_msg = result.get('message', 'Unknown error') if isinstance(result, dict) else str(result)
-        print(f"❌ Mining error: {error_msg}")
-        return jsonify({
-            'jobId': job_id,
-            'status': 'error',
-            'message': error_msg
-        }), 500
+    # Check mining status
+    if isinstance(result, dict):
+        mining_status = result.get('status')
+
+        if mining_status == 'success':
+            rules = result.get('patterns', [])
+            print(f"✅ Mining job {job_id} finished with {len(rules)} patterns")
+            return jsonify({
+                'jobId': job_id,
+                'status': 'finished',
+                'conjunction_count': conjunction_count,
+                'min_support': min_support,
+                'message': 'Mining job finished successfully',
+                'result': rules
+            })
+
+        if mining_status == 'no_results':
+            print(f"ℹ️ Mining job {job_id} finished with no patterns")
+            return jsonify({
+                'jobId': job_id,
+                'status': 'no_results',
+                'conjunction_count': conjunction_count,
+                'min_support': min_support,
+                'message': result.get('message', 'No patterns found for the selected parameters.'),
+                'result': []
+            })
+
+    # Handle error case
+    error_msg = result.get('message', 'Mining failed') if isinstance(result, dict) else str(result)
+    print(f"❌ Mining error: {error_msg}")
+    return jsonify({
+        'jobId': job_id,
+        'status': 'error',
+        'message': error_msg
+    }), 500
+
     
+
 
 @app.route('/api/mine/<job_id>', methods=['GET'])
 def get_mining_status(job_id: str):
