@@ -824,17 +824,21 @@ def handle_backward_chain_for_message(message: str):
 
     article_id = m.group(1)
 
-    # Call getAllFactsAndRules to obtain canonical atoms
+    print(f" DEBUG: Received message: {message}")
+    function_calls = []
+    # First call getAllFactsAndRules to get canonical atoms
     print("DEBUG: handle_backward_chain_for_message - calling getAllFactsAndRules()")
     facts_res = getAllFactsAndRules()
     print("DEBUG: facts_res type:", type(facts_res))
-    print("DEBUG: facts_res preview:", (facts_res.get('facts')[:5] if isinstance(facts_res, dict) else str(facts_res)[:200]))
-    function_calls = [{'name': 'getAllFactsAndRules', 'args': {}, 'result': facts_res}]
-
+    print("DEBUG: raw facts count:", len(facts_res))
+    print("DEBUG: raw facts preview:", str(facts_res)[:200])
+        
+    # If we couldn't get facts/rules, return early
     if not isinstance(facts_res, dict) or facts_res.get('status') != 'success':
         return None, None
-
+    
     facts = facts_res.get('facts', []) or []
+    facts_text = "\n".join(facts[:200]) if isinstance(facts, list) else str(facts)
 
     # Ask the LLM to rewrite the user's question into a canonical MeTTa query
     # using the facts we retrieved. The model must output only a single MeTTa
@@ -853,11 +857,12 @@ def handle_backward_chain_for_message(message: str):
             - If mapping is ambiguous, pick the most semantically likely predicate present in the KB.
             - If you cannot produce a valid MeTTa expression, output the single token NO_QUERY and NOTHING ELSE.
 
-            Example mapping (for clarity only, do not output this): facts contain (engagement 1 high) -> question "Why is article 1 high?" -> output: (engagement 1 $what)
+            Example mapping (for clarity only, do not output this): if facts contain (engagement 1 high) -> question "Why article 1 has low engagement?" -> output should be like : "(: $prf (engagement 1 $what) $tv)"
 
             OUTPUT ONLY the MeTTa expression or NO_QUERY.
             """
-        print("DEBUG: sending rewrite prompt to LLM (first 300 chars):", rewrite_prompt[:300])
+        print("DEBUG: sending rewrite prompt to LLM (first 500 chars):", rewrite_prompt[:500])
+
         messages = [
             {"role": "system", "content": SYSTEM_INSTRUCTION},
             {"role": "user", "content": rewrite_prompt}
@@ -866,25 +871,14 @@ def handle_backward_chain_for_message(message: str):
         candidate_query = None
         if 'choices' in response_data and response_data['choices']:
             candidate_query = response_data['choices'][0]['message'].get('content', '').strip()
-
+        
         print("DEBUG: rewrite result:", candidate_query)
         function_calls.append({'name': 'rewrite_query', 'args': {'message': message}, 'result': candidate_query})
     except Exception as e:
         print('DEBUG: rewrite error:', e)
         return None, None
 
-    if not candidate_query or candidate_query.upper() == 'NO_QUERY':
-        print('DEBUG: no candidate query produced by LLM')
-        return None, None
-
-    # Ensure the candidate looks like a MeTTa expression; if it contains extra text,
-    # try to extract the first parenthesized expression.
-    mexpr = re.search(r"\([^\)]*\)", candidate_query)
-    if mexpr:
-        candidate_query = mexpr.group(0).strip()
-
-    print('DEBUG: final candidate_query to send to chainer:', candidate_query)
-
+    
     # Call the chainer with the rewritten query and include debug output
     try:
         print('DEBUG: calling getChainerResult with', candidate_query)
