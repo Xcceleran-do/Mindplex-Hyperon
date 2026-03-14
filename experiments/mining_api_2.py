@@ -1105,7 +1105,7 @@ def backWardChainer(whatToCheck, depth=5):
 def getChainerResult(whatToCheck, depth=5):
     """ Get the result of backward chaining for a specific query. 
     Args:
-        whatToCheck (str): The query to check, e.g., '(reputation 0 high)'
+        whatToCheck (str): The query to check, e.g., '(engagement 0 "High")'
         depth (int): The depth limit for backward chaining. (default 5)
     Returns:
         The justification of the backward chaining operation.
@@ -1121,44 +1121,53 @@ def getChainerResult(whatToCheck, depth=5):
         }
     
     # Simple prompt that relies on system instruction for formatting guidance
-    prompt = f"""
-        Analyze this backward chaining result and provide a clear justification:
-
-        **Query:** {whatToCheck}
-        **Backward Chaining Results:** {chainAnswer}
-
-        **Backward Chaining Example:**
-        When user asks "why is article 1 did get high engagement?", format query as "(engagement 1 high)" and call getChainerResult. 
-        
-        If backward chaining returns: [(: ((rule:- (, (engagement 1 high) (topic 1 AI))) (fact:- (topic 1 AI))) (engagement 1 high)), (: ((rule:- (, (engagement 1 high) (length 1 low))) (fact:- (length 1 low))) (engagement 1 high))]
-        
-        Analyze as: "I found 2 proofs for why article 1 has high engagement:
-        
-        **Proof 1:** Based on the rule that states 'if an article is about AI, then it has high engagement', and since we have the fact that 'article 1 is about AI', we can conclude that article 1 has high engagement.
-        
-        **Proof 2:** Based on the rule that states 'if an article is short (low length), then it has high engagement', and since we have the fact that 'article 1 has low length', we can also conclude that article 1 has high engagement.
-        
-        **Overall Justification:** Article 1's high engagement is well-supported by two independent logical proofs - both its AI topic and its concise length contribute to high engagement according to the rules in our knowledge base."
-
-        The backward chaining system tried to prove the query "{whatToCheck}" and found the above results. Please analyze these results and explain the logical reasoning behind the proof(s).
-        """
-
+    prompt = f"""  
+    Analyze this backward chaining result with STV truth values and provide a clear justification:  
+    
+    **Query:** {whatToCheck}  
+    **Backward Chaining Results:** {chainAnswer}  
+    
+    **STV-Enhanced Backward Chaining Example:**  
+    When user asks "why is article 1 did get high engagement?", format query as "(: $prx (engagement 1 "High") $tv" and call getChainerResult.  
+    
+    If backward chaining returns results with STV values like:  
+    [(: (factx (engagement 1 "High" ) (STV 1.0 1.0)),   
+    (: (((rule:- (-> (and (topic 1 AI) (engagement 1 "High"))) (fact:- (topic 1 AI) (STV 0.9 0.8)))   
+    (engagement 1 "High" (STV 0.9 0.8)))]  
+    
+    Analyze as: "I found 2 proofs for why article 1 has high engagement with associated truth values:  
+    
+    **Proof 1 (Direct Fact):** Article 1 has high engagement with strength 1.0 and confidence 1.0 (STV 1.0 1.0) - this is a known fact with maximum certainty.  
+    
+    **Proof 2 (Rule-Based):** Based on the rule that states 'if an article is about AI, then it has high engagement', and since we have the fact that 'article 1 is about AI' with strength 0.9 and confidence 0.8, we can conclude article 1 has high engagement with strength 0.9 and confidence 0.8.  
+    
+    **Truth Value Analysis:** The STV format (strength confidence) represents:  
+    - Strength: How strongly the conclusion follows from premises (0.0 to 1.0)  
+    - Confidence: How reliable the evidence is (0.0 to 1.0)  
+    
+    **Overall Justification:** Article 1's high engagement is supported by multiple proofs with different certainty levels. The direct fact provides maximum certainty (STV 1.0 1.0), while the rule-based inference provides strong but slightly less certain evidence (STV 0.9 0.8)."  
+    
+    The backward chaining system with STV tried to prove the query "{whatToCheck}" and found the above results. Please analyze these results, explaining both the logical reasoning and the truth value propagation through the proof(s).  
+    
+    IMPORTANT: Always extract and display the actual content of rules and facts from the raw proof data. Do NOT use generic references like "fact52" or "rule_1". Instead, show the full rule content like "if (audience 3 "Professionals") and (length 3 "high") then (engagement_level 3 "high")" and fact content like "(audience 3 "Professionals")".  
+    """
     try:
+        # Use ASI1 to analyze the results
         messages = [
             {"role": "system", "content": SYSTEM_INSTRUCTION},
             {"role": "user", "content": prompt}
         ]
         response_data = call_asi_api(messages)
-        justification = None
+        justification = "Unable to generate justification analysis."
         if 'choices' in response_data and response_data['choices']:
-            justification = response_data['choices'][0]['message'].get('content', '')
-
+             justification = response_data['choices'][0]['message'].get('content', '')
+        
         return {
             "query": whatToCheck,
             "status": "success",
             "raw_proofs": str(chainAnswer),
             "proof_count": len(chainAnswer),
-            "justification": justification or "Unable to generate justification analysis.",
+            "justification": justification,
             "depth_used": depth
         }
         
