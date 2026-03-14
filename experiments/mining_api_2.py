@@ -808,22 +808,8 @@ def getAllFactsAndRules():
 
     return {"status": "success", "facts": normalized}
 
-def handle_backward_chain_for_message(message: str):
-    """Detect simple 'why' questions about an article and run the
-    required automatic workflow: fetch facts, rewrite query to canonical
-    form, then call the chainer. Returns (response_text, function_calls) or
-    (None, None) if not applicable.
-    """
-    # Quick heuristic: look for 'why' and an article id
-    if not re.search(r'\bwhy\b|explain why|prove that', message, re.I):
-        return None, None
-
-    m = re.search(r'article\s+(\d+)', message, re.I)
-    if not m:
-        return None, None
-
-    article_id = m.group(1)
-
+def handle_backward_chain_for_message(message: str) -> dict:
+    """Handle natural language queries using backward chaining with STV support."""
     print(f" DEBUG: Received message: {message}")
     function_calls = []
     # First call getAllFactsAndRules to get canonical atoms
@@ -904,6 +890,7 @@ def handle_backward_chain_for_message(message: str):
         resp_text = f"Alright, here's the scoop —\n\n{raw_just}\n\n(That's the reasoning I found.)"
     print('DEBUG: final response text:', resp_text)
     return resp_text, function_calls
+
 
 # Define available functions for the AI with proper docstrings for automatic function calling
 def get_mining_results() -> dict:
@@ -1379,8 +1366,7 @@ def start_mining():
     job = MiningJob(
         job_id=job_id,
         status='running',
-        conjunction_count=conjunction_count,
-        min_support=min_support,
+        conjunction_count=conjunction_count
     )
     mining_jobs[job_id] = job
     run_mining_task(job_id, conjunction_count)
@@ -1392,7 +1378,6 @@ def start_mining():
     print("🔍 DEBUG: Starting formatting thread")
     print("🔍 DEBUG: Result before formatting =", result)
     print(f"the patterns is :  {result.get('patterns', [])}")
-    print(handler.print())
     if isinstance(result, dict) and result.get("answer"):
         
         minedPatterns = {
@@ -1446,8 +1431,6 @@ def start_mining():
         'status': 'error',
         'message': error_msg
     }), 500
-
-    
 
 
 @app.route('/api/mine/<job_id>', methods=['GET'])
