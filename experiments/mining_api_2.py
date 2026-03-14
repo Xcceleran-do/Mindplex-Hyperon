@@ -527,6 +527,25 @@ def extract_support_of_expressions(text: str) -> list[str]:
         start = end
     return results
 
+def parse_facts_for_pettachainer(facts_output):  
+    """  
+    Parse nested facts output and convert to PeTTaChainer-compatible format.  
+    Args:  
+        facts_output: List containing a single string with nested facts  
+    Returns:  
+        List of individual fact strings ready for handler.add_atom()  
+    """  
+    if not facts_output:
+        return []
+    # Extract the big string
+    nested_facts = facts_output[0]
+    # Regex to capture valid facts
+    pattern = r'\(:\s*fact\d+\s*\([^)]*\)\s*\(STV\s*[\d\.]+\s*[\d\.]+\)\)'
+    matches = re.findall(pattern, nested_facts)
+    individual_facts = [m.strip() for m in matches]
+    return individual_facts
+  
+
 def extract_parenthesized_expressions(text: str) -> list[str]:
     """Extract all balanced parenthesized expressions from text."""
     results = []
