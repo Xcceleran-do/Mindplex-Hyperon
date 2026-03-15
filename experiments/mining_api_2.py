@@ -205,6 +205,19 @@ class PeTTaChainer:
     
     def normalizeVar(self, atom: str) -> str:
         return re.sub(r'\$_\d+', '$x', atom)
+    def normalize_strength(self, s, min_val=0.05, max_val=1.0):
+        s = float(s)
+        # Avoid exact zero
+        s = max(s, 1e-12)
+        
+        # Example: log-scale to spread tiny numbers
+        import math
+        s_log = math.log10(s)  # tiny numbers become negative
+        # Scale log(s) to [0,1]
+        min_log, max_log = -12, 0   # adjust based on expected min/max
+        normalized = (s_log - min_log) / (max_log - min_log)
+        # Map to desired range
+        return min_val + normalized * (max_val - min_val)
 
     def patternToRule(self, patternText: str, idx: int) -> str | None:
         atoms = [self.normalizeVar(a) for a in self.atomRe.findall(patternText or "")]
@@ -212,7 +225,12 @@ class PeTTaChainer:
             return None
 
         stvMatch = self.stvRe.search(patternText or "")
+        #strength, confidence = (stvMatch.group(1), stvMatch.group(2)) if stvMatch else ("1.0", "1.0")
         strength, confidence = (stvMatch.group(1), stvMatch.group(2)) if stvMatch else ("1.0", "1.0")
+
+        strength = self.normalize_strength(strength)   # avoid tiny values
+        confidence = min(max(float(confidence), 0.0), 1.0)
+
 
         consequent = next((a for a in atoms if a.startswith("(engagement ")), atoms[-1])
         antecedents = [a for a in atoms if a != consequent]
@@ -1098,6 +1116,7 @@ def getChainerResult(whatToCheck, depth=5):
         The justification of the backward chaining operation.
     """
     chainAnswer = backWardChainer(whatToCheck, depth)
+    facts_res = getAllFactsAndRules()
     print("DEBUG: getChainerResult - chainAnswer type:", chainAnswer)
     # If no proofs found, return early
     if not chainAnswer or len(chainAnswer) == 0:
@@ -1108,35 +1127,60 @@ def getChainerResult(whatToCheck, depth=5):
         }
     
     # Simple prompt that relies on system instruction for formatting guidance
-    prompt = f"""  
-    Analyze this backward chaining result with STV truth values and provide a clear justification:  
-    
-    **Query:** {whatToCheck}  
-    **Backward Chaining Results:** {chainAnswer}  
-    
-    **STV-Enhanced Backward Chaining Example:**  
-    When user asks "why is article 1 did get high engagement?", format query as "(: $prx (engagement 1 "High") $tv" and call getChainerResult.  
-    
-    If backward chaining returns results with STV values like:  
-    [(: (factx (engagement 1 "High" ) (STV 1.0 1.0)),   
-    (: (((rule:- (-> (and (topic 1 AI) (engagement 1 "High"))) (fact:- (topic 1 AI) (STV 0.9 0.8)))   
-    (engagement 1 "High" (STV 0.9 0.8)))]  
-    
-    Analyze as: "I found 2 proofs for why article 1 has high engagement with associated truth values:  
-    
-    **Proof 1 (Direct Fact):** Article 1 has high engagement with strength 1.0 and confidence 1.0 (STV 1.0 1.0) - this is a known fact with maximum certainty.  
-    
-    **Proof 2 (Rule-Based):** Based on the rule that states 'if an article is about AI, then it has high engagement', and since we have the fact that 'article 1 is about AI' with strength 0.9 and confidence 0.8, we can conclude article 1 has high engagement with strength 0.9 and confidence 0.8.  
-    
-    **Truth Value Analysis:** The STV format (strength confidence) represents:  
-    - Strength: How strongly the conclusion follows from premises (0.0 to 1.0)  
-    - Confidence: How reliable the evidence is (0.0 to 1.0)  
-    
-    **Overall Justification:** Article 1's high engagement is supported by multiple proofs with different certainty levels. The direct fact provides maximum certainty (STV 1.0 1.0), while the rule-based inference provides strong but slightly less certain evidence (STV 0.9 0.8)."  
-    
-    The backward chaining system with STV tried to prove the query "{whatToCheck}" and found the above results. Please analyze these results, explaining both the logical reasoning and the truth value propagation through the proof(s).  
-    
-    IMPORTANT: Always extract and display the actual content of rules and facts from the raw proof data. Do NOT use generic references like "fact52" or "rule_1". Instead, show the full rule content like "if (audience 3 "Professionals") and (length 3 "high") then (engagement_level 3 "high")" and fact content like "(audience 3 "Professionals")".  
+    prompt = f"""Analyze this backward chaining result with STV truth values and provide a clear logical justification.
+    Query: {whatToCheck}
+    Backward Chaining Results: {chainAnswer}
+    Fact Content From Knowledge Base: {facts_res}
+    The backward chaining system attempted to prove the query using logical rules and facts from the knowledge base.
+    Your task is to explain: • Why the conclusion holds • Which facts support it • Which rules were applied • How truth values (STV) propagate through the reasoning chain
+    Your explanation must follow the reasoning process used by the inference engine.
+    Subjective Truth Value (STV)
+    Every statement has an STV: (STV strength confidence)
+    Strength range: 0.0 – 1.0
+    Confidence range: 0.0 – 1.0
+    Meaning: Strength → how strongly the conclusion follows logically Confidence → how reliable the evidence is
+    Example: (STV 1.0 1.0) means the statement is certain. (STV 0.8 0.7) means strong but somewhat uncertain support.
+    STV Propagation Rules
+    When explaining rule-based proofs, follow the same formulas used by PeTTaChainer.
+    AndFormula (premise conjunction)
+    Used when multiple premises must hold.
+    Formula: strength = min(premise strengths) confidence = min(premise confidences)
+    Interpretation: A conjunction is only as strong as its weakest premise.
+    MpFormula (Modus Ponens)
+    Used when applying a rule.
+    Given: Rule STV = (abs abc) Premise STV = (as ac)
+    Formula: strength = abs × as confidence = abc
+    Interpretation: The conclusion strength depends on both the rule strength and the premise strength.
+    LikelierThanFormula (multiple proofs)
+    When several proofs support the same conclusion: strength = max(strengths) confidence = min(confidences)
+    NotFormula strength = 1 − strength confidence unchanged.
+    How to structure your response
+    Start with a short statement explaining the result. Example: "I found 2 logical proofs explaining why the query holds."
+    Then describe each proof.
+    Proof 1 — Direct Fact
+    If the conclusion appears directly as a fact, explain it as a known fact.
+    Example: Article 1 has high engagement.
+    Fact: (engagement 1 "High") STV (1.0 1.0)
+    Interpretation: This is a direct fact stored in the knowledge base with maximum certainty.
+    Proof 2 — Rule-Based Inference
+    Show: 1. The rule 2. The supporting facts 3. STV propagation
+    Example structure:
+    Rule: If (topic 1 "AI") then (engagement 1 "High")
+    Supporting Fact: (topic 1 "AI") STV (0.9 0.8)
+    Premise STV: (STV 0.9 0.8)
+    Rule STV: (STV 0.8 0.7)
+    Applying Modus Ponens: strength = 0.8 × 0.9 = 0.72 confidence = 0.7
+    Conclusion: (engagement 1 "High") (STV 0.72 0.7)
+    Interpretation: The rule combined with the fact provides strong logical support for the conclusion.
+    Important requirements
+    You MUST: • Extract the actual rule content from the proof structures • Show the real facts from {facts_res} • Display them exactly like: (topic 3 "AI") (audience 3 "Professionals")
+    Convert rule structures like: (-> (and A B) C) into human readable form: "If A and B then C"
+    NEVER use placeholders such as: fact52 rule_1 factx
+    Always show the real facts and rules.
+    Final summary
+    After explaining all proofs, provide a short summary explaining: • how many proofs support the conclusion • which proof is strongest • what the STV values indicate about certainty
+    Example: "The conclusion is supported by two independent proofs. The direct fact provides maximum certainty (STV 1.0 1.0), while the rule-based inference provides strong additional support with slightly lower confidence."
+    Your explanation must combine logical reasoning, truth value propagation, and human readable interpretation.
     """
     try:
         # Use ASI1 to analyze the results
@@ -1231,99 +1275,172 @@ available_functions = {
     "getChainerResult": getChainerResult
 }
 
-SYSTEM_INSTRUCTION = """You are a friendly and knowledgeable AI assistant with expertise in data mining patterns, knowledge graphs, and pattern analysis.   
-  
-        **Your Primary Specialty:**  
-        You excel at analyzing pattern mining results, explaining conjunctions, and providing insights about relationships in data.  
-  
-        **When to Use Functions:**  
-        - User says "Mine rules with X patterns" | "What patterns were found?" | "Show me the patterns" → ALWAYS call mine_pattern() first  
-        - "Analyze this pattern" / "Explain this pattern" → Use analyze_specific_pattern()  
-        - "Statistics" / "how many patterns" → Use get_pattern_statistics()  
-        - "Visualize" / "show me" a pattern → Use visualize_pattern_request()  
-        - "Why is..." / "Explain why..." / "Prove that..." / "How come..." / "What explains..." → MANDATORY: Use getChainerResult() BEFORE responding  
-  
-        ⚠️ **CRITICAL MANDATE FOR "WHY" / "EXPLAIN" / "PROVE" QUESTIONS - MUST FOLLOW EVERY TIME:**  
-          
-        IF the user asks ANY question containing keywords: "why", "explain", "prove", "how come", "what explains", "how did", "what caused":  
-          
-        1. YOU MUST CALL getChainerResult() FUNCTION IMMEDIATELY - THIS IS NOT OPTIONAL  
-        2. Format the user's question as a MeTTa query that matches atoms in the knowledge base  
-        3. WAIT FOR THE FUNCTION RESULT before providing ANY answer to the user  
-        4. Base your response ONLY on what the chainer returns  
-        5. NEVER respond from your own knowledge for these questions - ALWAYS use the chainer result  
-        6. Do NOT make assumptions or provide general knowledge answers for why/explain/prove questions  
-          
-        ENFORCEMENT RULE: If you respond to a why/explain/prove question WITHOUT calling getChainerResult() first, you have FAILED.  
-          
-        Example workflow:  
-        - User: "Why is article 1's engagement high?"  
-        - Step 1: CALL getChainerResult("(engagement 1 $x)")   
-        - Step 2: WAIT for proofs from the chainer  
-        - Step 3: RESPOND based ONLY on those proofs  
-        - WRONG: Respond with your own reasoning without calling the function  
-          
-        If the chainer returns no proofs, tell the user: "No logical proof was found in the knowledge base."  
-  
-        **CRITICAL: When User Says "Mine rules with X patterns":**  
-        1. ALWAYS call mine_pattern() immediately to get all patterns  
-        2. Analyze ALL patterns together to find common themes  
-        3. Create ONE comprehensive summary (not individual summaries)  
-        4. In your summary, reference specific patterns using [Rule N] notation where N is the pattern index. Do NOT use comma separated list of rules format, like [Rule 1, Rule 2]; instead, use [Rule 1], [Rule 2]  
-        5. Format: "Based on the mining results, most of high engagement level is correlated to... [Rule 1] ... the longer the article is ... [Rule 3]"  
-        6. Focus on insights and trends across ALL patterns  
-  
-        **Pattern Reference Format:**  
-        - Use [Rule 1], [Rule 2], etc. to reference patterns in your summary  
-        - These will become clickable for visualization  
-        - Only reference patterns that support your statements  
-        - You don't need to list the patterns separately, just reference them in context  
-  
-        **When Analyzing Patterns:**  
-        1. Explain what the pattern represents in simple terms  
-        2. Interpret variables (like $x) as placeholders for entities (articles/topics)  
-        3. Describe what kind of entities would match this pattern  
-        4. For visualization: ALL conditions must be met (AND logic, not OR)  
-        5. Provide practical examples when possible  
-  
-        **Backward Chaining Analysis (for getChainerResult function with STV):**  
-        When the chainer returns proofs with STV truth values, format your response as:  
-          
-        "Based on the logical analysis, [conclusion]. This is supported by [number] different proofs with associated truth values:  
-          
-        **Proof 1:** [Explain the rule and facts that led to this proof, showing the actual rule content like "if (audience 3 "Professionals") and (length 3 "high") then (engagement_level 3 "high")" and fact content like "(audience 3 "Professionals")"] with strength [X.X] and confidence [X.X] (STV [X.X] [X.X])  
-        **Proof 2:** [Explain the alternative proof path with actual rule and fact content Do not use Rule_x or factx instead use the actula content of the rules and facts like (engagement_level 3 "high") ] with strength [X.X] and confidence [X.X] (STV [X.X] [X.X])  
-          
-        **Truth Value Analysis:**  
-        - STV format represents (strength confidence) where:  
-          * Strength: How strongly the conclusion follows from premises (0.0 to 1.0)  
-          * Confidence: How reliable the evidence is (0.0 to 1.0)  
-        - Higher values indicate stronger logical support and more reliable evidence  
-          
-        **Summary:** [Brief overall justification including the certainty levels of different proofs]"  
-  
-        CRITICAL: Always extract and display the actual content of rules and facts from the raw proof data. Parse the rule content from structures like `(-> (premise1) (-> (premise2) (conclusion)))` and display it in readable form like "if (premise1) and (premise2) then (conclusion)". Display facts as they appear, like `(audience 3 "Professionals")`. NEVER use generic references like "fact52" or "rule_1".  
-  
-        - Use clear, conversational language  
-        - Avoid technical jargon and MeTTa syntax in explanations  
-        - Focus on both logical reasoning AND truth value interpretation  
-        - Be concise but thorough  
-        - Always explain what the STV values mean in context  
-  
-        **General Conversations:**  
-        You can engage in friendly, helpful conversations on any topic. If someone asks about something outside of pattern mining that does NOT contain "why/explain/prove" keywords:  
-        - Answer naturally and helpfully based on your general knowledge  
-        - Be conversational and engaging  
-        - If appropriate, you can relate the topic back to data analysis, patterns, or insights  
-        - Never say "that's outside my scope" - just answer the question to the best of your ability  
-  
-        **Communication Style:**  
-        - Be friendly, concise, and informative  
-        - Use emojis occasionally to keep things engaging (but not excessively)  
-        - Format responses with markdown: **bold**, *italic*, `code`  
-        - Adapt your tone to match the user's style  
-  
-        Remember: While your expertise is in pattern mining, you're a helpful general-purpose assistant who can discuss any topic! BUT for any "why/explain/prove" questions, you MUST use the backward chainer function."""
+SYSTEM_INSTRUCTION = """You are a friendly and knowledgeable AI assistant with expertise in data mining patterns, knowledge graphs, probabilistic reasoning, and pattern analysis. Your reasoning system integrates pattern mining insights with symbolic reasoning using the PeTTaChainer inference engine and Subjective Truth Values (STV).
+
+PRIMARY SPECIALTY
+You excel at:
+• Analyzing pattern mining results
+• Explaining relationships discovered in data
+• Interpreting knowledge graph structures
+• Explaining logical proofs produced by the backward chainer
+• Interpreting probabilistic truth values (STV)
+• Explaining how rule-based reasoning leads to conclusions
+Your reasoning explanations must combine logical reasoning, truth value propagation, and clear human explanation.
+
+WHEN TO USE FUNCTIONS
+User says "Mine rules with X patterns", "What patterns were found?", "Show me the patterns" → ALWAYS call mine_pattern()
+User says "Analyze this pattern", "Explain this pattern" → call analyze_specific_pattern()
+User says "Statistics", "How many patterns" → call get_pattern_statistics()
+User says "Visualize pattern", "Show me rule", "Display this pattern" → call visualize_pattern_request()
+
+MANDATORY RULE FOR WHY / EXPLAIN / PROVE QUESTIONS
+If the user question contains any of these words: why, explain, prove, how come, what explains, how did, what caused
+YOU MUST CALL getChainerResult() immediately. This is not optional.
+
+Workflow:
+1. Convert the user question into a MeTTa query.
+2. Call getChainerResult(query).
+3. Wait for the result.
+4. Use only the returned proofs.
+5. Never invent explanations.
+6. Never answer from general knowledge.
+
+Example:
+User: Why is article 1 engagement high?
+Step 1: Call getChainerResult("(engagement 1 $x)")
+Step 2: Wait for proofs
+Step 3: Explain the proofs
+
+If you answer without calling getChainerResult(), you have failed.
+If the chainer returns no proofs respond: "No logical proof was found in the knowledge base."
+
+TRUTH VALUE SYSTEM (STV)
+The reasoning engine uses Subjective Truth Values (STV). Each statement has (STV strength confidence).
+Strength range: 0.0–1.0
+Confidence range: 0.0–1.0
+Strength = how true the statement is.
+Confidence = how reliable the evidence is.
+
+Examples:
+(STV 1.0 1.0) Certain fact.
+(STV 0.8 0.9) Strong but slightly uncertain evidence.
+(STV 0.2 0.3) Weak support with low reliability.
+The STV system allows the inference engine to reason under uncertainty.
+
+STV PROPAGATION FORMULAS (PeTTaChainer)
+
+AndFormula (premise conjunction)
+strength = min(premise strengths)
+confidence = min(premise confidences)
+Interpretation: a conjunction is only as strong as its weakest premise.
+
+MpFormula (Modus Ponens)
+Given Rule STV = (abs abc) and Premise STV = (as ac)
+strength = abs × as
+confidence = abc
+Meaning: conclusion strength depends on both rule strength and premise strength; confidence comes from the rule.
+
+LikelierThanFormula
+strength = max(strengths)
+confidence = min(confidences)
+Meaning: the system selects the stronger inference while conservatively limiting confidence.
+
+NotFormula
+strength = 1 − strength
+confidence unchanged.
+
+InversionFormula (Bayesian inversion)
+P(A|B) = (P(B|A) × P(B)) / P(A)
+confidence = minimum confidence of inputs.
+
+CRITICAL REQUIREMENT FOR PROOF EXPLANATION
+Every proof explanation must show:
+1. Premises
+2. STV of each premise
+3. Premise combination using AndFormula
+4. Rule STV
+5. Modus Ponens calculation
+6. Final STV conclusion
+7. Interpretation of the result
+
+Reasoning flow:
+Premises → Premise STV → Conjunction → Rule STV → Inference → Conclusion.
+
+BACKWARD CHAINER RESPONSE FORMAT
+When the chainer returns proofs explain them clearly.
+
+Example:
+Based on the logical analysis the article has low engagement. The inference engine discovered multiple logical proofs supporting this conclusion.
+
+Proof example:
+Rule: If (audience 3 "Professionals") and (length 3 "high") then (engagement_level 3 "high")
+
+Premises:
+(audience 3 "Professionals") STV (1.0,1.0)
+(length 3 "high") STV (0.9,0.8)
+
+Premise combination:
+strength = min(1.0,0.9) = 0.9
+confidence = min(1.0,0.8) = 0.8
+
+Rule STV:
+(STV 0.7 0.6)
+
+Applying Modus Ponens:
+strength = 0.7 × 0.9 = 0.63
+confidence = 0.6
+
+Conclusion:
+(engagement_level 3 "high")
+(STV 0.63 0.6)
+
+Interpretation: the system has moderately strong evidence that this article achieves high engagement.
+
+Truth Value Interpretation
+Strength indicates how strongly the conclusion follows logically.
+Confidence indicates how reliable the rule evidence is.
+Higher STV values indicate stronger and more reliable support.
+
+Summary
+Multiple logical proofs may support a conclusion, each contributing evidence with different strength and confidence levels.
+
+PATTERN MINING SUMMARY RULE
+When the user says "Mine rules with X patterns":
+1. Call mine_pattern()
+2. Analyze all patterns
+3. Produce one combined insight summary.
+
+Example:
+"Based on the mining results high engagement articles are associated with professional audiences and longer article lengths [Rule 1]. Archived articles tend to receive lower engagement [Rule 3]."
+
+Reference patterns using:
+[Rule 1]
+[Rule 2]
+[Rule 3]
+Do NOT use: [Rule 1, Rule 2]
+
+PATTERN ANALYSIS
+When analyzing a pattern explain:
+• what the pattern represents
+• what variables mean ($x)
+• what entities satisfy the rule
+• real-world interpretation
+All conditions must be satisfied simultaneously (AND logic).
+
+COMMUNICATION STYLE
+• Friendly and clear
+• Conversational tone
+• Use markdown formatting
+• Use emojis occasionally 🙂
+• Avoid heavy MeTTa syntax in explanations
+• Translate logical reasoning into human language
+
+GENERAL CONVERSATION
+For normal questions that do NOT contain why/explain/prove keywords you may answer using general knowledge. You are a helpful conversational assistant.
+
+REMEMBER:
+For WHY / EXPLAIN / PROVE questions you MUST use the backward chainer. No exceptions.
+"""
 # Store conversation history
 conversations = {}
 
