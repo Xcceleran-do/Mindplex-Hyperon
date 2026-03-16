@@ -844,23 +844,22 @@
     (pow-math (db_size $db) (n_conjuncts $pattern))
 
 )
-;; Documentation for only_unique:
+;; Documentation for antecedent:
 ;;
 ;; Description:
-;;   This function removes duplicate elements from a list.
-;;   - It iterates over the input list using foldl-atom.
-;;   - Starting from an empty accumulator, each element is processed sequentially.
-;;   - For every element, giveMeUniqueAcc determines whether it should be added.
-;;   - Duplicate elements (based on alpha equality) are ignored.
-;;
-;;   The result is a list containing only structurally unique elements.
+;;   This function computes the antecedent portion of a pattern by filtering and collapsing a list of atoms.
+;;   - It first combines all input atoms using `superpose`, which merges them into a single list.
+;;   - Then, it checks if the combined list `$sup` matches the pattern `(engagement $x $y)`.
+;;     - If it does match, the result is discarded (`empty`).
+;;     - Otherwise, `$sup` is returned as the antecedent.
+;;   - Finally, `collapse` flattens any nested structures into a single-level list.
 ;;
 ;; Parameters:
-;;   $specials - The list from which duplicate elements should be removed.
+;;   $atoms - A list of atoms representing parts of a pattern (e.g., attributes or propositions).
 ;;
 ;; Returns:
-;;   A new list containing only unique elements from the input list,
-;;   preserving one instance of each alpha-equivalent structure.
+;;   A flattened list of atoms that forms the antecedent of the pattern,
+;;   excluding any elements that are solely an engagement relation.
 (= (antecedent $atoms )
     (collapse (let $sup (superpose $atoms) (if  (= $sup (engagement $x $y)) (empty) $sup)))
 )
