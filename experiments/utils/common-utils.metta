@@ -844,8 +844,27 @@
     (pow-math (db_size $db) (n_conjuncts $pattern))
 
 )
-
-
+;; Documentation for only_unique:
+;;
+;; Description:
+;;   This function removes duplicate elements from a list.
+;;   - It iterates over the input list using foldl-atom.
+;;   - Starting from an empty accumulator, each element is processed sequentially.
+;;   - For every element, giveMeUniqueAcc determines whether it should be added.
+;;   - Duplicate elements (based on alpha equality) are ignored.
+;;
+;;   The result is a list containing only structurally unique elements.
+;;
+;; Parameters:
+;;   $specials - The list from which duplicate elements should be removed.
+;;
+;; Returns:
+;;   A new list containing only unique elements from the input list,
+;;   preserving one instance of each alpha-equivalent structure.
+(= (antecedent $atoms )
+    (collapse (let $sup (superpose $atoms) (if  (= $sup (engagement $x $y)) (empty) $sup)))
+)
+!(antecedent (, (author $_1368858 "Hruy") (date-period $_1368858 "Archived") (popularity $_1368858 "Top_10") (audience-expertise $_1368858 "Beginner") (engagement $_1368858 "Low")))
 
  ;check if atom is variable or not
 
