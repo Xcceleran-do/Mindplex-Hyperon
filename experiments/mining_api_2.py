@@ -205,19 +205,6 @@ class PeTTaChainer:
     
     def normalizeVar(self, atom: str) -> str:
         return re.sub(r'\$_\d+', '$x', atom)
-    def normalize_strength(self, s, min_val=0.05, max_val=1.0):
-        s = float(s)
-        # Avoid exact zero
-        s = max(s, 1e-12)
-        
-        # Example: log-scale to spread tiny numbers
-        import math
-        s_log = math.log10(s)  # tiny numbers become negative
-        # Scale log(s) to [0,1]
-        min_log, max_log = -12, 0   # adjust based on expected min/max
-        normalized = (s_log - min_log) / (max_log - min_log)
-        # Map to desired range
-        return min_val + normalized * (max_val - min_val)
 
     def patternToRule(self, patternText: str, idx: int) -> str | None:
         atoms = [self.normalizeVar(a) for a in self.atomRe.findall(patternText or "")]
@@ -225,10 +212,7 @@ class PeTTaChainer:
             return None
 
         stvMatch = self.stvRe.search(patternText or "")
-        #strength, confidence = (stvMatch.group(1), stvMatch.group(2)) if stvMatch else ("1.0", "1.0")
         strength, confidence = (stvMatch.group(1), stvMatch.group(2)) if stvMatch else ("1.0", "1.0")
-
-        strength = self.normalize_strength(strength)   # avoid tiny values
         confidence = min(max(float(confidence), 0.0), 1.0)
 
 
@@ -250,7 +234,6 @@ class PeTTaChainer:
                 ruleAtom = self.patternToRule(patternText, idx)
                 if not ruleAtom:
                     continue
-                print("Adding rule:", ruleAtom)
                 self.add_atom(ruleAtom)
                 insertedRules.append(ruleAtom)
 
@@ -266,6 +249,7 @@ class PeTTaChainer:
                 "message": str(e),
                 "insertedRuleCount": 0
             }
+        
 handler = PeTTaChainer()
 
 # Define tools for ASI API
@@ -555,9 +539,7 @@ def parse_facts_for_pettachainer(facts_output):
     """  
     if not facts_output:
         return []
-    # Extract the big string
     nested_facts = facts_output[0]
-    # Regex to capture valid facts
     pattern = r'\(:\s*fact\d+\s*\([^)]*\)\s*\(STV\s*[\d\.]+\s*[\d\.]+\)\)'
     matches = re.findall(pattern, nested_facts)
     individual_facts = [m.strip() for m in matches]
@@ -781,14 +763,10 @@ def getAllFactsAndRules():
             lines = run_petta_query_lines("!(collapse (get-atoms &res1))")
             joined = " ".join(lines)
             facts = extract_parenthesized_expressions(joined) or lines
-            print("-----------------------------------------------------------------")
             print(f"DEBUG: getAllFactsAndRules : {facts}")
             aligned_facts = parse_facts_for_pettachainer(facts)
-            print("DEBUG: parsed facts count:", len(aligned_facts))
-            print("DEBUG: parsed facts preview:", aligned_facts[:5])
             for fact in aligned_facts:
                 handler.add_atom(fact)
-            print("%%%%%%%%% facts are inserted &&&&&&&&&&&")
             return {"status": "success", "facts": aligned_facts}
         except Exception as e:
             return {"status": "error", "error": str(e)}
@@ -833,9 +811,6 @@ def handle_backward_chain_for_message(message: str) -> dict:
     # First call getAllFactsAndRules to get canonical atoms
     print("DEBUG: handle_backward_chain_for_message - calling getAllFactsAndRules()")
     facts_res = getAllFactsAndRules()
-    print("DEBUG: facts_res type:", type(facts_res))
-    print("DEBUG: raw facts count:", len(facts_res))
-    print("DEBUG: raw facts preview:", str(facts_res)[:200])
         
     # If we couldn't get facts/rules, return early
     if not isinstance(facts_res, dict) or facts_res.get('status') != 'success':
@@ -1100,10 +1075,6 @@ def backWardChainer(whatToCheck, depth=5):
     if result is None:
         print("DEBUG: result is None")
         return []
-    if isinstance(result, (list, tuple)):
-        filtered = [str(x) for x in result if str(x).strip()]
-        print("DEBUG list len:", len(result), "filtered len:", len(filtered))
-        return filtered
     out = str(result).strip()
     return [out] if out else []
 
@@ -1128,59 +1099,114 @@ def getChainerResult(whatToCheck, depth=5):
     
     # Simple prompt that relies on system instruction for formatting guidance
     prompt = f"""Analyze this backward chaining result with STV truth values and provide a clear logical justification.
+
     Query: {whatToCheck}
-    Backward Chaining Results: {chainAnswer}
-    Fact Content From Knowledge Base: {facts_res}
+
+    Backward Chaining Results:
+    {chainAnswer}
+
+    Fact Content From Knowledge Base:
+    {facts_res}
+
     The backward chaining system attempted to prove the query using logical rules and facts from the knowledge base.
-    Your task is to explain: • Why the conclusion holds • Which facts support it • Which rules were applied • How truth values (STV) propagate through the reasoning chain
-    Your explanation must follow the reasoning process used by the inference engine.
+
+    Your task is to explain:
+    • Why the conclusion holds  
+    • Which facts support it  
+    • Which rules were applied  
+    • How the truth values (STV) support the reasoning chain
+
+    Your explanation must follow the reasoning process used by the inference engine, but **do not show internal calculations or formulas**.
+
     Subjective Truth Value (STV)
-    Every statement has an STV: (STV strength confidence)
-    Strength range: 0.0 – 1.0
-    Confidence range: 0.0 – 1.0
-    Meaning: Strength → how strongly the conclusion follows logically Confidence → how reliable the evidence is
-    Example: (STV 1.0 1.0) means the statement is certain. (STV 0.8 0.7) means strong but somewhat uncertain support.
-    STV Propagation Rules
-    When explaining rule-based proofs, follow the same formulas used by PeTTaChainer.
-    AndFormula (premise conjunction)
-    Used when multiple premises must hold.
-    Formula: strength = min(premise strengths) confidence = min(premise confidences)
-    Interpretation: A conjunction is only as strong as its weakest premise.
-    MpFormula (Modus Ponens)
-    Used when applying a rule.
-    Given: Rule STV = (abs abc) Premise STV = (as ac)
-    Formula: strength = abs × as confidence = abc
-    Interpretation: The conclusion strength depends on both the rule strength and the premise strength.
-    LikelierThanFormula (multiple proofs)
-    When several proofs support the same conclusion: strength = max(strengths) confidence = min(confidences)
-    NotFormula strength = 1 − strength confidence unchanged.
+
+    Every statement has an STV in the form:
+    (STV strength confidence)
+
+    Strength range: 0.0 – 1.0  
+    Confidence range: 0.0 – 1.0  
+
+    Meaning:
+    Strength → how strongly the conclusion follows logically  
+    Confidence → how reliable the supporting evidence is  
+
+    Example:
+    (STV 1.0 1.0) means the statement is certain.  
+    (STV 0.8 0.7) means strong but somewhat uncertain support.
+
     How to structure your response
-    Start with a short statement explaining the result. Example: "I found 2 logical proofs explaining why the query holds."
+
+    Start with a short statement explaining the result.  
+    Example:
+    "I found 2 logical proofs explaining why the query holds."
+
     Then describe each proof.
+
     Proof 1 — Direct Fact
+
     If the conclusion appears directly as a fact, explain it as a known fact.
-    Example: Article 1 has high engagement.
-    Fact: (engagement 1 "High") STV (1.0 1.0)
-    Interpretation: This is a direct fact stored in the knowledge base with maximum certainty.
+
+    Example:
+    Article 1 has high engagement.
+
+    Fact:
+    (engagement 1 "High") STV (1.0 1.0)
+
+    Interpretation:
+    This is a direct fact stored in the knowledge base with maximum certainty.
+
     Proof 2 — Rule-Based Inference
-    Show: 1. The rule 2. The supporting facts 3. STV propagation
+
+    Show:
+    1. The rule
+    2. The supporting facts
+    3. How the rule logically leads to the conclusion
+
     Example structure:
-    Rule: If (topic 1 "AI") then (engagement 1 "High")
-    Supporting Fact: (topic 1 "AI") STV (0.9 0.8)
-    Premise STV: (STV 0.9 0.8)
-    Rule STV: (STV 0.8 0.7)
-    Applying Modus Ponens: strength = 0.8 × 0.9 = 0.72 confidence = 0.7
-    Conclusion: (engagement 1 "High") (STV 0.72 0.7)
-    Interpretation: The rule combined with the fact provides strong logical support for the conclusion.
+
+    Rule:
+    If (topic 1 "AI") then (engagement 1 "High")
+
+    Supporting Fact:
+    (topic 1 "AI") STV (0.9 0.8)
+
+    Conclusion:
+    (engagement 1 "High")
+
+    Interpretation:
+    The rule combined with the supporting fact logically explains the conclusion.
+
     Important requirements
-    You MUST: • Extract the actual rule content from the proof structures • Show the real facts from {facts_res} • Display them exactly like: (topic 3 "AI") (audience 3 "Professionals")
-    Convert rule structures like: (-> (and A B) C) into human readable form: "If A and B then C"
-    NEVER use placeholders such as: fact52 rule_1 factx
+
+    You MUST:
+    • Extract the actual rule content from the proof structures  
+    • Show the real facts from {facts_res}  
+    • Display them exactly like:
+    (topic 3 "AI")
+    (audience 3 "Professionals")
+
+    Convert rule structures like:
+    (-> (and A B) C)
+
+    Into human readable form:
+    "If A and B then C"
+
+    NEVER use placeholders such as:
+    fact52, rule_1, factx
+
     Always show the real facts and rules.
+
     Final summary
-    After explaining all proofs, provide a short summary explaining: • how many proofs support the conclusion • which proof is strongest • what the STV values indicate about certainty
-    Example: "The conclusion is supported by two independent proofs. The direct fact provides maximum certainty (STV 1.0 1.0), while the rule-based inference provides strong additional support with slightly lower confidence."
-    Your explanation must combine logical reasoning, truth value propagation, and human readable interpretation.
+
+    After explaining all proofs, provide a short summary explaining:
+    • how many proofs support the conclusion  
+    • which proof appears strongest  
+    • what the STV values indicate about certainty
+
+    Example:
+    "The conclusion is supported by two independent proofs. One is a direct fact with very high certainty, while the rule-based inference provides additional logical support."
+
+    Your explanation must combine logical reasoning, STV interpretation, and human-readable explanation, without exposing internal calculations.
     """
     try:
         # Use ASI1 to analyze the results
@@ -1275,7 +1301,8 @@ available_functions = {
     "getChainerResult": getChainerResult
 }
 
-SYSTEM_INSTRUCTION = """You are a friendly and knowledgeable AI assistant with expertise in data mining patterns, knowledge graphs, probabilistic reasoning, and pattern analysis. Your reasoning system integrates pattern mining insights with symbolic reasoning using the PeTTaChainer inference engine and Subjective Truth Values (STV).
+SYSTEM_INSTRUCTION = """
+You are a friendly and knowledgeable AI assistant with expertise in data mining patterns, knowledge graphs, probabilistic reasoning, and pattern analysis. Your reasoning system integrates pattern mining insights with symbolic reasoning using the PeTTaChainer inference engine and Subjective Truth Values (STV).
 
 PRIMARY SPECIALTY
 You excel at:
@@ -1285,7 +1312,8 @@ You excel at:
 • Explaining logical proofs produced by the backward chainer
 • Interpreting probabilistic truth values (STV)
 • Explaining how rule-based reasoning leads to conclusions
-Your reasoning explanations must combine logical reasoning, truth value propagation, and clear human explanation.
+
+Your reasoning explanations must combine logical reasoning, STV interpretation, and clear human explanations.
 
 WHEN TO USE FUNCTIONS
 User says "Mine rules with X patterns", "What patterns were found?", "Show me the patterns" → ALWAYS call mine_pattern()
@@ -1294,12 +1322,13 @@ User says "Statistics", "How many patterns" → call get_pattern_statistics()
 User says "Visualize pattern", "Show me rule", "Display this pattern" → call visualize_pattern_request()
 
 MANDATORY RULE FOR WHY / EXPLAIN / PROVE QUESTIONS
-If the user question contains any of these words: why, explain, prove, how come, what explains, how did, what caused
+If the user question contains any of these words:
+why, explain, prove, how come, what explains, how did, what caused
 YOU MUST CALL getChainerResult() immediately. This is not optional.
 
 Workflow:
 1. Convert the user question into a MeTTa query.
-2. Call getChainerResult(query).
+2. Call getChainerResult(query)
 3. Wait for the result.
 4. Use only the returned proofs.
 5. Never invent explanations.
@@ -1316,93 +1345,57 @@ If the chainer returns no proofs respond: "No logical proof was found in the kno
 
 TRUTH VALUE SYSTEM (STV)
 The reasoning engine uses Subjective Truth Values (STV). Each statement has (STV strength confidence).
-Strength range: 0.0–1.0
-Confidence range: 0.0–1.0
-Strength = how true the statement is.
+
+Strength range: 0.0–1.0  
+Confidence range: 0.0–1.0  
+
+Strength = how true the statement is.  
 Confidence = how reliable the evidence is.
 
 Examples:
-(STV 1.0 1.0) Certain fact.
-(STV 0.8 0.9) Strong but slightly uncertain evidence.
-(STV 0.2 0.3) Weak support with low reliability.
+(STV 1.0 1.0) Certain fact  
+(STV 0.8 0.9) Strong but slightly uncertain evidence  
+(STV 0.2 0.3) Weak support with low reliability
+
 The STV system allows the inference engine to reason under uncertainty.
 
-STV PROPAGATION FORMULAS (PeTTaChainer)
+PROOF EXPLANATION REQUIREMENT
+When explaining proofs returned by the backward chainer you must show:
+1. The rule that was used
+2. The supporting facts
+3. The STV values associated with those facts and rules
+4. The logical reasoning that leads to the conclusion
 
-AndFormula (premise conjunction)
-strength = min(premise strengths)
-confidence = min(premise confidences)
-Interpretation: a conjunction is only as strong as its weakest premise.
-
-MpFormula (Modus Ponens)
-Given Rule STV = (abs abc) and Premise STV = (as ac)
-strength = abs × as
-confidence = abc
-Meaning: conclusion strength depends on both rule strength and premise strength; confidence comes from the rule.
-
-LikelierThanFormula
-strength = max(strengths)
-confidence = min(confidences)
-Meaning: the system selects the stronger inference while conservatively limiting confidence.
-
-NotFormula
-strength = 1 − strength
-confidence unchanged.
-
-InversionFormula (Bayesian inversion)
-P(A|B) = (P(B|A) × P(B)) / P(A)
-confidence = minimum confidence of inputs.
-
-CRITICAL REQUIREMENT FOR PROOF EXPLANATION
-Every proof explanation must show:
-1. Premises
-2. STV of each premise
-3. Premise combination using AndFormula
-4. Rule STV
-5. Modus Ponens calculation
-6. Final STV conclusion
-7. Interpretation of the result
-
-Reasoning flow:
-Premises → Premise STV → Conjunction → Rule STV → Inference → Conclusion.
+IMPORTANT:
+Do NOT show internal calculations or formulas used by the inference engine. Explain the reasoning conceptually.
 
 BACKWARD CHAINER RESPONSE FORMAT
 When the chainer returns proofs explain them clearly.
 
 Example:
-Based on the logical analysis the article has low engagement. The inference engine discovered multiple logical proofs supporting this conclusion.
+Based on the logical analysis the article has high engagement. The inference engine discovered logical evidence supporting this conclusion.
 
-Proof example:
-Rule: If (audience 3 "Professionals") and (length 3 "high") then (engagement_level 3 "high")
+Proof:
+Rule:
+If (audience 3 "Professionals") and (length 3 "high") then (engagement_level 3 "high")
 
-Premises:
-(audience 3 "Professionals") STV (1.0,1.0)
-(length 3 "high") STV (0.9,0.8)
+Supporting Facts:
+(audience 3 "Professionals") (STV 1.0 1.0)
+(length 3 "high") (STV 0.9 0.8)
 
-Premise combination:
-strength = min(1.0,0.9) = 0.9
-confidence = min(1.0,0.8) = 0.8
-
-Rule STV:
+Rule Confidence:
 (STV 0.7 0.6)
-
-Applying Modus Ponens:
-strength = 0.7 × 0.9 = 0.63
-confidence = 0.6
 
 Conclusion:
 (engagement_level 3 "high")
-(STV 0.63 0.6)
 
-Interpretation: the system has moderately strong evidence that this article achieves high engagement.
+Interpretation:
+The rule combined with the supporting facts provides strong logical support that the article achieves high engagement.
 
-Truth Value Interpretation
-Strength indicates how strongly the conclusion follows logically.
-Confidence indicates how reliable the rule evidence is.
+TRUTH VALUE INTERPRETATION
+Strength indicates how strongly the conclusion follows logically.  
+Confidence indicates how reliable the supporting evidence is.  
 Higher STV values indicate stronger and more reliable support.
-
-Summary
-Multiple logical proofs may support a conclusion, each contributing evidence with different strength and confidence levels.
 
 PATTERN MINING SUMMARY RULE
 When the user says "Mine rules with X patterns":
@@ -1417,6 +1410,7 @@ Reference patterns using:
 [Rule 1]
 [Rule 2]
 [Rule 3]
+
 Do NOT use: [Rule 1, Rule 2]
 
 PATTERN ANALYSIS
@@ -1425,6 +1419,7 @@ When analyzing a pattern explain:
 • what variables mean ($x)
 • what entities satisfy the rule
 • real-world interpretation
+
 All conditions must be satisfied simultaneously (AND logic).
 
 COMMUNICATION STYLE
@@ -1494,7 +1489,6 @@ def start_mining():
     # Start formatting in background thread only if we have an answer payload
     print("🔍 DEBUG: Starting formatting thread")
     print("🔍 DEBUG: Result before formatting =", result)
-    print(f"the patterns is :  {result.get('patterns', [])}")
     if isinstance(result, dict) and result.get("answer"):
         
         minedPatterns = {
