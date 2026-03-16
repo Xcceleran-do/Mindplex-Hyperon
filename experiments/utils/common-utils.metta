@@ -864,7 +864,6 @@
 (= (antecedent $atoms )
     (collapse (let $sup (superpose $atoms) (if  (= $sup (engagement $x $y)) (empty) $sup)))
 )
-!(antecedent (, (author $_1368858 "Hruy") (date-period $_1368858 "Archived") (popularity $_1368858 "Top_10") (audience-expertise $_1368858 "Beginner") (engagement $_1368858 "Low")))
 
  ;check if atom is variable or not
 
