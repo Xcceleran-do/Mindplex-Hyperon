@@ -22,6 +22,15 @@ from dataclasses import dataclass
 from typing import Dict, Any, Optional, List
 from hyperon import MeTTa
 from dotenv import load_dotenv
+import logging  
+from petta import PeTTa  
+
+logging.basicConfig(  
+    format="%(asctime)s [%(levelname)s] %(message)s",  
+    level=logging.INFO  
+)  
+logger = logging.getLogger(__name__)  
+
 
 # Add workspace root to path to allow imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
@@ -86,21 +95,29 @@ METTA_SETUP_WSL = f"""
 !(import_prolog_functions_from_file "{PROJECT_ROOT_WSL}/experiments/frequent-pattern-miner/conj_exp.pl" (unique_combinations_star cut-first-char promote_engagement_conj))
 
 !(import! &self {PROJECT_ROOT_WSL}/experiments/utils/common-utils)
+!(import! &stv-formulas {PROJECT_ROOT_WSL}/experiments/PLN/Formulas)
 !(import! &self {PROJECT_ROOT_WSL}/experiments/frequent-pattern-miner/etv-utils)
 !(import! &self {PROJECT_ROOT_WSL}/experiments/frequent-pattern-miner/frequent-pattern-miner)
 !(import! &self {PROJECT_ROOT_WSL}/experiments/pattern-miner/pattern-miner)
 !(import! &self {PROJECT_ROOT_WSL}/experiments/chainer/main)
 !(import! &tempo {PROJECT_ROOT_WSL}/experiments/atomspace_visualizer/public/data)
-!(import! &stv-formulas {PROJECT_ROOT_WSL}/experiments/PLN/Formulas)
 
-!(let $atom (match &tempo ($fact $stv) (: (fact:- $fact) $fact $stv)) (add-atom &res1 $atom))
+!(bind! &fact-count-petta (new-state 1))
+(= (get-next-fact-id-petta)
+   (let $n (get-state &fact-count-petta)
+   (progn (change-state! &fact-count-petta (+ $n 1))
+          (atom_concat fact $n))))
+
+!(let $atom (match &tempo ($fact $stv) 
+               (let $id (get-next-fact-id-petta)
+                 (: $id $fact $stv)))
+   (add-atom &res1 $atom))
 !(let $atom (match &tempo ($fact $stv) $fact) (add-atom &purifiedDbSpace $atom))
 """
 
 METTA_SETUP_PETTA = f"""
 !(import! &self {PROJECT_ROOT_WSL}/PeTTa/lib/lib_import.metta)
 !(import_prolog_functions_from_file "{PROJECT_ROOT_WSL}/experiments/frequent-pattern-miner/conj_exp.pl" (unique_combinations_star cut-first-char promote_engagement_conj))
-
 !(import! &self {PROJECT_ROOT_WSL}/experiments/utils/common-utils)
 !(import! &self {PROJECT_ROOT_WSL}/experiments/frequent-pattern-miner/etv-utils)
 !(import! &self {PROJECT_ROOT_WSL}/experiments/frequent-pattern-miner/frequent-pattern-miner)
@@ -109,7 +126,16 @@ METTA_SETUP_PETTA = f"""
 !(import! &tempo {PROJECT_ROOT_WSL}/experiments/atomspace_visualizer/public/data)
 !(import! &stv-formulas {PROJECT_ROOT_WSL}/experiments/PLN/Formulas)
 
-!(let $atom (match &tempo ($fact $stv) (: (fact:- $fact) $fact $stv)) (add-atom &res1 $atom))
+!(bind! &fact-count (new-state 1))
+(= (get-next-fact-id)
+   (let $n (get-state &fact-count)
+   (progn (change-state! &fact-count (+ $n 1))
+          (atom_concat fact $n))))
+
+!(let $atom (match &tempo ($fact $stv) 
+               (let $id (get-next-fact-id)
+                 (: $id $fact $stv)))
+   (add-atom &res1 $atom))
 !(let $atom (match &tempo ($fact $stv) $fact) (add-atom &purifiedDbSpace $atom))
 """
 
@@ -146,6 +172,86 @@ def init_petta_engine() -> bool:
 
     return True
 
+
+LOADEDLIB = False  
+LOADED_LOCK = threading.Lock()  
+class PeTTaChainer:  
+    def __init__(self):  
+        global LOADEDLIB  
+        self.handler = PeTTa()  
+          
+        self.kb = "kb" + uuid.uuid4().hex  
+        self._base_dir = os.path.dirname(__file__) 
+        self.atomRe = re.compile(r'\([A-Za-z_][\w\-]*\s+\$[_\w\d]+\s+"[^"]*"\)')
+        self.stvRe = re.compile(r'\(STV\s+([0-9eE\.\-]+)\s+([0-9eE\.\-]+)\)')
+  
+        if not LOADEDLIB:
+            with LOADED_LOCK:
+                if not LOADEDLIB:
+                    metta_path = os.path.join(self._base_dir, "chainer", "petta_chainer.metta")
+                    logger.info("Loading MeTTa library from %s", metta_path)
+                    self.handler.load_metta_file(metta_path)
+                    LOADEDLIB = True
+
+  
+    def add_atom(self, atom: str) -> str:  
+        return self.handler.process_metta_string(f"!(compileadd {self.kb} {atom})")  
+  
+    def query(self, atom: str, depth: int = 10) -> List[str]:  
+        atoms = self.handler.process_metta_string(  
+            f"!(query (fromNumber {depth}) {self.kb} {atom})"  
+        )  
+        return atoms
+    
+    def normalizeVar(self, atom: str) -> str:
+        return re.sub(r'\$_\d+', '$x', atom)
+
+    def patternToRule(self, patternText: str, idx: int) -> str | None:
+        atoms = [self.normalizeVar(a) for a in self.atomRe.findall(patternText or "")]
+        if not atoms:
+            return None
+
+        stvMatch = self.stvRe.search(patternText or "")
+        strength, confidence = (stvMatch.group(1), stvMatch.group(2)) if stvMatch else ("1.0", "1.0")
+        confidence = min(max(float(confidence), 0.0), 1.0)
+
+
+        consequent = next((a for a in atoms if a.startswith("(engagement ")), atoms[-1])
+        antecedents = [a for a in atoms if a != consequent]
+        lhs = antecedents[0] if len(antecedents) == 1 else f"(And {' '.join(antecedents)})"
+
+        return f'(: rule_{idx} (-> {lhs} {consequent}) (STV {strength} {confidence}))'
+
+    def formatter(self, minedPatterns):
+        """Insert mined patterns as rules."""
+        print("DEBUG: formatter received minedPatterns:", minedPatterns)
+        try:
+            payload = json.loads(minedPatterns) if isinstance(minedPatterns, str) else minedPatterns
+            patterns = payload.get("patterns", [])
+            insertedRules = []
+            for idx, p in enumerate(patterns, start=1):
+                patternText = str(p.get("pattern", ""))
+                ruleAtom = self.patternToRule(patternText, idx)
+                if not ruleAtom:
+                    continue
+                self.add_atom(ruleAtom)
+                insertedRules.append(ruleAtom)
+
+            return {
+                "status": "success",
+                "insertedRuleCount": len(insertedRules),
+                "rules": insertedRules
+            }
+
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": str(e),
+                "insertedRuleCount": 0
+            }
+        
+handler = PeTTaChainer()
+
 # Define tools for ASI API
 tools_schema = [
     {
@@ -159,10 +265,6 @@ tools_schema = [
                     "numberOfConjunction": {
                         "type": "integer",
                         "description": "The number of conjunctions to use in pattern mining."
-                    },
-                    "min_support": {
-                        "type": "integer",
-                        "description": "Minimum support threshold for pattern mining."
                     }
                 },
                 "required": ["numberOfConjunction"]
@@ -180,10 +282,6 @@ tools_schema = [
                     "conjunction_count": {
                         "type": "integer",
                         "description": "The number of conjunctions to use in pattern mining."
-                    },
-                    "min_support": {
-                        "type": "integer",
-                        "description": "Minimum support threshold for pattern mining."
                     }
                 },
                 "required": ["conjunction_count"]
@@ -343,9 +441,7 @@ def run_metta_with_petta(metta_code: str) -> str:
     with tempfile.NamedTemporaryFile(mode='w', suffix='.metta', delete=False) as tf:
         tf.write(full_metta_script)
         temp_file_path = tf.name
-    print("=== DEBUG: Full MeTTa Script ===")
-    print(full_metta_script)
-    print("=== END DEBUG ===")
+    print(full_metta_script)  # Debug: print the full MeTTa script being executed
     print(f"DEBUG: Temporary file created at: {temp_file_path}")
 
     try:
@@ -358,7 +454,6 @@ def run_metta_with_petta(metta_code: str) -> str:
         return result.stdout
     except subprocess.CalledProcessError as e:
         print(f"ERROR: Petta execution failed: {e.stderr}")
-        print(f"ERROR: Exit code: {e.returncode}")
         raise Exception(f"Petta execution failed: {e.stderr}")
     finally:
         if os.path.exists(temp_file_path):
@@ -434,6 +529,23 @@ def extract_support_of_expressions(text: str) -> list[str]:
         start = end
     return results
 
+def parse_facts_for_pettachainer(facts_output):  
+    """  
+    Parse nested facts output and convert to PeTTaChainer-compatible format.  
+    Args:  
+        facts_output: List containing a single string with nested facts  
+    Returns:  
+        List of individual fact strings ready for handler.add_atom()  
+    """  
+    if not facts_output:
+        return []
+    nested_facts = facts_output[0]
+    pattern = r'\(:\s*fact\d+\s*\([^)]*\)\s*\(STV\s*[\d\.]+\s*[\d\.]+\)\)'
+    matches = re.findall(pattern, nested_facts)
+    individual_facts = [m.strip() for m in matches]
+    return individual_facts
+  
+
 def extract_parenthesized_expressions(text: str) -> list[str]:
     """Extract all balanced parenthesized expressions from text."""
     results = []
@@ -490,17 +602,11 @@ def mine_pattern(numberOfConjunction: int) -> dict:
     Returns:
         A dictionary containing the mining results with parsed patterns.
     """
-    return mine_pattern_with_minsup(numberOfConjunction, 3)
-
-
-def mine_pattern_with_minsup(numberOfConjunction: int, min_support: int = 3) -> dict:
-    print(
-        f"Debug: mine pattern function being called with conjunction count {numberOfConjunction} and min_support {min_support}"
-    )
+    print(f"Debug: mine pattern function being called with conjunction count {numberOfConjunction}")
     
     try:
         # Run the miner with petta
-        query = f"!(pattern-miner &purifiedDbSpace {int(min_support)} {int(numberOfConjunction)})"
+        query = f"!(pattern-miner &purifiedDbSpace 3 {int(numberOfConjunction)})"
         print(f"DEBUG: Executing PeTTa query: {query}")
         petta_output = run_metta_with_petta(query)
         print(f"DEBUG: PeTTa execution finished. Output length: {len(petta_output)}")
@@ -532,25 +638,18 @@ def mine_pattern_with_minsup(numberOfConjunction: int, min_support: int = 3) -> 
                 patterns.append(parsed)
         
         if not patterns:
-            return {
-                "status": "no_results",
-                "patterns": [],
-                "conjunction_count": numberOfConjunction,
-                "min_support": min_support,
-                "message": "No patterns found for the selected conjunction/min support values.",
-            }
+            return {"status": "no_results", "patterns": []}
         
         return {
             "answer": full_answer_str,
             "status": "success",
             "conjunction_count": numberOfConjunction,
-            "min_support": min_support,
             "patterns": patterns,
             "total_count": len(patterns)
         }
         
     except Exception as e:
-        print(f"ERROR in mine_pattern_with_minsup: {traceback.format_exc()}")
+        print(f"ERROR in mine_pattern: {traceback.format_exc()}")
         return {
             "status": "error",
             "message": f"Failed to run pattern mining or parse result: {str(e)}",
@@ -629,12 +728,6 @@ def ingest_data():
     Trigger the ingestion pipeline for a specific user.
     Expects JSON: { "username": "some_user" }
     """
-    if os.getenv("DISABLE_INGESTION", "0") == "1":
-        return jsonify({
-            "status": "disabled",
-            "message": "Ingestion is disabled to protect current data.metta. Set DISABLE_INGESTION=0 to enable.",
-        }), 403
-
     try:
         data = request.get_json()
         username = data.get('username') if data else None
@@ -670,12 +763,17 @@ def getAllFactsAndRules():
             lines = run_petta_query_lines("!(collapse (get-atoms &res1))")
             joined = " ".join(lines)
             facts = extract_parenthesized_expressions(joined) or lines
-            return {"status": "success", "facts": facts}
+            print(f"DEBUG: getAllFactsAndRules : {facts}")
+            aligned_facts = parse_facts_for_pettachainer(facts)
+            for fact in aligned_facts:
+                handler.add_atom(fact)
+            return {"status": "success", "facts": aligned_facts}
         except Exception as e:
             return {"status": "error", "error": str(e)}
 
     try:
         facts = metta4Miner.run("!(collapse (get-atoms &res1))")
+        print("DEBUG: getAllFactsAndRules  the first 10- raw lines:", facts[:10])
     except Exception as e:
         return {"status": "error", "error": str(e)}
 
@@ -706,17 +804,14 @@ def getAllFactsAndRules():
 
     return {"status": "success", "facts": normalized}
 
-
 def handle_backward_chain_for_message(message: str) -> dict:
     """Handle natural language queries using backward chaining with STV support."""
     print(f" DEBUG: Received message: {message}")
-    
+    function_calls = []
     # First call getAllFactsAndRules to get canonical atoms
     print("DEBUG: handle_backward_chain_for_message - calling getAllFactsAndRules()")
     facts_res = getAllFactsAndRules()
-    print("DEBUG: facts_res type:", type(facts_res))
-    print("DEBUG: facts_res preview:", (facts_res.get('facts')[:5] if isinstance(facts_res, dict) else str(facts_res)[:200]))
-    
+        
     # If we couldn't get facts/rules, return early
     if not isinstance(facts_res, dict) or facts_res.get('status') != 'success':
         return None, None
@@ -741,11 +836,11 @@ def handle_backward_chain_for_message(message: str) -> dict:
             - If mapping is ambiguous, pick the most semantically likely predicate present in the KB.
             - If you cannot produce a valid MeTTa expression, output the single token NO_QUERY and NOTHING ELSE.
 
-            Example mapping (for clarity only, do not output this): facts contain (engagement 1 high) -> question "Why is article 1 high?" -> output: (engagement 1 $what)
+            Example mapping (for clarity only, do not output this): if facts contain (engagement 1 high) -> question "Why article 1 has low engagement?" -> output should be like : "(: $prf (engagement 1 $what) $tv)"
 
             OUTPUT ONLY the MeTTa expression or NO_QUERY.
             """
-        print("DEBUG: sending rewrite prompt to LLM (first 300 chars):", rewrite_prompt[:300])
+        print("DEBUG: sending rewrite prompt to LLM (first 500 chars):", rewrite_prompt[:500])
 
         messages = [
             {"role": "system", "content": SYSTEM_INSTRUCTION},
@@ -762,18 +857,7 @@ def handle_backward_chain_for_message(message: str) -> dict:
         print('DEBUG: rewrite error:', e)
         return None, None
 
-    # If no valid query was produced, return early
-    if not candidate_query or candidate_query.upper() == 'NO_QUERY':
-        print('DEBUG: no candidate query produced by LLM')
-        return None, None
-
-    # Ensure the candidate looks like a MeTTa expression; if it contains extra text,
-    # try to extract the first parenthesized expression.
-    mexpr = re.search(r"\([^\)]*\)", candidate_query)
-    if mexpr:
-        candidate_query = mexpr.group(0).strip()
-        print('DEBUG: final candidate_query to send to chainer:', candidate_query)
-
+    
     # Call the chainer with the rewritten query and include debug output
     try:
         print('DEBUG: calling getChainerResult with', candidate_query)
@@ -799,6 +883,7 @@ def handle_backward_chain_for_message(message: str) -> dict:
         resp_text = f"Alright, here's the scoop —\n\n{raw_just}\n\n(That's the reasoning I found.)"
     print('DEBUG: final response text:', resp_text)
     return resp_text, function_calls
+
 
 # Define available functions for the AI with proper docstrings for automatic function calling
 def get_mining_results() -> dict:
@@ -900,14 +985,14 @@ def run_mining_task(job_id: str, conjunction_count: int):
     Run the mining task for a given job.
     Args:
         job_id (str): Unique identifier for the mining job.
-        conjunction_count (iMining failed or no answernt): Number of conjunctions to use in the mining process.
+        conjunction_count (int): Number of conjunctions to use in the mining process.
     Returns:
         dict: A dictionary containing the job status, result, error (if any), and timestamps.
     """
     job = mining_jobs[job_id]
     job.start_time = time.time()
     try:
-        result = mine_pattern_with_minsup(conjunction_count, job.min_support)
+        result = mine_pattern(conjunction_count)
         job.status = 'completed'
         job.result = result  # Store the dict directly, not result[0][0]
         job.end_time = time.time()
@@ -930,7 +1015,7 @@ def run_mining_task(job_id: str, conjunction_count: int):
             'end_time': job.end_time
         }
 
-def start_mining_job(conjunction_count: int, min_support: int = 3):
+def start_mining_job(conjunction_count: int):
     """
     Wrapper that creates a MiningJob and runs the mining task synchronously
     so that function-calls from the LLM go through the same code path as the
@@ -940,18 +1025,11 @@ def start_mining_job(conjunction_count: int, min_support: int = 3):
     try:
         if not isinstance(conjunction_count, int):
             conjunction_count = int(conjunction_count)
-        if not isinstance(min_support, int):
-            min_support = int(min_support)
     except Exception:
-        return {'error': 'conjunction_count and min_support must be integers'}
+        return { 'error': 'conjunction_count must be an integer' }
 
     job_id = str(uuid.uuid4())
-    job = MiningJob(
-        job_id=job_id,
-        status='running',
-        conjunction_count=conjunction_count,
-        min_support=min_support,
-    )
+    job = MiningJob(job_id=job_id, status='running', conjunction_count=conjunction_count)
     mining_jobs[job_id] = job
 
     # Run synchronously (this will call mine_pattern internally)
@@ -974,7 +1052,6 @@ def start_mining_job(conjunction_count: int, min_support: int = 3):
         'jobId': job_id,
         'status': mining_jobs[job_id].status,
         'conjunction_count': conjunction_count,
-        'min_support': min_support,
         'result': mining_jobs[job_id].result
     }
 
@@ -993,20 +1070,13 @@ def formatter(mined_patterns):
     print("formatter ended :-_-:")
 
 def backWardChainer(whatToCheck, depth=5):
-    if init_petta_engine():
-        debug_petta_chainer_state(whatToCheck)
-        query = f"!(backward-chain &res1 (fromNumber 5) (: $prf {whatToCheck}))"
-        lines = run_petta_query_lines(query)
-        if PETTA_DEBUG:
-            print("DEBUG: raw backward chaining output lines:", lines)
-        joined = " ".join(lines)
-        proofs = extract_parenthesized_expressions(joined)
-        return proofs or lines
-
-    whatToCheck = metta4Miner.parse_single(whatToCheck)
-    answer = metta4Miner.run(f""" !(backward-chain &res1 (fromNumber 5) (: $prf {whatToCheck})) """)
-    return answer
-
+    result = handler.query(whatToCheck.strip(), depth=depth)
+    print("DEBUG raw result:", repr(result), "type:", type(result))
+    if result is None:
+        print("DEBUG: result is None")
+        return []
+    out = str(result).strip()
+    return [out] if out else []
 
 def getChainerResult(whatToCheck, depth=5):
     """ Get the result of backward chaining for a specific query. 
@@ -1017,6 +1087,7 @@ def getChainerResult(whatToCheck, depth=5):
         The justification of the backward chaining operation.
     """
     chainAnswer = backWardChainer(whatToCheck, depth)
+    facts_res = getAllFactsAndRules()
     print("DEBUG: getChainerResult - chainAnswer type:", chainAnswer)
     # If no proofs found, return early
     if not chainAnswer or len(chainAnswer) == 0:
@@ -1027,29 +1098,116 @@ def getChainerResult(whatToCheck, depth=5):
         }
     
     # Simple prompt that relies on system instruction for formatting guidance
-    prompt = f"""
-        Analyze this backward chaining result and provide a clear justification:
+    prompt = f"""Analyze this backward chaining result with STV truth values and provide a clear logical justification.
 
-        **Query:** {whatToCheck}
-        **Backward Chaining Results:** {chainAnswer}
+    Query: {whatToCheck}
 
-        **Backward Chaining Example:**
-        When user asks "why is article 1 did get high engagement?", format query as "(engagement 1 high)" and call getChainerResult. 
-        
-        If backward chaining returns: [(: ((rule:- (, (engagement 1 high) (topic 1 AI))) (fact:- (topic 1 AI))) (engagement 1 high)), (: ((rule:- (, (engagement 1 high) (length 1 low))) (fact:- (length 1 low))) (engagement 1 high))]
+    Backward Chaining Results:
+    {chainAnswer}
 
-        
-        Analyze as: "I found 2 proofs for why article 1 has high engagement:
-        
-        **Proof 1:** Based on the rule that states 'if an article is about AI, then it has high engagement', and since we have the fact that 'article 1 is about AI', we can conclude that article 1 has high engagement.
-        
-        **Proof 2:** Based on the rule that states 'if an article is short (low length), then it has high engagement', and since we have the fact that 'article 1 has low length', we can also conclude that article 1 has high engagement.
-        
-        **Overall Justification:** Article 1's high engagement is well-supported by two independent logical proofs - both its AI topic and its concise length contribute to high engagement according to the rules in our knowledge base."
+    Fact Content From Knowledge Base:
+    {facts_res}
 
-        The backward chaining system tried to prove the query "{whatToCheck}" and found the above results. Please analyze these results and explain the logical reasoning behind the proof(s).
-        """
+    The backward chaining system attempted to prove the query using logical rules and facts from the knowledge base.
 
+    Your task is to explain:
+    • Why the conclusion holds  
+    • Which facts support it  
+    • Which rules were applied  
+    • How the truth values (STV) support the reasoning chain
+
+    Your explanation must follow the reasoning process used by the inference engine, but **do not show internal calculations or formulas**.
+
+    Subjective Truth Value (STV)
+
+    Every statement has an STV in the form:
+    (STV strength confidence)
+
+    Strength range: 0.0 – 1.0  
+    Confidence range: 0.0 – 1.0  
+
+    Meaning:
+    Strength → how strongly the conclusion follows logically  
+    Confidence → how reliable the supporting evidence is  
+
+    Example:
+    (STV 1.0 1.0) means the statement is certain.  
+    (STV 0.8 0.7) means strong but somewhat uncertain support.
+
+    How to structure your response
+
+    Start with a short statement explaining the result.  
+    Example:
+    "I found 2 logical proofs explaining why the query holds."
+
+    Then describe each proof.
+
+    Proof 1 — Direct Fact
+
+    If the conclusion appears directly as a fact, explain it as a known fact.
+
+    Example:
+    Article 1 has high engagement.
+
+    Fact:
+    (engagement 1 "High") STV (1.0 1.0)
+
+    Interpretation:
+    This is a direct fact stored in the knowledge base with maximum certainty.
+
+    Proof 2 — Rule-Based Inference
+
+    Show:
+    1. The rule
+    2. The supporting facts
+    3. How the rule logically leads to the conclusion
+
+    Example structure:
+
+    Rule:
+    If (topic 1 "AI") then (engagement 1 "High")
+
+    Supporting Fact:
+    (topic 1 "AI") STV (0.9 0.8)
+
+    Conclusion:
+    (engagement 1 "High")
+
+    Interpretation:
+    The rule combined with the supporting fact logically explains the conclusion.
+
+    Important requirements
+
+    You MUST:
+    • Extract the actual rule content from the proof structures  
+    • Show the real facts from {facts_res}  
+    • Display them exactly like:
+    (topic 3 "AI")
+    (audience 3 "Professionals")
+
+    Convert rule structures like:
+    (-> (and A B) C)
+
+    Into human readable form:
+    "If A and B then C"
+
+    NEVER use placeholders such as:
+    fact52, rule_1, factx
+
+    Always show the real facts and rules.
+
+    Final summary
+
+    After explaining all proofs, provide a short summary explaining:
+    • how many proofs support the conclusion  
+    • which proof appears strongest  
+    • what the STV values indicate about certainty
+
+    Example:
+    "The conclusion is supported by two independent proofs. One is a direct fact with very high certainty, while the rule-based inference provides additional logical support."
+
+    Your explanation must combine logical reasoning, STV interpretation, and human-readable explanation, without exposing internal calculations.
+    """
     try:
         # Use ASI1 to analyze the results
         messages = [
@@ -1094,6 +1252,7 @@ def getChainerResult(whatToCheck, depth=5):
             "depth_used": depth,
             "error": str(e)
         }
+
 
 def summarize_patterns(patterns: list) -> str:
     """Use the Gemini model to create a single comprehensive summary of the
@@ -1142,97 +1301,141 @@ available_functions = {
     "getChainerResult": getChainerResult
 }
 
-SYSTEM_INSTRUCTION = """You are a friendly and knowledgeable AI assistant with expertise in data mining patterns, knowledge graphs, and pattern analysis. 
+SYSTEM_INSTRUCTION = """
+You are a friendly and knowledgeable AI assistant with expertise in data mining patterns, knowledge graphs, probabilistic reasoning, and pattern analysis. Your reasoning system integrates pattern mining insights with symbolic reasoning using the PeTTaChainer inference engine and Subjective Truth Values (STV).
 
-        **Your Primary Specialty:**
-        You excel at analyzing pattern mining results, explaining conjunctions, and providing insights about relationships in data.
+PRIMARY SPECIALTY
+You excel at:
+• Analyzing pattern mining results
+• Explaining relationships discovered in data
+• Interpreting knowledge graph structures
+• Explaining logical proofs produced by the backward chainer
+• Interpreting probabilistic truth values (STV)
+• Explaining how rule-based reasoning leads to conclusions
 
-        **When to Use Functions:**
-        - User says "Mine rules with X patterns" | "What patterns were found?" | "Show me the patterns" |or something like this → ALWAYS call mine_pattern(job_id: str , with the given conjunct number or default 3) first
-        - "Analyze this pattern" / "Explain this pattern" → Use analyze_specific_pattern()
-        - "Statistics" / "how many patterns" → Use get_pattern_statistics()
-        - "Visualize" / "show me" a pattern → Use visualize_pattern_request()
-    - "Why is..." / "Explain why..." / "Prove that..." questions → Use getChainerResult() with the query formatted as a MeTTa expression
+Your reasoning explanations must combine logical reasoning, STV interpretation, and clear human explanations.
 
-    **CRITICAL BACKWARD-CHAINING WORKFLOW (MUST FOLLOW):**
-    Before answering why questions, ALWAYS call getChainerResult().
+WHEN TO USE FUNCTIONS
+User says "Mine rules with X patterns", "What patterns were found?", "Show me the patterns" → ALWAYS call mine_pattern()
+User says "Analyze this pattern", "Explain this pattern" → call analyze_specific_pattern()
+User says "Statistics", "How many patterns" → call get_pattern_statistics()
+User says "Visualize pattern", "Show me rule", "Display this pattern" → call visualize_pattern_request()
 
-    Example:
-    - User: "What is article 1's engagement level?"
-    - Assistant: call getChainerResult("(engagement 1 $whatIsIt)").
-    - This ensures the chainer is invoked with a query that matches KB atoms and returns useful proofs.
+MANDATORY RULE FOR WHY / EXPLAIN / PROVE QUESTIONS
+If the user question contains any of these words:
+why, explain, prove, how come, what explains, how did, what caused
+YOU MUST CALL getChainerResult() immediately. This is not optional.
 
-                IMPORTANT: FOR ANY "WHY" / "EXPLAIN" / "PROVE" QUESTIONS (MANDATORY):
-                - The assistant MUST enforce this internal workflow, but MUST NOT mention it to the user.
-                    * Internally: fetch KB atoms, rewrite the NL question to a canonical MeTTa query, then call the chainer to obtain proofs.
-                    * Externally (user-facing): do NOT narrate or reveal any of these internal steps, function calls, or that you fetched facts/rules. Never say "I called...", "I fetched...", or similar.
-                - For such questions, the assistant MUST present only the final justification derived from the chainer or the concise statement "No proof was found." if no proof exists.
-                - Style: final answers should be friendly, concise, and slightly jokey. No MeTTa expressions, no code blocks, and no internal diagnostic text in the user-facing reply unless the user explicitly requests the raw proof or the MeTTa query.
-                - If the assistant cannot map the user's question to a MeTTa query or cannot produce a proof, respond with a short user-facing explanation (e.g. "I couldn't find a logical proof for that.") and offer to show the raw proof only if the user asks for it.
+Workflow:
+1. Convert the user question into a MeTTa query.
+2. Call getChainerResult(query)
+3. Wait for the result.
+4. Use only the returned proofs.
+5. Never invent explanations.
+6. Never answer from general knowledge.
 
-        **CRITICAL: When User Says "Mine rules with X patterns":**
-        1. ALWAYS call mine_pattern() immediately to get all patterns
-        2. Analyze ALL patterns together to find common themes
-        3. Create ONE comprehensive summary (not individual summaries)
-        4. In your summary, reference specific patterns using [Rule N] notation where N is the pattern index. Do NOT use comma separated list of rules format, like [Rule 1, Rule 2]; instead, use [Rule 1], [Rule 2]
-        5. Format: "Based on the mining results, most of high engagement level is correlated to... [Rule 1] ... the longer the article is ... [Rule 3]"
-        6. Focus on insights and trends across ALL patterns
+Example:
+User: Why is article 1 engagement high?
+Step 1: Call getChainerResult("(engagement 1 $x)")
+Step 2: Wait for proofs
+Step 3: Explain the proofs
 
-        **Pattern Reference Format:**
-        - Use [Rule 1], [Rule 2], etc. to reference patterns in your summary
-        - These will become clickable for visualization
-        - Only reference patterns that support your statements
-        - You don't need to list the patterns separately, just reference them in context
+If you answer without calling getChainerResult(), you have failed.
+If the chainer returns no proofs respond: "No logical proof was found in the knowledge base."
 
-        **When Analyzing Patterns:**
-        1. Explain what the pattern represents in simple terms
-        2. Interpret variables (like $x) as placeholders for entities (articles/topics)
-        3. Describe what kind of entities would match this pattern
-        4. For visualization: ALL conditions must be met (AND logic, not OR)
-        5. Provide practical examples when possible
+TRUTH VALUE SYSTEM (STV)
+The reasoning engine uses Subjective Truth Values (STV). Each statement has (STV strength confidence).
 
-        **General Conversations:**
-        You can engage in friendly, helpful conversations on any topic. If someone asks about something outside of pattern mining:
-        - Answer naturally and helpfully based on your general knowledge
-        - Be conversational and engaging
-        - If appropriate, you can relate the topic back to data analysis, patterns, or insights
-        - Never say "that's outside my scope" - just answer the question to the best of your ability
+Strength range: 0.0–1.0  
+Confidence range: 0.0–1.0  
 
-        **Backward Chaining Analysis (for getChainerResult function):**
-        When analyzing backward chaining results, you are an expert in logical reasoning and knowledge graph analysis. Provide clear, human-readable justifications that explain:
+Strength = how true the statement is.  
+Confidence = how reliable the evidence is.
 
-        1. **Main Conclusion:** What was proven and with how many different proof paths
-        2. **Proof Analysis:** For each proof path, explain:
-           - What rule was used
-           - What facts were needed
-           - How they combine to prove the query
-        3. **Logical Reasoning:** Explain the logical flow in simple terms
-        4. **Confidence:** Based on the number of proofs and their strength
+Examples:
+(STV 1.0 1.0) Certain fact  
+(STV 0.8 0.9) Strong but slightly uncertain evidence  
+(STV 0.2 0.3) Weak support with low reliability
 
-        **Backward Chaining Response Format:**
-        "Based on the backward chaining analysis, we have found [X] different logical proofs for why [query explanation].
+The STV system allows the inference engine to reason under uncertainty.
 
-        **Proof 1:** The rule states that [rule explanation], and since we have the fact that [fact explanation], we can conclude that [conclusion].
+PROOF EXPLANATION REQUIREMENT
+When explaining proofs returned by the backward chainer you must show:
+1. The rule that was used
+2. The supporting facts
+3. The STV values associated with those facts and rules
+4. The logical reasoning that leads to the conclusion
 
-        **Proof 2:** Another supporting rule indicates that [Rule N]:- [rule explanation], combined with the established facts:- [fact explanation], also leads to [conclusion].
+IMPORTANT:
+Do NOT show internal calculations or formulas used by the inference engine. Explain the reasoning conceptually.
 
-        **Overall Justification:** [Summary of why this conclusion is well-supported]"
+BACKWARD CHAINER RESPONSE FORMAT
+When the chainer returns proofs explain them clearly.
 
-        **Backward Chaining Style Guidelines:**
-        - do not call the function getChainerResult() more than once, just call once.
-        - Use clear, conversational language
-        - Avoid technical jargon
-        - Focus on the logical reasoning
-        - Be concise but thorough
-        - Use bullet points or numbered lists for clarity
+Example:
+Based on the logical analysis the article has high engagement. The inference engine discovered logical evidence supporting this conclusion.
 
-        **Communication Style:**
-        - Be friendly, concise, and informative
-        - Use emojis occasionally to keep things engaging (but not excessively)
-        - Format responses with markdown: **bold**, *italic*, `code`
-        - Adapt your tone to match the user's style
+Proof:
+Rule:
+If (audience 3 "Professionals") and (length 3 "high") then (engagement_level 3 "high")
 
-        Remember: While your expertise is in pattern mining, you're a helpful general-purpose assistant who can discuss any topic!"""
+Supporting Facts:
+(audience 3 "Professionals") (STV 1.0 1.0)
+(length 3 "high") (STV 0.9 0.8)
+
+Rule Confidence:
+(STV 0.7 0.6)
+
+Conclusion:
+(engagement_level 3 "high")
+
+Interpretation:
+The rule combined with the supporting facts provides strong logical support that the article achieves high engagement.
+
+TRUTH VALUE INTERPRETATION
+Strength indicates how strongly the conclusion follows logically.  
+Confidence indicates how reliable the supporting evidence is.  
+Higher STV values indicate stronger and more reliable support.
+
+PATTERN MINING SUMMARY RULE
+When the user says "Mine rules with X patterns":
+1. Call mine_pattern()
+2. Analyze all patterns
+3. Produce one combined insight summary.
+
+Example:
+"Based on the mining results high engagement articles are associated with professional audiences and longer article lengths [Rule 1]. Archived articles tend to receive lower engagement [Rule 3]."
+
+Reference patterns using:
+[Rule 1]
+[Rule 2]
+[Rule 3]
+
+Do NOT use: [Rule 1, Rule 2]
+
+PATTERN ANALYSIS
+When analyzing a pattern explain:
+• what the pattern represents
+• what variables mean ($x)
+• what entities satisfy the rule
+• real-world interpretation
+
+All conditions must be satisfied simultaneously (AND logic).
+
+COMMUNICATION STYLE
+• Friendly and clear
+• Conversational tone
+• Use markdown formatting
+• Use emojis occasionally 🙂
+• Avoid heavy MeTTa syntax in explanations
+• Translate logical reasoning into human language
+
+GENERAL CONVERSATION
+For normal questions that do NOT contain why/explain/prove keywords you may answer using general knowledge. You are a helpful conversational assistant.
+
+REMEMBER:
+For WHY / EXPLAIN / PROVE questions you MUST use the backward chainer. No exceptions.
+"""
 # Store conversation history
 conversations = {}
 
@@ -1245,7 +1448,6 @@ class MiningJob:
     start_time: float = 0
     end_time: Optional[float] = None
     conjunction_count: int = 0
-    min_support: int = 3
 # In-memory storage for mining jobs
 mining_jobs: Dict[str, MiningJob] = {}
 
@@ -1258,7 +1460,7 @@ def health_check():
 def start_mining():
     """Start a new mining job"""
     print("🔍 DEBUG: Received mining request")
-
+    
     data = request.get_json() or {}
     conjunction_count = data.get('conjunction_count', 2)
     min_support = data.get('min_support', 3)
@@ -1276,8 +1478,7 @@ def start_mining():
     job = MiningJob(
         job_id=job_id,
         status='running',
-        conjunction_count=conjunction_count,
-        min_support=min_support,
+        conjunction_count=conjunction_count
     )
     mining_jobs[job_id] = job
     run_mining_task(job_id, conjunction_count)
@@ -1288,15 +1489,21 @@ def start_mining():
     # Start formatting in background thread only if we have an answer payload
     print("🔍 DEBUG: Starting formatting thread")
     print("🔍 DEBUG: Result before formatting =", result)
-    if isinstance(result, dict) and result.get('answer'):
+    if isinstance(result, dict) and result.get("answer"):
+        
+        minedPatterns = {
+        'patterns': result['patterns']
+        }
 
+        # Start the thread
         thread = threading.Thread(
-            target=formatter,
-            args=(f"{result['answer']}",),
+            target=handler.formatter,
+            args=(minedPatterns,),  
             daemon=True
         )
         thread.start()
-
+   
+        
     print(f"🔍 DEBUG: result type = {type(result)}")
     print(f"🔍 DEBUG: result = {result}")
     
@@ -1336,7 +1543,6 @@ def start_mining():
         'message': error_msg
     }), 500
 
-    
 
 @app.route('/api/mine/<job_id>', methods=['GET'])
 def get_mining_status(job_id: str):
@@ -1350,7 +1556,6 @@ def get_mining_status(job_id: str):
         'jobId': job_id,
         'status': job.status,
         'conjunction count': job.conjunction_count,
-        'min_support': job.min_support,
         'startTime': job.start_time
     }
     
@@ -1377,7 +1582,6 @@ def list_mining_jobs():
             'jobId': job_id,
             'status': job.status,
             'conjunctionCount': job.conjunction_count,
-            'minSupport': job.min_support,
             'startTime': job.start_time
         }
         if job.end_time:
