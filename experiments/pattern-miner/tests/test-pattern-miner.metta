@@ -4,7 +4,7 @@
 !(import! &self ../../utils/common-utils)
 !(import! &self /mnt/c/Users/HP/iCog/Mindplex-Hyperon/experiments/frequent-pattern-miner/frequent-pattern-miner)
 !(import! &self ../../pattern-miner/pattern-miner)
-!(import! &temp /mnt/c/Users/HP/iCog/Mindplex-Hyperon/experiments/ingestion/outputs/bookcrossing_data)
+!(static-import! &temp "../../ingestion/outputs/bookcrossing_data_ascii")
 
 !(let $atom (match &temp ($fact $stv) (: (fact:- $fact) $fact $stv)) (add-atom &res1 $atom))
 !(let $atom (match &temp ($fact $stv) $fact) (add-atom &purifiedDbSpace $atom))
@@ -21,7 +21,7 @@
 ;; minimum support 3 -3rd arg
 ;; number of conjuncts 3 -4th arg
 
-!(pattern-miner &purifiedDbSpace 900 5) 
+!(pattern-miner &purifiedDbSpace 9 5) 
 !(println! "============ end ================")
 ;; demo result structure
     ; ((supportOf (, (Inheritance $y human) (Inheritance $y man)) 3) 

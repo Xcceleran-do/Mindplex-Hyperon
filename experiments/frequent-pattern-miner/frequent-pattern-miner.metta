@@ -15,7 +15,7 @@
 ;;  - $minsup: minimum support threshold
 ;;  - specialized pattern with `left`/`right` placeholder
 ;; Output: the instantiated pattern with a variable on the open side, or Empty
-; (:candidatePatternMaker (-> SpaceType (Specialized Pattern) Number Expression Expression))
+; (: candidatePatternMaker (-> SpaceType Expression Number Expression))
 ( = (candidatePatternMaker $dbspace ($link left $rValue) $minsup)
     (if (sup-eval $dbspace ($link $x $rValue) $minsup) ($link (cut-first-char l$x) $rValue) (empty))
 )
@@ -35,7 +35,7 @@
 
 
 ( = (createSpecials ($link $shabx $shaby))
-    (superpose (($link left $shaby) ($link $shabx right)))
+    (hyperpose (($link left $shaby) ($link $shabx right)))
 )
 
 
@@ -65,7 +65,7 @@
 (= (formatter (conjunct $conjunct) $dbspace $minSup) 
     (let $cnt (counter $dbspace $conjunct)
         ;; calculate EMPTV
-        (let $EMPTV (trace! $conjunct (emp-tv $conjunct $dbspace))
+        (let $EMPTV (emp-tv $conjunct $dbspace)
             (if (>= $cnt $minSup)
                 (let $organized (promote_engagement_conj $conjunct)
                     (trace! $organized (supportOf ($organized $EMPTV) $cnt)))
