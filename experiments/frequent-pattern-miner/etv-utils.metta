@@ -68,14 +68,16 @@
 ;; 
 ;; Returns:
 ;;   - EMPTV structure containing mean and confidence
+
 (= (emp-tv $pattern $db)
     (let*
         (  
              ($_ (println! "======= Emperical Truth Value ======="))
-            ( $ucount  (universe-count $pattern $db))
+            ($antecedent (antecedent $pattern))
+            ( $sup-ante (sup-num $db $antecedent))
             ( $sup (sup-num $db $pattern))
             ( $conf (count_to_confidence $sup))   
-            ($mean (// $sup $ucount))
+            ($mean (// $sup $sup-ante))
             ($confidence   (* 1e-1 $conf))
         )
     (STV $mean  $confidence)))

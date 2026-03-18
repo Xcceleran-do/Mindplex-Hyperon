@@ -844,8 +844,25 @@
     (pow-math (db_size $db) (n_conjuncts $pattern))
 
 )
-
-
+;; Documentation for antecedent:
+;;
+;; Description:
+;;   This function computes the antecedent portion of a pattern by filtering and collapsing a list of atoms.
+;;   - It first combines all input atoms using `superpose`, which merges them into a single list.
+;;   - Then, it checks if the combined list `$sup` matches the pattern `(engagement $x $y)`.
+;;     - If it does match, the result is discarded (`empty`).
+;;     - Otherwise, `$sup` is returned as the antecedent.
+;;   - Finally, `collapse` flattens any nested structures into a single-level list.
+;;
+;; Parameters:
+;;   $atoms - A list of atoms representing parts of a pattern (e.g., attributes or propositions).
+;;
+;; Returns:
+;;   A flattened list of atoms that forms the antecedent of the pattern,
+;;   excluding any elements that are solely an engagement relation.
+(= (antecedent $atoms )
+    (collapse (let $sup (superpose $atoms) (if  (= $sup (engagement $x $y)) (empty) $sup)))
+)
 
  ;check if atom is variable or not
 
