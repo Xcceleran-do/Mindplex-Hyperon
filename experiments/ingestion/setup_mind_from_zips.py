@@ -35,10 +35,10 @@ def main() -> None:
         help="Directory for JSON/Markdown report artifacts.",
     )
     parser.add_argument(
-        "--min-articles",
+        "--min-documents",
         type=int,
         default=1000,
-        help="Fail if loaded article count is below this threshold.",
+        help="Fail if loaded document count is below this threshold.",
     )
     args = parser.parse_args()
 
@@ -52,13 +52,13 @@ def main() -> None:
         mind_dir=args.mind_root,
         output_metta_path=args.output_metta,
         report_dir=args.report_dir,
-        min_articles=args.min_articles,
+        min_documents=args.min_documents,
     )
 
     print("\n=== MIND setup complete ===")
     print(f"Extracted train to: {train_dir}")
     print(f"Extracted valid to: {valid_dir}")
-    print(f"Articles processed: {stats['article_count']}")
+    print(f"Documents processed: {stats['document_count']}")
     print(f"Data file updated: {stats['output_metta_path']}")
     print(f"Shareable report: {stats['report_md_path']}")
 

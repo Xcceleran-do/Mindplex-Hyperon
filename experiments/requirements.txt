@@ -6,3 +6,6 @@ janus-swi
 python-dotenv
 regex
 requests
+transformers
+torch
+spacy

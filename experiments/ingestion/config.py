@@ -48,7 +48,7 @@ AI_FAILURE_STV = (0.5, 0.5)      # For failed AI analysis (fallback)
 UNKNOWN_STV = (0.5, 0.5)         # For unknown/missing values
 
 # AI Prompts
-ANALYSIS_PROMPT_TEMPLATE = """Analyze the following article content and metadata to provide categorical classifications with STV values.
+ANALYSIS_PROMPT_TEMPLATE = """Analyze the following document content and metadata to provide categorical classifications with STV values.
 
 Return ONLY a JSON object with the following structure:
 {{
@@ -59,8 +59,7 @@ Return ONLY a JSON object with the following structure:
     "audience_sentiment": {{"value": "classification", "strength": 0.0-1.0, "confidence": 0.0-1.0}}
 }}
 
-Article Title: {title}
-Content Snippet: {content_snippet}
+Document Content Snippet: {content_snippet}
 
 Classification Guidelines:
 - Tone: Formal, Casual, Instructional
@@ -98,28 +97,52 @@ STV Assignment Guidelines:
 Consider the content's language, structure, purpose, and target audience when assigning both classifications and STV values.
 """
 
-ENTITY_EXTRACTION_PROMPT_TEMPLATE = """Extract the most relevant entities (topics, technologies, people, organizations) from the following article.
+METADATA_SCHEMA_PROMPT_TEMPLATE = """You are a dynamic schema generator. Analyze the following document and determine what structured metadata fields would be valuable to extract. Do NOT extract the values yet, just identify the metadata keys/fields that are applicable.
+
+Return ONLY a JSON object containing a list of strings:
+{{
+    "metadata_fields": ["Field1", "Field2", "Field3"]
+}}
+
+Document Content: {content_snippet}
+"""
+
+METADATA_EXTRACTION_PROMPT_TEMPLATE = """Extract the following metadata fields from the document.
+Fields to extract: {fields_list}
+
+Return ONLY a JSON object where each key is a requested field, and the value is the extracted information and STV. If a field cannot be found, omit it or set value to null.
+{{
+    "Field1": {{"value": "ExtractedValue", "strength": 0.0-1.0, "confidence": 0.0-1.0}}
+}}
+
+Document Content: {content_snippet}
+"""
+
+ENTITY_TYPE_PROMPT_TEMPLATE = """Identify the high-level categories/types of entities present in this document (e.g., Person, Programming Language, Company, Concept, Location).
+
+Return ONLY a JSON object containing a list of strings:
+{{
+    "entity_types": ["Type1", "Type2"]
+}}
+
+Document Content: {content_snippet}
+"""
+
+ENTITY_EXTRACTION_PROMPT_TEMPLATE = """Extract the most relevant entities belonging to the following types from the document.
+Entity Types to extract: {entity_types}
 
 Return ONLY a JSON object with the following structure:
 {{
     "entities": [
-        {{"value": "entity_name", "type": "topic/tech/person/org", "strength": 0.0-1.0, "confidence": 0.0-1.0}},
+        {{"value": "entity_name", "type": "matched_type", "strength": 0.0-1.0, "confidence": 0.0-1.0}},
         ...
     ]
 }}
 
-Limit to the top 5-7 most significant entities.
-
-Article Title: {title}
-Content Snippet: {content_snippet}
-
-STV Assignment Guidelines:
-- strength (s): How central this entity is to the article [0.0-1.0]
-- confidence (c): Your certainty that this entity is correctly identified [0.0-1.0]
+Document Content: {content_snippet}
 """
 
-CLASSIFICATION_PROMPT_TEMPLATE = """Identify the domain and format of the following article.
-Possible domains: News, Research-Paper, Movie, Social-Media, Other.
+CLASSIFICATION_PROMPT_TEMPLATE = """Based on the document content, classify its primary domain and format. Be specific but concise.
 
 Return ONLY a JSON object:
 {{
@@ -128,11 +151,10 @@ Return ONLY a JSON object:
     "confidence": 0.0-1.0
 }}
 
-Article Title: {title}
-Content Snippet: {content_snippet}
+Document Content: {content_snippet}
 """
 
-SENTIMENT_PROMPT_TEMPLATE = """Analyze the sentiment of the following text.
+SENTIMENT_PROMPT_TEMPLATE = """Analyze the sentiment of the following document.
 Categorize as: Positive, Negative, Neutral, or Mixed.
 
 Return ONLY a JSON object:
@@ -142,7 +164,7 @@ Return ONLY a JSON object:
     "confidence": 0.0-1.0
 }}
 
-Text: {text}
+Document: {text}
 """
 
 OPEN_IE_PROMPT_TEMPLATE = """Extract structured (Subject, Predicate, Object) triples from the following text.

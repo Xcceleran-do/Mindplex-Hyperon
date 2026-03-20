@@ -2,48 +2,35 @@
 from .config import DETERMINISTIC_STV, UNKNOWN_STV
 
 class JsonToMetta:
-    def convert(self, articles):
+    def convert(self, documents):
         metta_lines = []
         
-        for article in articles:
-            art_id = f"A_{article.get('id')}"
-            meta = article.get('enriched_metadata', {})
+        for document in documents:
+            doc_id = f"A_{document.get('id')}"
+            meta = document.get('enriched_metadata', {})
             
-            # Helper to add line with STV
-            def add_prop(prop, meta_key, default_stv=UNKNOWN_STV):
-                if meta_key in meta:
-                    prop_data = meta[meta_key]
-                    if isinstance(prop_data, dict) and 'value' in prop_data and 'stv' in prop_data:
-                        value = prop_data['value']
-                        stv = prop_data['stv']
-                    else:
-                        # Fallback for old format
-                        value = prop_data
-                        stv = default_stv
-                    
-                    if value and value != "Unknown":
-                        # Sanitize string for MeTTa
-                        safe_val = str(value).replace('"', '\\"').replace('\n', ' ')
-                        strength, confidence = stv
-                        metta_lines.append(f"(({prop} {art_id} \"{safe_val}\") (STV {strength} {confidence}))")
+            def add_prop(prop, value, stv=UNKNOWN_STV):
+                if value and value != "Unknown" and value != "unknown" and value != "":
+                    # Sanitize string for MeTTa
+                    safe_val = str(value).replace('"', '\\"').replace('\n', ' ')
+                    strength, confidence = stv
+                    metta_lines.append(f"(({prop} {doc_id} \"{safe_val}\") (STV {strength} {confidence}))")
 
-            # Add all properties with their STVs
-            add_prop("length", "length")
-            add_prop("reading-time", "reading_time")
-            add_prop("tone", "tone")
-            add_prop("audience-expertise", "audience_expertise")
-            add_prop("content-type", "content_type")
-            add_prop("date-period", "date_period")
-            add_prop("primary-goal", "primary_goal")
-            add_prop("audience-sentiment", "audience_sentiment")
-            add_prop("popularity", "popularity")
-            add_prop("engagement", "engagement")
-            add_prop("author", "author")
-            add_prop("category", "category")
-            add_prop("title", "title")
-            add_prop("topic", "topic")
-            add_prop("domain", "domain")
-            add_prop("sentiment", "sentiment")
+            # Dynamically add all properties
+            for key, prop_data in meta.items():
+                # Skip specially handled keys
+                if key in ['entities', 'author', 'openie_triples']:
+                    continue
+                    
+                if isinstance(prop_data, dict) and 'value' in prop_data:
+                    value = prop_data.get('value')
+                    stv = prop_data.get('stv', UNKNOWN_STV)
+                else:
+                    value = prop_data
+                    stv = UNKNOWN_STV
+                    
+                prop_name = str(key).replace('_', '-').replace(' ', '-').lower()
+                add_prop(prop_name, value, stv)
             
             # Add authored-by as alias for author
             if 'author' in meta:
@@ -54,7 +41,7 @@ class JsonToMetta:
                     if value and value != "unknown":
                         safe_val = str(value).replace('"', '\\"').replace('\n', ' ')
                         strength, confidence = stv
-                        metta_lines.append(f"((authored-by {art_id} \"{safe_val}\") (STV {strength} {confidence}))")
+                        metta_lines.append(f"((authored-by {doc_id} \"{safe_val}\") (STV {strength} {confidence}))")
 
             # Add entities/topics
             if 'entities' in meta:
@@ -64,16 +51,19 @@ class JsonToMetta:
                         safe_val = str(val).replace('"', '\\"').replace('\n', ' ')
                         strength = ent.get('strength', 0.5)
                         confidence = ent.get('confidence', 0.5)
-                        metta_lines.append(f"((has-topic {art_id} \"{safe_val}\") (STV {strength} {confidence}))")
+                        metta_lines.append(f"((has-topic {doc_id} \"{safe_val}\") (STV {strength} {confidence}))")
 
             # Add OpenIE triples
-            if 'openie_triples' in meta:
-                for triple in meta['openie_triples']:
-                    s = str(triple.get('subject', '')).replace('"', '\\"').replace('\n', ' ')
-                    p = str(triple.get('predicate', '')).replace('"', '\\"').replace('\n', ' ')
-                    o = str(triple.get('object', '')).replace('"', '\\"').replace('\n', ' ')
-                    conf = triple.get('confidence', 0.5)
-                    if s and p and o:
-                        metta_lines.append(f"(({p} \"{s}\" \"{o}\") (STV 1.0 {conf}))")
+            openie_triples = document.get('openie_triples', [])
+            if not openie_triples and 'openie_triples' in meta:
+                openie_triples = meta['openie_triples']
+                
+            for triple in openie_triples:
+                s = str(triple.get('subject', '')).replace('"', '\\"').replace('\n', ' ')
+                p = str(triple.get('predicate', '')).replace('"', '\\"').replace('\n', ' ')
+                o = str(triple.get('object', '')).replace('"', '\\"').replace('\n', ' ')
+                conf = triple.get('confidence', 0.5)
+                if s and p and o:
+                    metta_lines.append(f"(({p} \"{s}\" \"{o}\") (STV 1.0 {conf}))")
 
         return "\n".join(metta_lines)
