@@ -87,6 +87,7 @@ def is_wsl_environment() -> bool:
         return False
 
 PROJECT_ROOT_PETTA = PROJECT_ROOT_WSL if is_wsl_environment() else PROJECT_ROOT_NATIVE
+data_path = os.path.join( PROJECT_ROOT,"experiments","atomspace_visualizer","public","data.metta")
 
 # Enable extra PeTTa debug probes for backward chaining when set to "1".
 PETTA_DEBUG = os.getenv("PETTA_DEBUG", "0") == "1"
@@ -188,19 +189,6 @@ class PeTTaChainer:
     
     def normalizeVar(self, atom: str) -> str:
         return re.sub(r'\$_\d+', '$x', atom)
-    def normalize_strength(self, s, min_val=0.05, max_val=1.0):
-        s = float(s)
-        # Avoid exact zero
-        s = max(s, 1e-12)
-        
-        # Example: log-scale to spread tiny numbers
-        import math
-        s_log = math.log10(s)  # tiny numbers become negative
-        # Scale log(s) to [0,1]
-        min_log, max_log = -12, 0   # adjust based on expected min/max
-        normalized = (s_log - min_log) / (max_log - min_log)
-        # Map to desired range
-        return min_val + normalized * (max_val - min_val)
 
     def patternToRule(self, patternText: str, idx: int) -> str | None:
         atoms = [self.normalizeVar(a) for a in self.atomRe.findall(patternText or "")]
@@ -208,12 +196,7 @@ class PeTTaChainer:
             return None
 
         stvMatch = self.stvRe.search(patternText or "")
-        #strength, confidence = (stvMatch.group(1), stvMatch.group(2)) if stvMatch else ("1.0", "1.0")
         strength, confidence = (stvMatch.group(1), stvMatch.group(2)) if stvMatch else ("1.0", "1.0")
-
-        strength = self.normalize_strength(strength)   # avoid tiny values
-        confidence = min(max(float(confidence), 0.0), 1.0)
-
 
         consequent = next((a for a in atoms if a.startswith("(engagement ")), atoms[-1])
         antecedents = [a for a in atoms if a != consequent]
@@ -223,7 +206,6 @@ class PeTTaChainer:
 
     def formatter(self, minedPatterns):
         """Insert mined patterns as rules."""
-        print("DEBUG: formatter received minedPatterns:", minedPatterns)
         try:
             payload = json.loads(minedPatterns) if isinstance(minedPatterns, str) else minedPatterns
             patterns = payload.get("patterns", [])
@@ -233,7 +215,6 @@ class PeTTaChainer:
                 ruleAtom = self.patternToRule(patternText, idx)
                 if not ruleAtom:
                     continue
-                print("Adding rule:", ruleAtom)
                 self.add_atom(ruleAtom)
                 insertedRules.append(ruleAtom)
 
@@ -251,25 +232,23 @@ class PeTTaChainer:
             }
 handler = PeTTaChainer()
 
-def load_metta_file_to_chainer(chainer, metta_file_path):
+def load_facts_to_chainer(chainer, metta_file_path):
     """Load MeTTa atoms from a file and insert them into the chainer KB, wrapping as (: factN ...)."""
     with open(metta_file_path, 'r') as f:
         fact_id = 1
         for line in f:
             atom = line.strip()
             if atom and not atom.startswith(';;'):
-                # Remove outer parentheses if present
                 if atom.startswith('(') and atom.endswith(')'):
                     atom_inner = atom[1:-1].strip()
                 else:
                     atom_inner = atom
                 # Wrap as (: factN ... )
                 wrapped = f'(: fact{fact_id} {atom_inner})'
-                print(f"Loading atom: {wrapped}")
                 chainer.add_atom(wrapped)
                 fact_id += 1
 
-load_metta_file_to_chainer(handler, "/home/henok/Desktop/Mindplex/Mindplex-Hyperon/experiments/atomspace_visualizer/public/data.metta")
+load_facts_to_chainer(handler, data_path)
 
 def get_facts(handler):  
     """Get facts using direct match to avoid inference recursion"""  
@@ -555,25 +534,7 @@ def extract_support_of_expressions(text: str) -> list[str]:
         start = end
     return results
 
-def parse_facts_for_pettachainer(facts_output):  
-    """  
-    Parse nested facts output and convert to PeTTaChainer-compatible format.  
-    Args:  
-        facts_output: List containing a single string with nested facts  
-    Returns:  
-        List of individual fact strings ready for handler.add_atom()  
-    """  
-    if not facts_output:
-        return []
-    # Extract the big string
-    nested_facts = facts_output[0]
-    # Regex to capture valid facts
-    pattern = r'\(:\s*fact\d+\s*\([^)]*\)\s*\(STV\s*[\d\.]+\s*[\d\.]+\)\)'
-    matches = re.findall(pattern, nested_facts)
-    individual_facts = [m.strip() for m in matches]
-    return individual_facts
   
-
 def extract_parenthesized_expressions(text: str) -> list[str]:
     """Extract all balanced parenthesized expressions from text."""
     results = []
@@ -776,57 +737,13 @@ def ingest_data():
         traceback.print_exc()
         return jsonify({"status": "error", "message": str(e)}), 500
 
-def getAllFactsAndRules():
-    """Return current facts and rules from the MeTTa knowledge base.
 
-    The assistant should call this before attempting backward chaining so it
-    can rewrite a user's natural-language question into a canonical MeTTa
-    query that matches predicates/constants present in the KB. Example:
-    user: "What is article 1's engagement level?"
-    assistant: call getAllFactsAndRules(), notice atoms like `(engagement 1 "high")`,
-    rewrite as `(engagement 1 $whatIsIt)`, then call getChainerResult.
-    """
-    if init_petta_engine():
-        try:
-            pass
-            #lines = run_petta_query_lines("!(get-atoms &res1)")
-            #handler.add_atom(lines[0])
-            #print("%%%%%%%%% facts are inserted &&&&&&&&&&&")
-            #return {"status": "success", "facts": lines}
-        except Exception as e:
-            return {"status": "error", "error": str(e)}
-    try:
-        facts = metta4Miner.run("!(collapse (get-atoms &res1))")
-        print("DEBUG: getAllFactsAndRules  the first 10- raw lines:", facts[:10])
-    except Exception as e:
-        return {"status": "error", "error": str(e)}
-
-    # Normalize the returned structure into a flat list of string atoms
-    normalized = []
-    try:
-        # If facts is nested (e.g., [[atom1, atom2]]), flatten one level
-        if isinstance(facts, (list, tuple)) and len(facts) == 1 and isinstance(facts[0], (list, tuple)):
-            iterable = facts[0]
-        else:
-            iterable = facts
-
-        if isinstance(iterable, (list, tuple)):
-            for item in iterable:
-                try:
-                    normalized.append(str(item))
-                except Exception:
-                    normalized.append(repr(item))
-        else:
-            normalized.append(str(iterable))
-
-    except Exception:
-        # Fallback: stringify the whole object
-        try:
-            return {"status": "success", "facts": [str(facts)]}
-        except Exception:
-            return {"status": "success", "facts": [repr(facts)]}
-
-    return {"status": "success", "facts": normalized}
+def getAllFactsAndRules(handler):  
+    """Get facts using direct match to avoid inference recursion"""  
+    query_result = handler.handler.process_metta_string(  
+        f"!(match &kb (: {handler.kb} $prf $type $tv) (: {handler.kb} $prf $type $tv))"  
+    )  
+    return query_result
 
 def handle_backward_chain_for_message(message: str) -> dict:
     """Handle natural language queries using backward chaining with STV support."""
@@ -834,20 +751,9 @@ def handle_backward_chain_for_message(message: str) -> dict:
     function_calls = []
     # First call getAllFactsAndRules to get canonical atoms
     print("DEBUG: handle_backward_chain_for_message - calling getAllFactsAndRules()")
-    #facts_res = getAllFactsAndRules()
-    facts_res =get_facts(handler)  
-    print("DEBUG: getAllFactsAndRules response:", facts_res[:10])  # Print first 10 lines for brevity
-    print("DEBUG: facts_res type:", type(facts_res))
-    print("DEBUG: raw facts count:", len(facts_res))
-   
-    """  
-    # If we couldn't get facts/rules, return early
-    if not isinstance(facts_res, dict) or facts_res.get('status') != 'success':
-        return None, None
-    
-    facts = facts_res.get('facts', []) or []
-    facts_text = "\n".join(facts[:200]) if isinstance(facts, list) else str(facts)
-    """
+    facts_res =getAllFactsAndRules(handler)  
+    print("DEBUG: getAllFactsAndRules response:", facts_res[:10])  # Print first 10 lines
+  
     # Ask the LLM to rewrite the user's question into a canonical MeTTa query
     # using the facts we retrieved. The model must output only a single MeTTa
     # expression (e.g. (engagement 1 $what)).
@@ -1084,30 +990,12 @@ def start_mining_job(conjunction_count: int):
         'result': mining_jobs[job_id].result
     }
 
-def formatter(mined_patterns):
-    print("formatter started :--:")
-    if init_petta_engine():
-        try:
-            run_metta_with_petta(f"!(let $atom (main {mined_patterns}) (add-atom &res1 $atom))")
-            print("formatter used PeTTa atomspace")
-            return
-        except Exception as e:
-            print(f"formatter: PeTTa path failed, falling back to hyperon: {e}")
-
-    mined_patterns = metta4Miner.parse_single(mined_patterns)
-    metta4Miner.run(f""" !(let $atom (main {mined_patterns}) (add-atom &res1 $atom)) """)
-    print("formatter ended :-_-:")
-
 def backWardChainer(whatToCheck, depth=3):
     result = handler.query(whatToCheck.strip(), depth=depth)
     print("DEBUG raw result:", repr(result), "type:", type(result))
     if result is None:
         print("DEBUG: result is None")
         return []
-    if isinstance(result, (list, tuple)):
-        filtered = [str(x) for x in result if str(x).strip()]
-        print("DEBUG list len:", len(result), "filtered len:", len(filtered))
-        return filtered
     out = str(result).strip()
     return [out] if out else []
 
@@ -1120,9 +1008,8 @@ def getChainerResult(whatToCheck, depth=5):
         The justification of the backward chaining operation.
     """
     chainAnswer = backWardChainer(whatToCheck, depth)
-    #facts_res = getAllFactsAndRules()
-    facts_res =get_facts(handler) 
-    print("DEBUG: getChainerResult - chainAnswer type:", chainAnswer)
+    facts_res =getAllFactsAndRules(handler) 
+    print("DEBUG: getChainerResult :", chainAnswer)
     # If no proofs found, return early
     if not chainAnswer or len(chainAnswer) == 0:
         return {
@@ -1472,7 +1359,6 @@ For WHY / EXPLAIN / PROVE questions you MUST use the backward chainer. No except
 """
 # Store conversation history
 conversations = {}
-
 @dataclass
 class MiningJob:
     job_id: str
@@ -1523,13 +1409,11 @@ def start_mining():
     # Start formatting in background thread only if we have an answer payload
     print("🔍 DEBUG: Starting formatting thread")
     print("🔍 DEBUG: Result before formatting =", result)
-    print(f"the patterns is :  {result.get('patterns', [])}")
     if isinstance(result, dict) and result.get("answer"):
         
         minedPatterns = {
         'patterns': result['patterns']
         }
-
         # Start the thread
         thread = threading.Thread(
             target=handler.formatter,
@@ -1538,7 +1422,6 @@ def start_mining():
         )
         thread.start()
    
-        
     print(f"🔍 DEBUG: result type = {type(result)}")
     print(f"🔍 DEBUG: result = {result}")
     
