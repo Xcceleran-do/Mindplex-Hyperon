@@ -78,6 +78,5 @@
             ( $sup (sup-num $db $pattern))
             ( $conf (count_to_confidence $sup))   
             ($mean (// $sup $sup-ante))
-            ($confidence   (* 1e-1 $conf))
         )
-    (STV $mean  $confidence)))
+    (STV $mean  $conf)))
