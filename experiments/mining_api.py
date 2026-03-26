@@ -409,7 +409,6 @@ def run_metta_with_petta(metta_code: str) -> str:
         with petta_lock:
             try:
                 results = petta_engine.process_metta_string(metta_code)
-                print(f"DEBUG: In-process PeTTa results: {results}")
                 if isinstance(results, (list, tuple)):
                     # If the runnable was not evaluated, fall back to load_metta_file.
                     if len(results) == 1 and str(results[0]).strip() == metta_code.strip().lstrip("!").strip():
@@ -424,7 +423,6 @@ def run_metta_with_petta(metta_code: str) -> str:
                         tf.write(metta_code)
                         temp_file_path = tf.name
                     results = petta_engine.load_metta_file(temp_file_path)
-                    print(f"DEBUG: In-process PeTTa load_metta_file results: {results}")
                     if isinstance(results, (list, tuple)):
                         return "\n".join(str(r) for r in results)
                     return str(results)
@@ -446,15 +444,12 @@ def run_metta_with_petta(metta_code: str) -> str:
     with tempfile.NamedTemporaryFile(mode='w', suffix='.metta', delete=False) as tf:
         tf.write(full_metta_script)
         temp_file_path = tf.name
-    print(full_metta_script)  # Debug: print the full MeTTa script being executed
-    print(f"DEBUG: Temporary file created at: {temp_file_path}")
 
     try:
         # Using bash explicitly as PeTTa/run.sh is a shell script
         # and we are on Windows (likely using git bash or similar environment)
         temp_file_path_wsl = to_wsl_path(temp_file_path)
         cmd = ["bash", PETTA_RUN_SH, temp_file_path_wsl]
-        print(f"DEBUG: Running petta command: {' '.join(cmd)}")
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
         return result.stdout
     except subprocess.CalledProcessError as e:
@@ -570,16 +565,12 @@ def debug_petta_chainer_state(what_to_check: str) -> None:
     if not PETTA_DEBUG:
         return
     try:
-        print("DEBUG: PeTTa probe - get-atoms &res1")
         atoms_lines = run_petta_query_lines(f"!(backward-chain &res1 (S (S Z)) (: $prf {what_to_check}))")
-        print("DEBUG: PeTTa atoms lines (first 10):", atoms_lines)
 
-        print("DEBUG: PeTTa probe - direct match")
         match_query = f"!(match &res1 {what_to_check} $x)"
         match_lines = run_petta_query_lines(match_query)
-        print("DEBUG: PeTTa match lines:", match_lines)
     except Exception as e:
-        print("DEBUG: PeTTa probe failed:", e)
+        pass
 
 def mine_pattern(numberOfConjunction: int) -> dict:
     """
@@ -591,14 +582,10 @@ def mine_pattern(numberOfConjunction: int) -> dict:
     Returns:
         A dictionary containing the mining results with parsed patterns.
     """
-    print(f"Debug: mine pattern function being called with conjunction count {numberOfConjunction}")
-    
     try:
         # Run the miner with petta
         query = f"!(pattern-miner &purifiedDbSpace 3 {int(numberOfConjunction)})"
-        print(f"DEBUG: Executing PeTTa query: {query}")
         petta_output = run_metta_with_petta(query)
-        print(f"DEBUG: PeTTa execution finished. Output length: {len(petta_output)}")
         normalized_query = query.strip().lstrip("!").strip()
         if petta_output.strip() == normalized_query:
             return {
@@ -608,8 +595,7 @@ def mine_pattern(numberOfConjunction: int) -> dict:
             }
         result_lines = parse_petta_output(petta_output)
         
-        print(f"Debug: PeTTa result lines: {result_lines}")
-        
+
         # Parse the result into JSON-serializable format
         patterns = []
         full_answer_str = " ".join(result_lines)
@@ -747,12 +733,9 @@ def getAllFactsAndRules(handler):
 
 def handle_backward_chain_for_message(message: str) -> dict:
     """Handle natural language queries using backward chaining with STV support."""
-    print(f" DEBUG: Received message: {message}")
     function_calls = []
     # First call getAllFactsAndRules to get canonical atoms
-    print("DEBUG: handle_backward_chain_for_message - calling getAllFactsAndRules()")
     facts_res =getAllFactsAndRules(handler)  
-    print("DEBUG: getAllFactsAndRules response:", facts_res[:10])  # Print first 10 lines
   
     # Ask the LLM to rewrite the user's question into a canonical MeTTa query
     # using the facts we retrieved. The model must output only a single MeTTa
@@ -775,8 +758,6 @@ def handle_backward_chain_for_message(message: str) -> dict:
 
             OUTPUT ONLY the MeTTa expression or NO_QUERY.
             """
-        print("DEBUG: sending rewrite prompt to LLM (first 500 chars):", rewrite_prompt[:500])
-
         messages = [
             {"role": "system", "content": SYSTEM_INSTRUCTION},
             {"role": "user", "content": rewrite_prompt}
@@ -786,18 +767,14 @@ def handle_backward_chain_for_message(message: str) -> dict:
         if 'choices' in response_data and response_data['choices']:
             candidate_query = response_data['choices'][0]['message'].get('content', '').strip()
         
-        print("DEBUG: rewrite result:", candidate_query)
         function_calls.append({'name': 'rewrite_query', 'args': {'message': message}, 'result': candidate_query})
     except Exception as e:
-        print('DEBUG: rewrite error:', e)
         return None, None
 
     
     # Call the chainer with the rewritten query and include debug output
     try:
-        print('DEBUG: calling getChainerResult with', candidate_query)
         chainer_result = getChainerResult(candidate_query)
-        print('DEBUG: chainer_result type:', chainer_result)
     except Exception as e:
         print('DEBUG: chainer call error:', e)
         chainer_result = {'status': 'error', 'error': str(e)}
@@ -816,7 +793,6 @@ def handle_backward_chain_for_message(message: str) -> dict:
     else:
         # Apply a friendly/jokey wrapper without revealing internal steps
         resp_text = f"Alright, here's the scoop —\n\n{raw_just}\n\n(That's the reasoning I found.)"
-    print('DEBUG: final response text:', resp_text)
     return resp_text, function_calls
 
 
@@ -992,9 +968,7 @@ def start_mining_job(conjunction_count: int):
 
 def backWardChainer(whatToCheck, depth=3):
     result = handler.query(whatToCheck.strip(), depth=depth)
-    print("DEBUG raw result:", repr(result), "type:", type(result))
     if result is None:
-        print("DEBUG: result is None")
         return []
     out = str(result).strip()
     return [out] if out else []
@@ -1009,7 +983,6 @@ def getChainerResult(whatToCheck, depth=5):
     """
     chainAnswer = backWardChainer(whatToCheck, depth)
     facts_res =getAllFactsAndRules(handler) 
-    print("DEBUG: getChainerResult :", chainAnswer)
     # If no proofs found, return early
     if not chainAnswer or len(chainAnswer) == 0:
         return {
@@ -1379,8 +1352,7 @@ def health_check():
 @app.route('/api/mine', methods=['POST'])
 def start_mining():
     """Start a new mining job"""
-    print("🔍 DEBUG: Received mining request")
-    
+
     data = request.get_json() or {}
     conjunction_count = data.get('conjunction_count', 2)
     min_support = data.get('min_support', 3)
@@ -1402,13 +1374,10 @@ def start_mining():
     )
     mining_jobs[job_id] = job
     run_mining_task(job_id, conjunction_count)
-    print(
-        f"🔍 DEBUG: Starting mining job {job_id} with conjunction count {conjunction_count} and min_support {min_support}"
-    )
+
     result = mining_jobs[job_id].result
     # Start formatting in background thread only if we have an answer payload
-    print("🔍 DEBUG: Starting formatting thread")
-    print("🔍 DEBUG: Result before formatting =", result)
+
     if isinstance(result, dict) and result.get("answer"):
         
         minedPatterns = {
@@ -1422,8 +1391,7 @@ def start_mining():
         )
         thread.start()
    
-    print(f"🔍 DEBUG: result type = {type(result)}")
-    print(f"🔍 DEBUG: result = {result}")
+
     
     # Check mining status
     if isinstance(result, dict):
@@ -1638,8 +1606,7 @@ def chat():
         # This prevents KeyError when shortcut paths (e.g. backward chaining)
         # attempt to append to conversations[session_id] before it's initialized.
         if session_id not in conversations:
-            print(f"DEBUG: Creating new conversation session '{session_id}'")
-        conversations.setdefault(session_id, [])
+            conversations.setdefault(session_id, [])
 
         if not message:
             return jsonify({'error': 'Message is required'}), 400
@@ -1648,11 +1615,9 @@ def chat():
         # return the chainer's justification directly.
         try:
             bc_text, bc_calls = handle_backward_chain_for_message(message)
-            print('DEBUG: backward chain shortcut result:', bc_text, bc_calls)
             if bc_text is not None:
                 # store in history (conversations[session_id] is guaranteed to exist now)
                 conversations[session_id].append({'role': 'user', 'content': message})
-                print('DEBUG: stored backward chain shortcut in history')
                 conversations[session_id].append({'role': 'assistant', 'content': bc_text})
                 try:
                     safe_calls = make_json_safe(bc_calls)
