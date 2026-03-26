@@ -46,8 +46,8 @@ class TestMindplexFetcher(unittest.TestCase):
         mock_response = MagicMock()
         mock_response.json.return_value = {
             "published_posts": [
-                {"id": 1, "post_title": "Article 1"},
-                {"id": 2, "post_title": "Article 2"}
+                {"id": 1, "post_title": "Document 1"},
+                {"id": 2, "post_title": "Document 2"}
             ]
         }
         mock_get.return_value = mock_response
@@ -108,12 +108,12 @@ class TestMindplexFetcher(unittest.TestCase):
 
     @patch('experiments.ingestion.fetcher.requests.get')
     def test_fetch_all_single_page(self, mock_get):
-        """Test fetching articles across multiple pages (single page case)"""
+        """Test fetching documents across multiple pages (single page case)"""
         mock_response = MagicMock()
         mock_response.json.return_value = {
             "published_posts": [
-                {"id": 1, "post_title": "Article 1"},
-                {"id": 2, "post_title": "Article 2"}
+                {"id": 1, "post_title": "Document 1"},
+                {"id": 2, "post_title": "Document 2"}
             ]
         }
         mock_get.return_value = mock_response
@@ -126,25 +126,25 @@ class TestMindplexFetcher(unittest.TestCase):
 
     @patch('experiments.ingestion.fetcher.requests.get')
     def test_fetch_all_multiple_pages(self, mock_get):
-        """Test fetching articles across multiple pages"""
+        """Test fetching documents across multiple pages"""
         page_1_response = MagicMock()
         page_1_response.json.return_value = {
             "published_posts": [
-                {"id": i, "post_title": f"Article {i}"} for i in range(1, 21)
+                {"id": i, "post_title": f"Document {i}"} for i in range(1, 21)
             ]
         }
         
         page_2_response = MagicMock()
         page_2_response.json.return_value = {
             "published_posts": [
-                {"id": i, "post_title": f"Article {i}"} for i in range(21, 31)
+                {"id": i, "post_title": f"Document {i}"} for i in range(21, 31)
             ]
         }
         
         page_3_response = MagicMock()
         page_3_response.json.return_value = {
             "published_posts": [
-                {"id": i, "post_title": f"Article {i}"} for i in range(31, 36)
+                {"id": i, "post_title": f"Document {i}"} for i in range(31, 36)
             ]
         }
         
@@ -152,7 +152,7 @@ class TestMindplexFetcher(unittest.TestCase):
         
         result = self.fetcher.fetch_all(limit=100)
         
-        # Should have articles from all pages but not exceed limit
+        # Should have documents from all pages but not exceed limit
         self.assertEqual(len(result), 35)
 
     @patch('experiments.ingestion.fetcher.requests.get')
@@ -161,7 +161,7 @@ class TestMindplexFetcher(unittest.TestCase):
         mock_response = MagicMock()
         mock_response.json.return_value = {
             "published_posts": [
-                {"id": i, "post_title": f"Article {i}"} for i in range(1, 51)
+                {"id": i, "post_title": f"Document {i}"} for i in range(1, 51)
             ]
         }
         mock_get.return_value = mock_response
@@ -177,7 +177,7 @@ class TestMindplexFetcher(unittest.TestCase):
         page_1_response = MagicMock()
         page_1_response.json.return_value = {
             "published_posts": [
-                {"id": 1, "post_title": "Article 1"}
+                {"id": 1, "post_title": "Document 1"}
             ]
         }
         
@@ -199,14 +199,14 @@ class TestMindplexFetcher(unittest.TestCase):
         page_1_response = MagicMock()
         page_1_response.json.return_value = {
             "published_posts": [
-                {"id": i, "post_title": f"Article {i}"} for i in range(1, 21)
+                {"id": i, "post_title": f"Document {i}"} for i in range(1, 21)
             ]
         }
         
         page_2_response = MagicMock()
         page_2_response.json.return_value = {
             "published_posts": [
-                {"id": i, "post_title": f"Article {i}"} for i in range(21, 25)
+                {"id": i, "post_title": f"Document {i}"} for i in range(21, 25)
             ]
         }
         
@@ -223,7 +223,7 @@ class TestMindplexFetcher(unittest.TestCase):
         page_1_response = MagicMock()
         page_1_response.json.return_value = {
             "published_posts": [
-                {"id": 1, "post_title": "Article 1"}
+                {"id": 1, "post_title": "Document 1"}
             ]
         }
         
@@ -254,7 +254,7 @@ class TestMindplexFetcher(unittest.TestCase):
         mock_response = MagicMock()
         mock_response.json.return_value = {
             "published_posts": [
-                {"id": 1, "post_title": "Article 1"}
+                {"id": 1, "post_title": "Document 1"}
             ]
         }
         mock_get.return_value = mock_response

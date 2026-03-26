@@ -24,16 +24,16 @@ def main() -> None:
         help="Directory for benchmark summary artifacts.",
     )
     parser.add_argument(
-        "--min-articles",
+        "--min-documents",
         type=int,
         default=1000,
-        help="Fail if fewer than this many articles are loaded (helps catch wrong dataset path).",
+        help="Fail if fewer than this many documents are loaded (helps catch wrong dataset path).",
     )
     parser.add_argument(
-        "--max-articles",
+        "--max-documents",
         type=int,
         default=10000,
-        help="Cap exported articles for faster visualization (top by impressions).",
+        help="Cap exported documents for faster visualization (top by impressions).",
     )
     args = parser.parse_args()
 
@@ -41,12 +41,12 @@ def main() -> None:
         mind_dir=args.mind_dir,
         output_metta_path=args.output_metta,
         report_dir=args.report_dir,
-        min_articles=args.min_articles,
-        max_articles=args.max_articles,
+        min_documents=args.min_documents,
+        max_documents=args.max_documents,
     )
 
     print("\n=== Ready to show your boss ===")
-    print(f"Articles processed: {stats['article_count']}")
+    print(f"Documents processed: {stats['document_count']}")
     print(f"Total impressions: {stats['total_impressions']}")
     print(f"Average CTR: {stats['avg_ctr']:.4f}")
     print(f"Data file updated: {stats['output_metta_path']}")

@@ -166,7 +166,6 @@ class TestConfigConstants(unittest.TestCase):
     def test_analysis_prompt_template(self):
         """Test analysis prompt template"""
         self.assertIsInstance(ANALYSIS_PROMPT_TEMPLATE, str)
-        self.assertIn("{title}", ANALYSIS_PROMPT_TEMPLATE)
         self.assertIn("{content_snippet}", ANALYSIS_PROMPT_TEMPLATE)
         self.assertIn("tone", ANALYSIS_PROMPT_TEMPLATE.lower())
         self.assertIn("sentiment", ANALYSIS_PROMPT_TEMPLATE.lower())

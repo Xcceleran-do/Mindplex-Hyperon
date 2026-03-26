@@ -12,7 +12,7 @@ class MindplexFetcher:
             self.headers["Authorization"] = f"Bearer {self.token}"
 
     def fetch_page(self, page=1):
-        """Fetches a single page of articles for the user."""
+        """Fetches a single page of documents for the user."""
         path = USER_ARTICLES_ENDPOINT_TEMPLATE.format(username=self.username, page=page)
         url = f"{MINDPLEX_API_DOMAIN}{path}"
         
@@ -26,11 +26,11 @@ class MindplexFetcher:
             return None
 
     def fetch_all(self, limit=100):
-        """Fetches articles up to a limit."""
-        articles = []
+        """Fetches documents up to a limit."""
+        documents = []
         page = 1
         
-        while len(articles) < limit:
+        while len(documents) < limit:
             data = self.fetch_page(page)
             if not data:
                 break
@@ -42,7 +42,7 @@ class MindplexFetcher:
                 print("No more posts found.")
                 break
                 
-            articles.extend(batch)
+            documents.extend(batch)
             
             # Check if we've reached the end (if batch size is small, likely last page)
             # Or we can check 'count' in response if available/reliable
@@ -51,4 +51,35 @@ class MindplexFetcher:
                 
             page += 1
             
-        return articles[:limit]
+        return documents[:limit]
+
+class FileFetcher:
+    """Fetcher for local files (PDF, CSV, JSON)"""
+    def __init__(self, directory):
+        self.directory = directory
+
+    def fetch_all(self, limit=50):
+        import os
+        supported_exts = ('.pdf', '.csv', '.json', '.txt')
+        files = []
+        if not os.path.exists(self.directory):
+            print(f"Directory not found: {self.directory}")
+            return []
+
+        # If directory is actually a file
+        if os.path.isfile(self.directory):
+            files = [self.directory]
+        else:
+            for f in os.listdir(self.directory):
+                if f.lower().endswith(supported_exts):
+                    files.append(os.path.join(self.directory, f))
+
+        documents = []
+        for i, file_path in enumerate(files[:limit]):
+            documents.append({
+                "id": f"file_{i}",
+                "post_title": os.path.basename(file_path),
+                "file_path": file_path,
+                "author_username": "local_system"
+            })
+        return documents

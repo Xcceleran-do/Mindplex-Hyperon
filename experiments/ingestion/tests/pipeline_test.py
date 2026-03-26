@@ -8,7 +8,7 @@ class TestIngestionPipeline(unittest.TestCase):
     """Test suite for ingestion pipeline orchestration"""
 
     @patch('experiments.ingestion.pipeline.MindplexFetcher')
-    @patch('experiments.ingestion.pipeline.ArticleAnalyzer')
+    @patch('experiments.ingestion.pipeline.DocumentAnalyzer')
     @patch('experiments.ingestion.pipeline.JsonToMetta')
     @patch('experiments.ingestion.pipeline.load_dotenv')
     @patch('builtins.open', new_callable=mock_open)
@@ -22,7 +22,7 @@ class TestIngestionPipeline(unittest.TestCase):
         mock_fetcher.fetch_all.return_value = [
             {
                 "id": 1,
-                "post_title": "Article 1",
+                "post_title": "Document 1",
                 "views": 100,
                 "content": [{"type": "p", "content": "test"}],
                 "min_to_read": "5 min",
@@ -34,7 +34,7 @@ class TestIngestionPipeline(unittest.TestCase):
             },
             {
                 "id": 2,
-                "post_title": "Article 2",
+                "post_title": "Document 2",
                 "views": 50,
                 "content": [{"type": "p", "content": "test"}],
                 "min_to_read": "3 min",
@@ -80,8 +80,8 @@ class TestIngestionPipeline(unittest.TestCase):
 
     @patch('experiments.ingestion.pipeline.MindplexFetcher')
     @patch('experiments.ingestion.pipeline.load_dotenv')
-    def test_run_ingestion_no_articles_found(self, mock_load_env, mock_fetcher_class):
-        """Test pipeline handling when no articles are found"""
+    def test_run_ingestion_no_documents_found(self, mock_load_env, mock_fetcher_class):
+        """Test pipeline handling when no documents are found"""
         mock_fetcher = MagicMock()
         mock_fetcher.fetch_all.return_value = []
         mock_fetcher_class.return_value = mock_fetcher
@@ -89,7 +89,7 @@ class TestIngestionPipeline(unittest.TestCase):
         result = run_ingestion(username="test_user")
         
         self.assertEqual(result["status"], "error")
-        self.assertIn("No articles found", result["message"])
+        self.assertIn("No documents found", result["message"])
 
     @patch('experiments.ingestion.pipeline.MindplexFetcher')
     @patch('experiments.ingestion.pipeline.load_dotenv')
@@ -121,9 +121,9 @@ class TestIngestionPipeline(unittest.TestCase):
         mock_fetcher_class.assert_called_once_with(username=DEFAULT_USERNAME)
 
     @patch('experiments.ingestion.pipeline.MindplexFetcher')
-    @patch('experiments.ingestion.pipeline.ArticleAnalyzer')
+    @patch('experiments.ingestion.pipeline.DocumentAnalyzer')
     @patch('experiments.ingestion.pipeline.load_dotenv')
-    def test_run_ingestion_validates_article_views(self, mock_load_env, mock_analyzer_class, mock_fetcher_class):
+    def test_run_ingestion_validates_document_views(self, mock_load_env, mock_analyzer_class, mock_fetcher_class):
         """Test that pipeline validates and casts view counts"""
         mock_fetcher = MagicMock()
         mock_fetcher.fetch_all.return_value = [
@@ -155,11 +155,11 @@ class TestIngestionPipeline(unittest.TestCase):
         self.assertEqual(result["status"], "success")
         
         # Check that views were validated
-        processed_article = mock_analyzer.process.call_args[0][0]
-        self.assertEqual(processed_article["views"], 0)  # Should default to 0
+        processed_document = mock_analyzer.process.call_args[0][0]
+        self.assertEqual(processed_document["views"], 0)  # Should default to 0
 
     @patch('experiments.ingestion.pipeline.MindplexFetcher')
-    @patch('experiments.ingestion.pipeline.ArticleAnalyzer')
+    @patch('experiments.ingestion.pipeline.DocumentAnalyzer')
     @patch('experiments.ingestion.pipeline.JsonToMetta')
     @patch('experiments.ingestion.pipeline.load_dotenv')
     @patch('builtins.open', new_callable=mock_open)
@@ -168,10 +168,10 @@ class TestIngestionPipeline(unittest.TestCase):
                                                          mock_load_env, mock_converter_class,
                                                          mock_analyzer_class, mock_fetcher_class):
         """Test that ranking stats are correctly passed to analyzer"""
-        mock_articles = [
+        mock_documents = [
             {
                 "id": 1,
-                "post_title": "Article 1",
+                "post_title": "Document 1",
                 "views": 100,
                 "content": [{"type": "p", "content": "test"}],
                 "min_to_read": "5 min",
@@ -183,7 +183,7 @@ class TestIngestionPipeline(unittest.TestCase):
             },
             {
                 "id": 2,
-                "post_title": "Article 2",
+                "post_title": "Document 2",
                 "views": 50,
                 "content": [{"type": "p", "content": "test"}],
                 "min_to_read": "3 min",
@@ -196,7 +196,7 @@ class TestIngestionPipeline(unittest.TestCase):
         ]
         
         mock_fetcher = MagicMock()
-        mock_fetcher.fetch_all.return_value = mock_articles
+        mock_fetcher.fetch_all.return_value = mock_documents
         mock_fetcher_class.return_value = mock_fetcher
         
         mock_analyzer = MagicMock()
@@ -210,13 +210,13 @@ class TestIngestionPipeline(unittest.TestCase):
         run_ingestion()
         
         # Verify rank_stats parameter was passed
-        # Article 1 has higher views (100) so rank 1, Article 2 has rank 2
+        # Document 1 has higher views (100) so rank 1, Document 2 has rank 2
         calls = mock_analyzer.process.call_args_list
         self.assertEqual(len(calls), 2)
         
-        # First article should have rank 1
+        # First document should have rank 1
         self.assertEqual(calls[0][1]["rank_stats"][1], 1)
-        # Second article should have rank 2
+        # Second document should have rank 2
         self.assertEqual(calls[1][1]["rank_stats"][2], 2)
 
     @patch('experiments.ingestion.pipeline.MindplexFetcher')
@@ -240,7 +240,7 @@ class TestIngestionPipeline(unittest.TestCase):
         ]
         mock_fetcher_class.return_value = mock_fetcher
         
-        with patch('experiments.ingestion.pipeline.ArticleAnalyzer'):
+        with patch('experiments.ingestion.pipeline.DocumentAnalyzer'):
             with patch('experiments.ingestion.pipeline.JsonToMetta'):
                 with patch('builtins.open', new_callable=mock_open):
                     with patch('os.makedirs') as mock_makedirs:
@@ -250,7 +250,7 @@ class TestIngestionPipeline(unittest.TestCase):
                         mock_makedirs.assert_called()
 
     @patch('experiments.ingestion.pipeline.MindplexFetcher')
-    @patch('experiments.ingestion.pipeline.ArticleAnalyzer')
+    @patch('experiments.ingestion.pipeline.DocumentAnalyzer')
     @patch('experiments.ingestion.pipeline.JsonToMetta')
     @patch('experiments.ingestion.pipeline.load_dotenv')
     @patch('builtins.open', new_callable=mock_open)
@@ -262,7 +262,7 @@ class TestIngestionPipeline(unittest.TestCase):
         mock_fetcher.fetch_all.return_value = [
             {
                 "id": i,
-                "post_title": f"Article {i}",
+                "post_title": f"Document {i}",
                 "views": 100 - i,
                 "content": [{"type": "p", "content": "test"}],
                 "min_to_read": "5 min",
@@ -290,7 +290,7 @@ class TestIngestionPipeline(unittest.TestCase):
         mock_fetcher.fetch_all.assert_called_once_with(limit=50)
 
     @patch('experiments.ingestion.pipeline.MindplexFetcher')
-    @patch('experiments.ingestion.pipeline.ArticleAnalyzer')
+    @patch('experiments.ingestion.pipeline.DocumentAnalyzer')
     @patch('experiments.ingestion.pipeline.JsonToMetta')
     @patch('experiments.ingestion.pipeline.load_dotenv')
     @patch('builtins.open', new_callable=mock_open)
@@ -328,7 +328,7 @@ class TestIngestionPipeline(unittest.TestCase):
         mock_analyzer_class.assert_called_once_with(api_key="test-api-key")
 
     @patch('experiments.ingestion.pipeline.MindplexFetcher')
-    @patch('experiments.ingestion.pipeline.ArticleAnalyzer')
+    @patch('experiments.ingestion.pipeline.DocumentAnalyzer')
     @patch('experiments.ingestion.pipeline.JsonToMetta')
     @patch('experiments.ingestion.pipeline.load_dotenv')
     @patch('builtins.open', new_callable=mock_open)

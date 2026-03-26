@@ -134,7 +134,7 @@ class TestSafeQuote(unittest.TestCase):
 
     def test_safe_quote_escapes_quotes(self):
         """Test that quotes are properly escaped"""
-        result = _safe_quote('Article "with quotes"')
+        result = _safe_quote('Document "with quotes"')
         self.assertIn('\\"', result)
 
     def test_safe_quote_removes_newlines(self):
@@ -187,21 +187,21 @@ class TestTokenize(unittest.TestCase):
 
 
 class TestLengthBucket(unittest.TestCase):
-    """Test article length bucketing"""
+    """Test document length bucketing"""
 
     def test_length_bucket_short(self):
-        """Test short article classification"""
+        """Test short document classification"""
         self.assertEqual(_length_bucket(10), "Short")
         self.assertEqual(_length_bucket(17), "Short")
 
     def test_length_bucket_medium(self):
-        """Test medium article classification"""
+        """Test medium document classification"""
         self.assertEqual(_length_bucket(18), "Medium")
         self.assertEqual(_length_bucket(30), "Medium")
         self.assertEqual(_length_bucket(44), "Medium")
 
     def test_length_bucket_long(self):
-        """Test long article classification"""
+        """Test long document classification"""
         self.assertEqual(_length_bucket(45), "Long")
         self.assertEqual(_length_bucket(100), "Long")
 
@@ -401,8 +401,8 @@ class TestEmitFact(unittest.TestCase):
 class TestConvertMindToMetta(unittest.TestCase):
     """Test MIND dataset conversion (integration tests)"""
 
-    def test_convert_mind_min_articles_validation(self):
-        """Test minimum article validation"""
+    def test_convert_mind_min_documents_validation(self):
+        """Test minimum document validation"""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create minimal test data directory
             os.makedirs(os.path.join(temp_dir, "train"))
@@ -413,7 +413,7 @@ class TestConvertMindToMetta(unittest.TestCase):
                 f.write("")
             
             with self.assertRaises(RuntimeError) as context:
-                convert_mind_to_metta(temp_dir, "output.metta", temp_dir, min_articles=100)
+                convert_mind_to_metta(temp_dir, "output.metta", temp_dir, min_documents=100)
             
             # Check that RuntimeError is raised (message may vary depending on whether records found)
             error_msg = str(context.exception)
@@ -440,7 +440,7 @@ class TestConvertMindToMetta(unittest.TestCase):
             
             result = convert_mind_to_metta(
                 temp_dir, output_metta, report_dir, 
-                min_articles=1, max_articles=None
+                min_documents=1, max_documents=None
             )
             
             self.assertIn("output_metta_path", result)

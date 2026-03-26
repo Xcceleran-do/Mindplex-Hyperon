@@ -229,18 +229,18 @@ def _midpoint_datetime(values: List[datetime]) -> Optional[datetime]:
     return sorted_values[len(sorted_values) // 2]
 
 
-def _emit_fact(lines: List[str], prop: str, article_id: str, value: str) -> None:
+def _emit_fact(lines: List[str], prop: str, document_id: str, value: str) -> None:
     safe_value = _safe_quote(value)
     if safe_value:
-        lines.append(f'({prop} {article_id} "{safe_value}")')
+        lines.append(f'({prop} {document_id} "{safe_value}")')
 
 
 def convert_mind_to_metta(
     mind_dir: str,
     output_metta_path: str,
     report_dir: str,
-    min_articles: int = 1000,
-    max_articles: Optional[int] = None,
+    min_documents: int = 1000,
+    max_documents: Optional[int] = None,
 ) -> Dict[str, object]:
     all_news: Dict[str, Dict[str, str]] = {}
     impressions_by_news: Dict[str, int] = defaultdict(int)
@@ -264,7 +264,7 @@ def convert_mind_to_metta(
     if not all_news:
         raise RuntimeError("No news records were loaded from MIND.")
 
-    if len(all_news) < min_articles:
+    if len(all_news) < min_documents:
         file_details = "; ".join(
             [
                 f"{entry['news_path']} (news={entry['news_records']}, behaviors={entry['has_behaviors']})"
@@ -272,8 +272,8 @@ def convert_mind_to_metta(
             ]
         )
         raise RuntimeError(
-            "Loaded too few articles for a meaningful benchmark "
-            f"({len(all_news)} < min_articles={min_articles}). "
+            "Loaded too few documents for a meaningful benchmark "
+            f"({len(all_news)} < min_documents={min_documents}). "
             "This usually means --mind-dir points to a sample folder. "
             f"Loaded files: {file_details}"
         )
@@ -284,11 +284,11 @@ def convert_mind_to_metta(
     reference_date = _midpoint_datetime(timestamps)
 
     selected_news_ids = list(all_news.keys())
-    if isinstance(max_articles, int) and max_articles > 0 and len(selected_news_ids) > max_articles:
+    if isinstance(max_documents, int) and max_documents > 0 and len(selected_news_ids) > max_documents:
         selected_news_ids = sorted(
             selected_news_ids,
             key=lambda news_id: (-impressions_by_news.get(news_id, 0), news_id),
-        )[:max_articles]
+        )[:max_documents]
 
     metta_lines: List[str] = []
     distribution = {
@@ -302,7 +302,7 @@ def convert_mind_to_metta(
 
     for news_id in selected_news_ids:
         record = all_news[news_id]
-        article_id = f"A_{news_id}"
+        document_id = f"A_{news_id}"
         category = _normalize_category(record.get("category", "unknown"))
         title = record.get("title", "")
         abstract = record.get("abstract", "")
@@ -325,19 +325,19 @@ def convert_mind_to_metta(
         engagement = _engagement_bucket(ctr)
         audience_sentiment = _sentiment_bucket(title, abstract)
 
-        _emit_fact(metta_lines, "length", article_id, length)
-        _emit_fact(metta_lines, "reading-time", article_id, reading_time)
-        _emit_fact(metta_lines, "tone", article_id, tone)
-        _emit_fact(metta_lines, "audience-expertise", article_id, audience_expertise)
-        _emit_fact(metta_lines, "content-type", article_id, content_type)
-        _emit_fact(metta_lines, "date-period", article_id, date_period)
-        _emit_fact(metta_lines, "primary-goal", article_id, primary_goal)
-        _emit_fact(metta_lines, "category", article_id, category)
-        _emit_fact(metta_lines, "popularity", article_id, popularity)
-        _emit_fact(metta_lines, "engagement", article_id, engagement)
-        _emit_fact(metta_lines, "audience-sentiment", article_id, audience_sentiment)
-        _emit_fact(metta_lines, "authored-by", article_id, "MIND")
-        _emit_fact(metta_lines, "title", article_id, title)
+        _emit_fact(metta_lines, "length", document_id, length)
+        _emit_fact(metta_lines, "reading-time", document_id, reading_time)
+        _emit_fact(metta_lines, "tone", document_id, tone)
+        _emit_fact(metta_lines, "audience-expertise", document_id, audience_expertise)
+        _emit_fact(metta_lines, "content-type", document_id, content_type)
+        _emit_fact(metta_lines, "date-period", document_id, date_period)
+        _emit_fact(metta_lines, "primary-goal", document_id, primary_goal)
+        _emit_fact(metta_lines, "category", document_id, category)
+        _emit_fact(metta_lines, "popularity", document_id, popularity)
+        _emit_fact(metta_lines, "engagement", document_id, engagement)
+        _emit_fact(metta_lines, "audience-sentiment", document_id, audience_sentiment)
+        _emit_fact(metta_lines, "authored-by", document_id, "MIND")
+        _emit_fact(metta_lines, "title", document_id, title)
 
         distribution["engagement"][engagement] += 1
         distribution["popularity"][popularity] += 1
@@ -354,8 +354,8 @@ def convert_mind_to_metta(
 
     stats = {
         "dataset": "MIND",
-        "article_count": len(selected_news_ids),
-        "source_article_count": len(all_news),
+        "document_count": len(selected_news_ids),
+        "source_document_count": len(all_news),
         "with_impressions": sum(1 for news_id in selected_news_ids if impressions_by_news.get(news_id, 0) > 0),
         "total_impressions": sum(impressions_by_news.get(news_id, 0) for news_id in selected_news_ids),
         "total_clicks": int(sum(clicks_by_news.values())),
@@ -378,9 +378,9 @@ def convert_mind_to_metta(
         "# Preliminary Results on MIND",
         "",
         "## Executive Snapshot",
-        f"- Articles processed: **{stats['article_count']}**",
-        f"- Source articles available: **{stats['source_article_count']}**",
-        f"- Articles with impressions: **{stats['with_impressions']}**",
+        f"- Documents processed: **{stats['document_count']}**",
+        f"- Source documents available: **{stats['source_document_count']}**",
+        f"- Documents with impressions: **{stats['with_impressions']}**",
         f"- Total impressions: **{stats['total_impressions']}**",
         f"- Total clicks: **{stats['total_clicks']}**",
         f"- Average CTR: **{stats['avg_ctr']:.4f}**",
@@ -440,16 +440,16 @@ def main() -> None:
         help="Directory where summary report files are written.",
     )
     parser.add_argument(
-        "--min-articles",
+        "--min-documents",
         type=int,
         default=1000,
-        help="Fail fast if fewer than this many articles are loaded (guards against wrong/small folders).",
+        help="Fail fast if fewer than this many documents are loaded (guards against wrong/small folders).",
     )
     parser.add_argument(
-        "--max-articles",
+        "--max-documents",
         type=int,
         default=None,
-        help="Optional cap on number of articles exported (top by impressions).",
+        help="Optional cap on number of documents exported (top by impressions).",
     )
     args = parser.parse_args()
 
@@ -457,12 +457,12 @@ def main() -> None:
         mind_dir=args.mind_dir,
         output_metta_path=args.output_metta,
         report_dir=args.report_dir,
-        min_articles=args.min_articles,
-        max_articles=args.max_articles,
+        min_documents=args.min_documents,
+        max_documents=args.max_documents,
     )
 
     print("MIND conversion finished.")
-    print(f"- Articles processed: {stats['article_count']}")
+    print(f"- Documents processed: {stats['document_count']}")
     print(f"- MeTTa output: {stats['output_metta_path']}")
     print(f"- Report (markdown): {stats['report_md_path']}")
 
