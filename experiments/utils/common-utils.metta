@@ -844,6 +844,7 @@
     (pow-math (db_size $db) (n_conjuncts $pattern))
 
 )
+
 ;; Documentation for antecedent:
 ;;
 ;; Description:
@@ -863,8 +864,6 @@
 (= (antecedent $atoms )
     (collapse (let $sup (superpose $atoms) (if  (= $sup (engagement $x $y)) (empty) $sup)))
 )
-
- ;check if atom is variable or not
 
 
  ; THIS IMPLEMENTATION CONSIDERS THE VARIABLE NAMES
