@@ -1,6 +1,6 @@
 
 !(import! &self /mnt/c/Users/HP/iCog/Mindplex-Hyperon/PeTTa/lib/lib_import)
-!(import_prolog_functions_from_file "/mnt/c/Users/HP/iCog/Mindplex-Hyperon/experiments/frequent-pattern-miner/conj_exp.pl" (unique_combinations_star cut-first-char promote_engagement_conj))
+!(import_prolog_functions_from_file "/mnt/c/Users/HP/iCog/Mindplex-Hyperon/experiments/frequent-pattern-miner/conj_exp.pl" (unique_combinations_star cut-first-char promote_engagement_conj hyperpose_runtime))
 !(import! &self ../../utils/common-utils)
 !(import! &self /mnt/c/Users/HP/iCog/Mindplex-Hyperon/experiments/frequent-pattern-miner/frequent-pattern-miner)
 !(import! &self ../../pattern-miner/pattern-miner)
@@ -21,7 +21,7 @@
 ;; minimum support 3 -3rd arg
 ;; number of conjuncts 3 -4th arg
 
-!(pattern-miner &purifiedDbSpace 9 5) 
+!(pattern-miner &purifiedDbSpace 800 5) 
 !(println! "============ end ================")
 ;; demo result structure
     ; ((supportOf (, (Inheritance $y human) (Inheritance $y man)) 3) 

@@ -50,9 +50,8 @@
 ;;     meeting $minsup
 ( = (absSpeCan $dbspace $minsup)
     (let $specializedPattern (only_unique (collapse (createSpecials (match $dbspace ($link $x $y) ($link $x $y)))))
-        (candidatePatternMaker $dbspace (superpose $specializedPattern) $minsup))
+        (candidatePatternMaker $dbspace (hyperpose_runtime $specializedPattern) $minsup))
 )
-
 ; --------------------------------------------
 ;;  formatter
 ; --------------------------------------------

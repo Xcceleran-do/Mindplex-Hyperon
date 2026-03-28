@@ -1,6 +1,68 @@
 :- use_module(library(lists)).
 :- use_module(library(pairs)).
 
+:- dynamic hyperpose_runtime_branches_cache/2.
+:- dynamic hyperpose_runtime_parallel_min_branches/1.
+
+hyperpose_runtime_parallel_min_branches(6).
+
+% hyperpose_runtime(+Exprs, -Out)
+% Runtime variant of hyperpose that evaluates branch expressions concurrently.
+% Unlike translator-level hyperpose, Exprs can be provided via variables.
+hyperpose_runtime(Exprs, Out) :-
+    nonvar(Exprs),
+    is_list(Exprs),
+    length(Exprs, BranchCount),
+    hyperpose_runtime_parallel_min_branches(MinParallelBranches),
+    ( BranchCount < MinParallelBranches
+    -> member(Expr, Exprs),
+             run_runtime_branch_expr(Expr, Out)
+    ; get_hyperpose_runtime_branches(Exprs, Branches),
+      concurrent_and(member((Goal, Res), Branches), (call(Goal), Out = Res))
+    ).
+
+run_runtime_branch_expr(Expr, Out) :-
+        ( is_list(Expr)
+        -> reduce(Expr, Out)
+        ; Out = Expr
+        ).
+
+set_hyperpose_runtime_parallel_min_branches(Min, true) :-
+    integer(Min),
+    Min >= 1,
+    retractall(hyperpose_runtime_parallel_min_branches(_)),
+    assertz(hyperpose_runtime_parallel_min_branches(Min)).
+
+get_hyperpose_runtime_branches(Exprs, Branches) :-
+    ( ground(Exprs),
+      hyperpose_runtime_branches_cache(Exprs, Cached)
+    -> copy_term(Cached, Branches)
+    ; build_hyperpose_runtime_branches(Exprs, Built),
+      ( ground(Exprs)
+      -> copy_term(Built, Stored),
+         ( hyperpose_runtime_branches_cache(Exprs, _)
+         -> true
+         ; assertz(hyperpose_runtime_branches_cache(Exprs, Stored))
+         )
+      ; true
+      ),
+      Branches = Built
+    ).
+
+build_hyperpose_runtime_branches([], []).
+build_hyperpose_runtime_branches([Expr|Exprs], [(Goal, Res)|Branches]) :-
+    compile_runtime_branch(Expr, Goal, Res),
+    build_hyperpose_runtime_branches(Exprs, Branches).
+
+compile_runtime_branch(Expr, true, Expr) :-
+    ( var(Expr)
+    ; atomic(Expr)
+    ; Expr = partial(_, _)
+    ),
+    !.
+compile_runtime_branch(Expr, Goal, Res) :-
+    translate_expr_to_conj(Expr, Goal, Res).
+
 % unique_combinations_star(+Exprs, +Size, -Results)
 % Generates conjunctions of size Size where all clauses share exactly one hub
 % variable and no other variable is shared across any pair of clauses.
