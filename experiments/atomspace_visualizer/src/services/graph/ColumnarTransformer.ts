@@ -1,11 +1,11 @@
 // Columnar Graph Transformer - transforms property-based data into columnar layout
-import { 
-  Triple, 
-  GraphNode, 
-  GraphEdge, 
-  GraphData, 
+import {
+  Triple,
+  GraphNode,
+  GraphEdge,
+  GraphData,
   GraphMetadata,
-  Point 
+  Point
 } from '../../types';
 
 export interface PropertyColumn {
@@ -20,7 +20,7 @@ export interface Article {
 }
 
 export class ColumnarTransformer {
-  private readonly COLUMN_SPACING = 300;
+  private readonly COLUMN_SPACING = 500;
   private readonly NODE_SPACING = 120;
   private readonly HEADER_HEIGHT = 100;
 
@@ -93,16 +93,16 @@ export class ColumnarTransformer {
 
     // Define priority columns that should appear first
     const priorityColumns = ['audience-expertise', 'engagement'];
-    
+
     // Sort properties: priority ones first, then alphabetical
     const sortedProperties = Array.from(propertyValues.keys()).sort((a, b) => {
       const indexA = priorityColumns.indexOf(a);
       const indexB = priorityColumns.indexOf(b);
-      
+
       if (indexA !== -1 && indexB !== -1) return indexA - indexB;
       if (indexA !== -1) return -1;
       if (indexB !== -1) return 1;
-      
+
       return a.localeCompare(b);
     });
 
@@ -150,10 +150,12 @@ export class ColumnarTransformer {
   private createPropertyNodes(columns: PropertyColumn[], nodes: GraphNode[]): void {
     for (const column of columns) {
       const isTarget = ['audience-expertise', 'engagement'].includes(column.name);
-      
+
       const label = column.name.replace(/_/g, ' ').toUpperCase() + (isTarget ? ' 🎯' : '');
-      
+
       // Add column header node with better color
+      const headerColors = this.getHeaderColorStats(column.name);
+
       nodes.push({
         id: `header-${column.name}`,
         label: label,
@@ -162,7 +164,9 @@ export class ColumnarTransformer {
           x: column.position,
           y: 20
         },
-        color: this.getHeaderColor(column.name),
+        color: headerColors.bg,
+        textColor: headerColors.text,
+        strokeColor: headerColors.border,
         size: isTarget ? 90 : 70, // Larger size for target columns
         metadata: {
           originalExpression: column.name,
@@ -175,6 +179,8 @@ export class ColumnarTransformer {
 
       // Add value nodes
       const values = Array.from(column.values).sort();
+      const valColors = this.getPropertyValueColorStats(column.name);
+
       values.forEach((value, index) => {
         nodes.push({
           id: `${column.name}-${value}`,
@@ -184,7 +190,8 @@ export class ColumnarTransformer {
             x: column.position,
             y: this.HEADER_HEIGHT + index * this.NODE_SPACING
           },
-          color: this.getPropertyValueColor(column.name),
+          color: valColors.bg,
+          strokeColor: valColors.border,
           size: isTarget ? 60 : 45, // Larger size for target values
           metadata: {
             originalExpression: value,
@@ -206,7 +213,7 @@ export class ColumnarTransformer {
     for (const [articleId, article] of articlesMap) {
       for (const column of columns) {
         const value = article.properties.get(column.name);
-        
+
         if (value) {
           const targetId = `${column.name}-${value}`;
 
@@ -225,50 +232,51 @@ export class ColumnarTransformer {
     }
   }
 
-  private getHeaderColor(propertyName: string): string {
-    const colorMap: Record<string, string> = {
-      // Target Attributes (High Contrast / Neon)
-      'audience-expertise': '#059669', // Darker Emerald (better contrast with white text)
-      'engagement': '#be123c',         // Darker Rose (better contrast with white text)
+  private generateColor(str: string, type: 'header' | 'value'): { bg: string; text: string; border: string } {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
 
-      // Other Attributes (Muted / Pastel)
-      'length': '#94a3b8',           // Slate
-      'reading-time': '#94a3b8',     // Slate
-      'tone': '#a78bfa',             // Soft Purple
-      'complexity': '#818cf8',       // Soft Indigo
-      'content-type': '#60a5fa',     // Soft Blue
-      'date-period': '#9ca3af',      // Gray
-      'primary-goal': '#f472b6',     // Soft Pink
-      'popularity': '#34d399',       // Soft Green
-      'audience-sentiment': '#fbbf24', // Soft Amber
-      'authored-by': '#fb7185',      // Soft Rose
-      'title': '#4b5563'             // Dark Gray
+    // Hue: Full range 0-360 based on hash
+    const h = Math.abs(hash % 360);
+
+    // Saturation: High for vibrant, appealing colors (70-95%)
+    const s = 70 + (Math.abs(hash >> 8) % 25);
+
+    // Lightness:
+    let l: number;
+    let textColor: string;
+    let borderColor: string;
+
+    if (type === 'header') {
+      // Header: Richer, darker for better contrast with white text, or lighter for black text
+      // Let's force a range that guarantees good contrast with one or the other.
+      // Dark Mode preference: deeply saturated dark colors (L: 20-40%) with White text
+      l = 25 + (Math.abs(hash >> 4) % 20); // 25-45%
+      textColor = '#ffffff';
+      borderColor = `hsla(${h}, ${s}%, ${l + 20}%, 0.8)`;
+    } else {
+      // Value: Brighter, pastel (L: 70-90%) - Text is OUTSIDE, so this color is just the circle fill.
+      // But if we ever put text inside, it should be black.
+      l = 75 + (Math.abs(hash >> 4) % 15); // 75-90%
+      textColor = '#1e293b'; // Slate-800
+      borderColor = `hsla(${h}, ${s}%, ${l - 20}%, 0.5)`;
+    }
+
+    return {
+      bg: `hsl(${h}, ${s}%, ${l}%)`,
+      text: textColor,
+      border: borderColor
     };
-
-    return colorMap[propertyName] || '#4b5563';
   }
 
-  private getPropertyValueColor(propertyName: string): string {
-    const colorMap: Record<string, string> = {
-      // Target Attributes (Bright / Distinct)
-      'audience-expertise': '#10b981', // Emerald
-      'engagement': '#f43f5e',         // Rose
+  private getHeaderColorStats(propertyName: string) {
+    return this.generateColor(propertyName, 'header');
+  }
 
-      // Other Attributes (Lighter versions)
-      'length': '#cbd5e1',           // Light Slate
-      'reading-time': '#cbd5e1',     // Light Slate
-      'tone': '#c4b5fd',             // Light Purple
-      'complexity': '#a5b4fc',       // Light Indigo
-      'content-type': '#93c5fd',     // Light Blue
-      'date-period': '#d1d5db',      // Light Gray
-      'primary-goal': '#fbcfe8',     // Light Pink
-      'popularity': '#6ee7b7',       // Light Green
-      'audience-sentiment': '#fcd34d', // Light Amber
-      'authored-by': '#fda4af',      // Light Rose
-      'title': '#9ca3af'             // Light Gray
-    };
-
-    return colorMap[propertyName] || '#9ca3af';
+  private getPropertyValueColorStats(propertyName: string) {
+    return this.generateColor(propertyName, 'value');
   }
 
   private createMetadata(nodes: GraphNode[], edges: GraphEdge[]): GraphMetadata {

@@ -23,6 +23,27 @@ export const worldToScreen = (worldPoint: Point, transform: Transform): Point =>
   };
 };
 
+// Helper to truncate text to fit width
+const fitTextToWidth = (ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string => {
+  if (ctx.measureText(text).width <= maxWidth) return text;
+
+  let low = 0;
+  let high = text.length;
+  let fit = '';
+
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    const str = text.substring(0, mid) + '...';
+    if (ctx.measureText(str).width <= maxWidth) {
+      fit = str;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  return fit || text.substring(0, 3) + '...';
+};
+
 // Render a single node with columnar styling
 export const renderNode = (
   ctx: CanvasRenderingContext2D,
@@ -41,7 +62,7 @@ export const renderNode = (
   // Skip rendering if node is outside viewport
   const margin = radius + 50;
   if (screenPos.x < -margin || screenPos.x > canvasWidth + margin ||
-      screenPos.y < -margin || screenPos.y > canvasHeight + margin) {
+    screenPos.y < -margin || screenPos.y > canvasHeight + margin) {
     return;
   }
 
@@ -60,13 +81,14 @@ export const renderNode = (
 
   // Determine colors based on state
   let fillColor = node.color || nodeFill;
-  let strokeColor = nodeStroke;
+  let strokeColor = node.strokeColor || nodeStroke;
   let strokeWidth = 2;
   let currentRadius = radius;
 
   if (isDimmed) {
     // Dim the node
     fillColor = fillColor.replace(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/, 'rgba($1, $2, $3, 0.2)');
+    fillColor = fillColor.replace(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/, 'hsla($1, $2%, $3%, 0.2)');
     fillColor = fillColor.replace(/#([0-9a-f]{6})/i, (match, hex) => {
       const r = parseInt(hex.substr(0, 2), 16);
       const g = parseInt(hex.substr(2, 2), 16);
@@ -75,94 +97,103 @@ export const renderNode = (
     });
   } else if (isHighlighted) {
     // Highlight the node
-    currentRadius *= 1.2;
+    currentRadius *= 1.25;
     strokeColor = nodeHighlight;
-    strokeWidth = 4;
-    
-    // Add glow effect
+    strokeWidth = Math.max(4, 6 * transform.scale);
+
+    // Dynamic glow
     ctx.shadowColor = nodeHighlight;
-    ctx.shadowBlur = 20;
+    ctx.shadowBlur = 15 * transform.scale;
   }
 
   if (node === hoveredNode) {
-    currentRadius *= 1.1;
-    strokeWidth = 3;
+    currentRadius *= 1.15;
+    strokeWidth = Math.max(3, 4 * transform.scale);
     strokeColor = nodeHover;
+
+    // Subtle hover glow
+    ctx.shadowColor = nodeHover;
+    ctx.shadowBlur = Math.max(10 * transform.scale, 8);
   }
 
   if (node === selectedNode) {
     strokeColor = nodeSelected;
-    strokeWidth = 4;
+    strokeWidth = Math.max(4, 5 * transform.scale);
+
+    // Strong selection glow
+    ctx.shadowColor = nodeSelected;
+    ctx.shadowBlur = 20 * transform.scale;
   }
 
   // Draw node based on column type
   if (node.metadata.columnType === 'header') {
-    // Draw header as rectangle with flexible width based on text
-    const fontSize = 14;
-    ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`;
-    const textMetrics = ctx.measureText(node.label);
+    // Calculate the actual font size we'll use for rendering
+    const baseFontSize = 14;
+    const scaledFontSize = Math.max(baseFontSize, Math.min(baseFontSize * 2, baseFontSize * transform.scale));
+    ctx.font = `bold ${scaledFontSize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`;
+
+    // Use width-based truncation for headers (max width to prevent overlap)
+    const displayLabel = fitTextToWidth(ctx, node.label, 200);
+
+    // Measure the truncated text with the SAME font we'll use for drawing
+    const textMetrics = ctx.measureText(displayLabel);
     const textWidth = textMetrics.width;
-    const padding = 40; // Padding on each side (increased for longer names)
-    const width = (textWidth + padding * 2) * transform.scale;
-    const height = 40 * transform.scale;
-    
+    const padding = 24;
+    const width = textWidth + padding * 2;
+    const height = 36 * transform.scale;
+
     ctx.fillStyle = fillColor;
     ctx.fillRect(screenPos.x - width / 2, screenPos.y - height / 2, width, height);
-    
+
     ctx.strokeStyle = strokeColor;
     ctx.lineWidth = strokeWidth;
     ctx.strokeRect(screenPos.x - width / 2, screenPos.y - height / 2, width, height);
+
+    if (transform.scale > 0.4) {
+      // Use explicit text color if available (for headers), otherwise default
+      ctx.fillStyle = isDimmed ? textDimmed : (node.textColor || textPrimary);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(displayLabel, screenPos.x, screenPos.y);
+    }
   } else {
     // Draw regular nodes as circles
     ctx.beginPath();
     ctx.arc(screenPos.x, screenPos.y, currentRadius, 0, 2 * Math.PI);
     ctx.fillStyle = fillColor;
     ctx.fill();
-    
+
     ctx.strokeStyle = strokeColor;
     ctx.lineWidth = strokeWidth;
     ctx.stroke();
+
+    // Draw node label
+    if (transform.scale > 0.4 && node.label) {
+      ctx.fillStyle = isDimmed ? textDimmed : (node.textColor || textPrimary);
+      const fontSize = 12;
+      const scaledFontSize = Math.max(fontSize, Math.min(fontSize * 2, fontSize * transform.scale));
+      ctx.font = `${scaledFontSize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+
+      // Smart truncation for value labels (max 150px)
+      const displayLabel = fitTextToWidth(ctx, node.label, 140);
+
+      // Position: y + radius + padding
+      ctx.fillText(displayLabel, screenPos.x, screenPos.y + currentRadius + 8);
+    }
   }
 
   // Reset shadow
   ctx.shadowColor = 'transparent';
   ctx.shadowBlur = 0;
-
-  // Draw node label
-  if (transform.scale > 0.4 && node.label) {
-    ctx.fillStyle = isDimmed ? textDimmed : textPrimary;
-    const fontSize = node.metadata.columnType === 'header' ? 14 : 12;
-    // Scale font size but clamp it to reasonable limits
-    const scaledFontSize = Math.max(fontSize, Math.min(fontSize * 2, fontSize * transform.scale));
-    ctx.font = `${scaledFontSize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`;
-    ctx.textAlign = 'center';
-    
-    let displayLabel = node.label;
-    
-    if (node.metadata.columnType === 'header') {
-      ctx.textBaseline = 'middle';
-      if (displayLabel.length > 25) {
-        displayLabel = displayLabel.substring(0, 23) + '...';
-      }
-      ctx.fillText(displayLabel, screenPos.x, screenPos.y);
-    } else {
-      // Render label below the node to prevent overflow on the node itself
-      ctx.textBaseline = 'top';
-      // Truncate more aggressively to prevent overlap
-      if (displayLabel.length > 15) {
-        displayLabel = displayLabel.substring(0, 12) + '...';
-      }
-      // Position: y + radius + padding (increased padding)
-      ctx.fillText(displayLabel, screenPos.x, screenPos.y + currentRadius + 8);
-    }
-  }
 };
 
 // Get unique color for each article's line
 export const getArticleLineColor = (articleId: string, isHighlighted: boolean, isDimmed: boolean): string => {
   if (isDimmed) return 'rgba(107, 114, 128, 0.1)';
   if (isHighlighted) return '#f59e0b';
-  
+
   // Generate unique color based on article ID
   const match = articleId.match(/article-(\d+)/);
   if (match) {
@@ -170,7 +201,7 @@ export const getArticleLineColor = (articleId: string, isHighlighted: boolean, i
     const hue = (articleNum * 137) % 360; // Golden angle for good color distribution
     return `hsla(${hue}, 70%, 55%, 0.7)`;
   }
-  
+
   return 'rgba(107, 114, 128, 0.4)';
 };
 
@@ -236,7 +267,7 @@ export const renderArticleConnections = (
       const prevNode = graphData.nodes.find(n => n.id === edges[i - 1].target);
       if (!prevNode) continue;
       const prevScreen = worldToScreen(prevNode.position, transform);
-      
+
       const controlX = (prevScreen.x + targetScreen.x) / 2;
       const controlY = (prevScreen.y + targetScreen.y) / 2;
       ctx.quadraticCurveTo(controlX, controlY, targetScreen.x, targetScreen.y);
@@ -252,7 +283,7 @@ export const renderArticleConnections = (
     ctx.beginPath();
     ctx.arc(articleScreen.x, articleScreen.y, 5 * transform.scale, 0, 2 * Math.PI);
     ctx.fill();
-    
+
     // Markers at property connections
     for (const edge of edges) {
       const targetNode = graphData.nodes.find(n => n.id === edge.target);
@@ -273,7 +304,7 @@ export const drawColumnSeparators = (
   canvasHeight: number
 ) => {
   const columns = new Map<number, boolean>(); // x -> isTarget
-  
+
   for (const node of graphData.nodes) {
     if (node.metadata.columnType === 'header') {
       columns.set(node.position.x, !!node.metadata.isTarget);
@@ -289,9 +320,9 @@ export const drawColumnSeparators = (
     if (isTarget) {
       const screenX = worldToScreen({ x: columnX, y: 0 }, transform).x;
       const width = 250 * transform.scale; // Approximate column width
-      
+
       ctx.fillStyle = 'rgba(255, 255, 255, 0.03)'; // Subtle highlight
-      ctx.fillRect(screenX - width/2, 0, width, canvasHeight);
+      ctx.fillRect(screenX - width / 2, 0, width, canvasHeight);
     }
   }
 

@@ -1,27 +1,27 @@
-! (register-module! ../../../experiments)
 
-! (import! &self experiments:pattern-miner:pattern-miner)
-! (import! &self experiments:utils:common-utils)
-! (import! &self experiments:frequent-pattern-miner:frequent-pattern-miner)
-! (import! &db experiments:atomspace_visualizer:public:data)
+!(import! &self /mnt/c/Users/HP/iCog/Mindplex-Hyperon/PeTTa/lib/lib_import)
+!(import_prolog_functions_from_file "/mnt/c/Users/HP/iCog/Mindplex-Hyperon/experiments/frequent-pattern-miner/conj_exp.pl" (unique_combinations_star cut-first-char promote_engagement_conj hyperpose_runtime))
+!(import! &self ../../utils/common-utils)
+!(import! &self /mnt/c/Users/HP/iCog/Mindplex-Hyperon/experiments/frequent-pattern-miner/frequent-pattern-miner)
+!(import! &self ../../pattern-miner/pattern-miner)
+!(static-import! &temp "../../ingestion/outputs/bookcrossing_data_ascii")
 
-! (bind! purifiedDbSpace (new-space)) ; space to hold the database atoms
-! (add-reduct purifiedDbSpace (get-atoms &db))
+!(let $atom (match &temp ($fact $stv) (: (fact:- $fact) $fact $stv)) (add-atom &res1 $atom))
+!(let $atom (match &temp ($fact $stv) $fact) (add-atom &purifiedDbSpace $atom))
 
-;; space to hold the miner result
-!(bind! &res1 (new-space))
-; ! (memberChecker (engagement $x "high") () purifiedDbSpace 3)
-; !(sup-eval purifiedDbSpace (engagement $x "high") 3)
-; ! (memberChecker (engagement $x "low") ( (engagement $x "low") (engagement $x "med")) purifiedDbSpace 3)
-; ! (let $ana (customUnique (match purifiedDbSpace ($link $x $y) (createSpecials ($link $x $y))) purifiedDbSpace 3) (--- :- --- (unique_combinations_star $ana)))
 
----------------------------------------------------
+; !(memberChecker (engagement_level $x "high") () purifiedDbSpace 3)
+; !(sup-eval purifiedDbSpace (engagement_level $x "high") 3)
+; !(memberChecker (engagement_level $x "low") ( (engagement_level $x "low") (engagement_level $x "med")) purifiedDbSpace 3)
+; !(let $ana (customUnique (match purifiedDbSpace ($link $x $y) (createSpecials ($link $x $y))) purifiedDbSpace 3) (--- :- --- (unique_combinations_star $ana)))
+
+; ---------------------------------------------------
 ;; mine frequent patterns without surprissingness 
----------------------------------------------------
+; ---------------------------------------------------
 ;; minimum support 3 -3rd arg
 ;; number of conjuncts 3 -4th arg
 
-!(pattern-miner purifiedDbSpace 3 4) 
+!(pattern-miner &purifiedDbSpace 800 5) 
 !(println! "============ end ================")
 ;; demo result structure
     ; ((supportOf (, (Inheritance $y human) (Inheritance $y man)) 3) 

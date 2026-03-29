@@ -1,74 +1,76 @@
-# experiments/ingestion/pipeline.py
-import os
-import sys
-import time
-from dotenv import load_dotenv
+#!/usr/bin/env python3
+"""Public ingestion entrypoint.
 
-# Add workspace root to path to allow imports
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
+This file intentionally stays thin and delegates implementation details to
+modular components in `models.py`, `tool_router.py`, `agents/`, and
+`orchestrator.py`.
+"""
 
-from experiments.ingestion.fetcher import MindplexFetcher
-from experiments.ingestion.analyzer import ArticleAnalyzer
-from experiments.ingestion.converter import JsonToMetta
-from experiments.ingestion.config import DEFAULT_USERNAME
+from __future__ import annotations
 
-def main():
-    load_dotenv()
-    
-    username = os.getenv("MINDPLEX_USERNAME", DEFAULT_USERNAME)
-    print(f"Starting ingestion pipeline for user: {username}")
+from typing import Any, Dict, Optional, Sequence
 
-    print("1. Fetching articles...")
-    fetcher = MindplexFetcher(username=username)
-    articles = fetcher.fetch_all(limit=50) # Start small for testing
-    print(f"   Fetched {len(articles)} articles.")
-    
-    if not articles:
-        print("No articles found. Exiting.")
-        return
+from .models import IngestionConfig, IngestionResult
+from .orchestrator import MultiAgentIngestionOrchestrator
 
-    print("2. Calculating Rankings...")
-    # Sort by views descending to determine popularity rank
-    # Ensure views is int
-    for art in articles:
-        try:
-            art['views'] = int(art.get('views', 0))
-        except:
-            art['views'] = 0
-            
-    articles.sort(key=lambda x: x.get('views', 0), reverse=True)
-    rank_map = {art.get('id'): i+1 for i, art in enumerate(articles)}
 
-    print("3. Analyzing and Enriching (this may take time)...")
-    # Use GEMINI_API_KEY4 as per original file
-    api_key = os.getenv("GEMINI_API_KEY4")
-    analyzer = ArticleAnalyzer(api_key=api_key)
-    
-    enriched_articles = []
-    for i, art in enumerate(articles):
-        print(f"   Processing [{i+1}/{len(articles)}]: {art.get('post_title', 'Untitled')[:30]}...")
-        enriched = analyzer.process(art, rank_stats=rank_map)
-        enriched_articles.append(enriched)
-        
-        # Sleep to avoid hitting Gemini API rate limits (Free tier is ~15 RPM)
-        # if i < len(articles) - 1:
-        #     print("   Sleeping 60s for rate limit...")
-        #     time.sleep(60)
+def run_ingestion(
+    username: Optional[str] = None,
+    sources: Optional[Sequence[str]] = None,
+    output_path: Optional[str] = None,
+    subject_prefix: str = "A",
+    source_reliability: float = 0.9,
+    min_property_coverage: float = 0.25,
+) -> Dict[str, Any]:
+    """Standalone ingestion entrypoint used by both API and CLI."""
 
-    print("4. Converting to MeTTa...")
-    converter = JsonToMetta()
-    metta_output = converter.convert(enriched_articles)
+    if source_reliability < 0 or source_reliability > 1:
+        return IngestionResult(
+            status="error",
+            message="source_reliability must be in [0, 1]",
+        ).__dict__
 
-    output_path = "experiments/atomspace_visualizer/public/data.metta"
-    print(f"5. Saving to {output_path}...")
-    
-    # Ensure directory exists
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    
-    with open(output_path, "w") as f:
-        f.write(metta_output)
-    
-    print("Done!")
+    if min_property_coverage < 0 or min_property_coverage > 1:
+        return IngestionResult(
+            status="error",
+            message="min_property_coverage must be in [0, 1]",
+        ).__dict__
 
-if __name__ == "__main__":
-    main()
+    config = IngestionConfig(
+        username=username,
+        sources=list(sources or []),
+        output_path=output_path,
+        subject_prefix=subject_prefix,
+        source_reliability=source_reliability,
+        min_property_coverage=min_property_coverage,
+    )
+
+    orchestrator = MultiAgentIngestionOrchestrator()
+    state, reports = orchestrator.execute(config)
+
+    failed_report = next((report for report in reports if report.status == "error"), None)
+    if failed_report is not None:
+        return IngestionResult(
+            status="error",
+            message=failed_report.error or f"Agent failed: {failed_report.name}",
+            skipped_sources=state.skipped_sources,
+            agent_reports=[report.__dict__ for report in reports],
+        ).__dict__
+
+    unique_subjects = sorted({fact.subject for fact in state.facts})
+    unique_properties = sorted({fact.predicate for fact in state.facts})
+
+    message = "Ingestion completed"
+    if state.warnings:
+        message = f"Ingestion completed with {len(state.warnings)} warning(s)"
+
+    return IngestionResult(
+        status="success",
+        message=message,
+        output_path=state.output_path,
+        facts_count=len(state.facts),
+        subjects=unique_subjects,
+        properties=unique_properties,
+        skipped_sources=state.skipped_sources,
+        agent_reports=[report.__dict__ for report in reports],
+    ).__dict__

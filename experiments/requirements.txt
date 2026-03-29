@@ -2,5 +2,7 @@ flask
 flask-cors
 google-generativeai
 hyperon
-dotenv
+janus-swi
+python-dotenv
 regex
+requests

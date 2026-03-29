@@ -20,6 +20,54 @@ cd /workspaces/Mindplex-Hyperon/experiments
 ./stop_all.sh
 # AtomSpace Visualizer — Unified Chat + Mining Documentation
 
+## MIND Benchmark Quick Run
+
+Use this when you need an external, public dataset result you can share quickly.
+
+1. Download and extract MIND (recommend **MINDsmall**) so the folder contains either:
+  - `train/news.tsv`, `train/behaviors.tsv`, `valid/news.tsv`, `valid/behaviors.tsv`, or
+  - `news.tsv` and `behaviors.tsv` directly.
+
+2. Run the one-shot adapter (from repo root):
+
+```bash
+python experiments/ingestion/run_mind_benchmark.py --mind-dir <PATH_TO_MIND_FOLDER>
+```
+
+3. Outputs generated automatically:
+  - `experiments/atomspace_visualizer/public/data.metta` (ready for existing miner/visualizer)
+  - `experiments/reports/mind_preliminary_results.md` (shareable summary)
+  - `experiments/reports/mind_preliminary_results.json` (raw stats)
+
+4. Optional test:
+
+```bash
+python -m unittest experiments.ingestion.tests.mind_adapter_test
+```
+
+Notes:
+- Engagement labels are derived from CTR buckets.
+- Popularity is marked `Top_10` using the top 10% impression threshold.
+- Tone/sentiment/expertise are heuristic, for preliminary benchmarking.
+
+### If direct URL download fails (zip fallback)
+
+If your environment cannot fetch MIND with direct links, download `MINDsmall_train.zip`
+and `MINDsmall_dev.zip` manually from https://msnews.github.io/ (Download section), then run:
+
+```bash
+python3 experiments/ingestion/setup_mind_from_zips.py \
+  --train-zip /path/to/MINDsmall_train.zip \
+  --dev-zip /path/to/MINDsmall_dev.zip \
+  --mind-root datasets/MIND \
+  --min-articles 10000
+```
+
+This extracts train/valid and immediately generates:
+- `experiments/atomspace_visualizer/public/data.metta`
+- `experiments/reports/mind_preliminary_results.md`
+- `experiments/reports/mind_preliminary_results.json`
+
 This README consolidates the project README and the chat debugging/implementation notes. It explains how the chat+mining features work, how to run and test them, and where to look when things go wrong.
 
 ## Quick start

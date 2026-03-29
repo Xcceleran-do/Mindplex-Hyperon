@@ -18,7 +18,7 @@ export interface ChatInterfaceProps {
   onVisualize: (filter: import('../../types').FilterState) => void;
   miningResults?: Array<{ pattern: string; support: string }>;
   conjunctSize?: number;
-  onMiningStart?: (conjunctSize: number) => void;
+  onMiningStart?: (conjunctSize: number, minSupport?: number) => void;
   isOpen?: boolean;
   onClose?: () => void;
 }
@@ -32,9 +32,9 @@ const ChatInterface = (props: ChatInterfaceProps) => {
 
   let chatContainerRef: HTMLDivElement | undefined;
   let inputRef: HTMLTextAreaElement | undefined;
-  
+
   console.log('ChatInterface rendered, props:', { conjunctSize: props.conjunctSize });
-  
+
   // NOTE: We intentionally do NOT auto-trigger mining when `props.conjunctSize`
   // changes because that value is also set by the parent when a mining job
   // completes. Doing so could cause a feedback loop where the parent starts
@@ -70,9 +70,9 @@ const ChatInterface = (props: ChatInterfaceProps) => {
         content: `Mining completed! Found ${results.length} pattern(s). Analyzing results...`,
         timestamp: new Date()
       };
-      
+
       setMessages(prev => [...prev, systemMsg]);
-      
+
       // Request a single summary for all patterns and display it
       (async () => {
         const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
@@ -114,7 +114,7 @@ const ChatInterface = (props: ChatInterfaceProps) => {
 
   const analyzeConjunct = async (pattern: string, support: string) => {
     const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
-    
+
     try {
       const response = await fetch(`${API_BASE}/api/chat/analyze`, {
         method: 'POST',
@@ -125,7 +125,7 @@ const ChatInterface = (props: ChatInterfaceProps) => {
       if (!response.ok) throw new Error('Failed to analyze conjunct');
 
       const data = await response.json();
-      
+
       const assistantMsg: Message = {
         id: `msg-${Date.now()}-${Math.random()}`,
         role: 'assistant',
@@ -141,7 +141,7 @@ const ChatInterface = (props: ChatInterfaceProps) => {
       setMessages(prev => [...prev, assistantMsg]);
     } catch (error) {
       console.error('Error analyzing conjunct:', error);
-      
+
       // Fallback to simple summary
       const fallbackMsg: Message = {
         id: `msg-${Date.now()}-${Math.random()}`,
@@ -158,7 +158,7 @@ const ChatInterface = (props: ChatInterfaceProps) => {
   // Send AI message (internal function)
   const sendAIMessage = async (text: string) => {
     const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
-    
+
     // Show typing indicator
     const typingMsg: Message = {
       id: `typing-${Date.now()}`,
@@ -187,19 +187,19 @@ const ChatInterface = (props: ChatInterfaceProps) => {
       if (!response.ok) throw new Error('Failed to get response');
 
       const data = await response.json();
-      
+
       // Remove typing indicator and add actual response
       setMessages(prev => prev.filter(m => !m.isTyping));
-      
+
       const aiMsg: Message = {
         id: `msg-${Date.now()}-${Math.random()}`,
         role: 'assistant',
         content: data.response,
         timestamp: new Date()
       };
-      
+
       setMessages(prev => [...prev, aiMsg]);
-      
+
     } catch (error) {
       console.error('Error sending message:', error);
       setMessages(prev => prev.filter(m => !m.isTyping));
@@ -229,7 +229,7 @@ const ChatInterface = (props: ChatInterfaceProps) => {
     };
     setMessages(prev => [...prev, userMsg]);
     setInputText('');
-    
+
     // Intercept explicit mining commands and delegate to parent unified miner
     const mineRegex = /mine(?: rules)?(?: with)?\s*(?:the )?(?:next )?(?:top )?\s*(\d+)\s*(?:patterns?|conjunctions?)/i;
     const m = text.match(mineRegex);
@@ -304,7 +304,7 @@ const ChatInterface = (props: ChatInterfaceProps) => {
           let match;
           while ((match = regex.exec(patternObj.pattern)) !== null) {
             const property = match[1];
-            const value = `"${ match[3]?.trim()}"`;
+            const value = `"${match[3]?.trim()}"`;
             if (property && value) {
               propertyFilters.push({ property, value });
             }
@@ -346,13 +346,13 @@ const ChatInterface = (props: ChatInterfaceProps) => {
         <div class={`chat-interface ${isMinimized() ? 'minimized' : ''}`}>
           {/* Header removed as it's now handled by the sidebar container */}
           <div class="chat-header-actions-floating">
-             <button class="chat-action-btn" onClick={clearChat} title="Clear Chat">
-                🗑️
-              </button>
+            <button class="chat-action-btn" onClick={clearChat} title="Clear Chat">
+              🗑️
+            </button>
           </div>
 
           <Show when={!isMinimized()}>
-            <div class="chat-container" ref={chatContainerRef}>
+            <div class="chat-messages" ref={chatContainerRef}>
               <Show when={messages().length === 0}>
                 <div class="chat-welcome">
                   <div class="welcome-icon">👋</div>
@@ -445,12 +445,12 @@ const formatMessage = (content: string): string => {
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
     .replace(/`([^`]+)`/g, '<code>$1</code>')
     .replace(/```([^```]+)```/g, '<pre><code>$1</code></pre>');
-  
+
   // Convert [Pattern N] or [N] to clickable references
   formatted = formatted.replace(/\[(?:Rule )?(\d+)\]/g, '<span class="pattern-ref" data-pattern="$1" title="Click to visualize this pattern">[$1]</span>');
-  
+
   formatted = formatted.replace(/\n/g, '<br/>');
-  
+
   return formatted;
 };
 
