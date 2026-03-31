@@ -42,11 +42,11 @@ The MeTTa / AtomSpace ecosystem was the required execution environment.
 
 The research phase (July – October 2025) surveyed both symbolic and neuro-symbolic rule-mining algorithms. Three experimental branches were created to prototype candidate approaches:
 
-| Branch | Purpose |
-|---|---|
-| `SYMBOLIC` | Symbolic/evolutionary approaches — EVODA |
-| `Neuro-Symbolic` | Neuro-symbolic approaches — DFOL, RARL analysis, RuDiK analysis |
-| `demo-PeTTa` (and predecessors) | Hyperon-Miner adaptation for production use |
+| Branch | Purpose | Link |
+|---|---|---|
+| `SYMBOLIC` | Symbolic/evolutionary approaches — EVODA | [branch](https://github.com/Xcceleran-do/Mindplex-Hyperon/tree/SYMBOLIC) |
+| `Neuro-Symbolic` | Neuro-symbolic approaches — DFOL, RARL analysis, RuDiK analysis | [branch](https://github.com/Xcceleran-do/Mindplex-Hyperon/tree/Neuro-Symbolic) |
+| `demo-PeTTa` (and predecessors) | Hyperon-Miner adaptation for production use | [branch](https://github.com/Xcceleran-do/Mindplex-Hyperon/tree/demo-PeTTa) |
 
 A **full head-to-head benchmark across all candidates was not possible**. The core obstacle was that a complete port of DFOL and EVODA to execute natively *inside AtomSpace* (the required production environment) was not achievable within this quarter. The limitations discovered during porting attempts determined the final decision.
 
@@ -55,7 +55,7 @@ A **full head-to-head benchmark across all candidates was not possible**. The co
 ### 2.2 Algorithms Reviewed
 
 #### 2.2.1 EVODA — Evolutionary Algorithm for Rule Learning over Knowledge Graphs
-*(Implemented: `SYMBOLIC` branch, `Evoda/evoda.metta`)*
+*(Implemented: [`SYMBOLIC` branch](https://github.com/Xcceleran-do/Mindplex-Hyperon/tree/SYMBOLIC), [`Evoda/evoda.metta`](https://github.com/Xcceleran-do/Mindplex-Hyperon/blob/SYMBOLIC/Evoda/evoda.metta) — [commit](https://github.com/Xcceleran-do/Mindplex-Hyperon/commit/dabdffbec064463a1a284ac1ebd0008a71bc7687))*
 
 **Paper:** "Rule Learning Over Knowledge Graphs With Genetic Logic Programming"  
 **Type:** Symbolic / Evolutionary
@@ -78,7 +78,7 @@ EVODA was successfully prototyped in MeTTa (`Evoda/evoda.metta`). The implementa
 ---
 
 #### 2.2.2 DFOL — Differentiable First-Order Logic
-*(Implemented: `Neuro-Symbolic` branch, `DFOL/dfol.metta` + Python bindings)*
+*(Implemented: [`Neuro-Symbolic` branch](https://github.com/Xcceleran-do/Mindplex-Hyperon/tree/Neuro-Symbolic), [`DFOL/dfol.metta`](https://github.com/Xcceleran-do/Mindplex-Hyperon/blob/Neuro-Symbolic/DFOL/dfol.metta) + Python bindings — [commit](https://github.com/Xcceleran-do/Mindplex-Hyperon/commit/8a9a80a4281bbfcadc875293e25686aca989f96b))*
 
 **Paper:** Implemented from the DFOL paper (included as `Neuro-Symbolic/paper.pdf`)  
 **Type:** Neuro-Symbolic (combines symbolic first-order logic with neural network differentiable relaxation)
@@ -101,7 +101,7 @@ DFOL was implemented in MeTTa with PyTorch Python bindings. The implementation c
 ---
 
 #### 2.2.3 RARL — Rule-Aware Reinforcement Learning
-*(Reviewed: `Neuro-Symbolic` branch, `RARL/docs/RARL_Analysis.md`)*
+*(Reviewed: [`Neuro-Symbolic` branch](https://github.com/Xcceleran-do/Mindplex-Hyperon/tree/Neuro-Symbolic), [`RARL/docs/RARL_Analysis.md`](https://github.com/Xcceleran-do/Mindplex-Hyperon/blob/Neuro-Symbolic/RARL/docs/RARL_Analysis.md) — [PR #2](https://github.com/Xcceleran-do/Mindplex-Hyperon/pull/2))*
 
 **Type:** Neuro-Symbolic (RL + logic rules)
 
@@ -117,7 +117,7 @@ RARL was reviewed through paper analysis and pseudocode documentation. The algor
 ---
 
 #### 2.2.4 RuDiK — Rule Discovery in Knowledge Bases
-*(Reviewed: `Neuro-Symbolic` branch, `RuDiK/docs/RuDiK_analysis.md`)*
+*(Reviewed: [`Neuro-Symbolic` branch](https://github.com/Xcceleran-do/Mindplex-Hyperon/tree/Neuro-Symbolic), [`RuDiK/docs/RuDiK_analysis.md`](https://github.com/Xcceleran-do/Mindplex-Hyperon/blob/Neuro-Symbolic/RuDiK/docs/RuDiK_analysis.md) — [PR #6](https://github.com/Xcceleran-do/Mindplex-Hyperon/pull/6))*
 
 **Type:** Symbolic (SPARQL-based rule discovery over RDF/OWL knowledge bases)
 
@@ -133,7 +133,7 @@ RuDiK was reviewed through paper analysis and analysis documentation. Key concer
 ---
 
 #### 2.2.5 Hyperon-Miner (Built-in MeTTa Pattern Miner)
-*(Used in production: `demo-PeTTa` branch, `experiments/pattern-miner/` and `experiments/frequent-pattern-miner/`)*
+*(Used in production: [`demo-PeTTa` branch](https://github.com/Xcceleran-do/Mindplex-Hyperon/tree/demo-PeTTa), [`experiments/pattern-miner/`](https://github.com/Xcceleran-do/Mindplex-Hyperon/tree/demo-PeTTa/experiments/pattern-miner) and [`experiments/frequent-pattern-miner/`](https://github.com/Xcceleran-do/Mindplex-Hyperon/tree/demo-PeTTa/experiments/frequent-pattern-miner) — [commit 624582f9](https://github.com/Xcceleran-do/Mindplex-Hyperon/commit/624582f915580a3a77738d1132e500477f8ef45d))*
 
 **Type:** Symbolic / Frequent Itemset Mining (built into the Hyperon/MeTTa ecosystem)
 
@@ -174,7 +174,7 @@ A speed benchmark was conducted (January 10, 2026) on the same 180-fact dataset 
 
 The ~49× speed advantage of PeTTa and its ability to handle all predicates without requiring filtering confirmed that PeTTa is the preferred execution environment for the Hyperon-Miner. This is an interpreter-level optimization, not a change in mining algorithm.
 
-Full benchmark details and reproduction instructions are in [`BENCHMARKS.md`](../BENCHMARKS.md).
+Full benchmark details and reproduction instructions are in [BENCHMARKS.md](https://github.com/Xcceleran-do/Mindplex-Hyperon/blob/demo-PeTTa/BENCHMARKS.md). Preliminary results on the production dataset are in the [`results` branch](https://github.com/Xcceleran-do/Mindplex-Hyperon/tree/results) — [commit 1a40965e](https://github.com/Xcceleran-do/Mindplex-Hyperon/commit/1a40965e62fa84d51ed4dba84c32dd81b45b6a54).
 
 ---
 
