@@ -212,7 +212,7 @@ PLN (Probabilistic Logic Networks) backward chaining was implemented and refined
 | SHA | Date | Author | Message |
 |---|---|---|---|
 | `4c23e26` | 2026-03-18 | Henok Yoseph | Implement PLN Backward Chaining (#32) |
-| `374c633` | 2026-03-04 | yotors | Add unit tests for ingestion pipeline, fetcher, and converter |
+| `607a9d2` | 2026-03-04 | yotors | Add unit tests for ingestion pipeline, fetcher, and converter |
 | `adbcedc` | 2026-03-26 | Henok Yoseph | Refactor Implement PLN Backward Chaining (#34) |
 
 **Summary:** PLN backward chaining was implemented from scratch (PR #32) and subsequently refactored (PR #34) with improved atom ingestion, unique fact ID assignment, and structured fact management using a dedicated `&fact-count-petta` state.
