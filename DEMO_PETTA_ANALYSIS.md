@@ -43,7 +43,7 @@ The branch was bootstrapped with core project structure, documentation, and init
 
 | SHA | Date | Author | Message |
 |---|---|---|---|
-| `bc0e38d` | 2025-07-22 | yotors | intial commit |
+| `bc0e38d` | 2025-07-22 | yotors | initial commit |
 | `148b251` | 2025-07-22 | yotors | correct hyperon version |
 | `beeaa8d` | 2025-07-22 | yotors | updated the readme, added templates |
 | `75ab52a` | 2025-07-22 | yotors | Update issue templates |
