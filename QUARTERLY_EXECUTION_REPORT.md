@@ -259,6 +259,65 @@ The PLN backward chaining engine was ported to the MeTTa-Morphism 2 (mm2) runtim
 
 ---
 
+### 3. AtomSpace Visualizer
+
+An interactive, web-based AtomSpace visualization tool was built from scratch — entirely outside the original OKR scope.
+
+The visualizer ([PR #11](https://github.com/Xcceleran-do/Mindplex-Hyperon/pull/11), [commit fd0d083c](https://github.com/Xcceleran-do/Mindplex-Hyperon/commit/fd0d083c90d8bfceb35b6e440bd2e66dad34aa8e)) was built using **SolidJS + TypeScript + Vite** and provides:
+- Real-time MeTTa expression parsing into an interactive force-directed / hierarchical / circular graph
+- Zoom, pan, node selection, drag-and-drop interaction
+- Monaco code editor for live MeTTa input with error reporting
+- A "Mine the Gold" pattern mining HUD that triggers the Hyperon-Miner from the UI and displays results in a draggable result card
+
+A subsequent refactor and dark-mode upgrade was delivered in [PR #19](https://github.com/Xcceleran-do/Mindplex-Hyperon/pull/19), modularising the `ColumnarVisualizer` component, introducing design tokens, and adding a full dark/light theme toggle.
+
+---
+
+### 4. Backward Chainer Integrated with Hyperon-Miner
+
+The PLN backward chaining engine was fully integrated with the Hyperon-Miner output, creating an end-to-end pipeline from pattern discovery to symbolic reasoning.
+
+Key deliverables:
+- Initial backward chainer prototype wired to mined facts ([commit d9f2688e](https://github.com/Xcceleran-do/Mindplex-Hyperon/commit/d9f2688e11a3d996c78c688c3c4c9b0f8fd97fbe))
+- `formatter()` function that converts mined `supportOf` patterns into PLN-compatible logical rules
+- `getChainerResult()` backend function that accepts a natural-language why-query, rewrites it into MeTTa, runs the backward chainer, and returns a proof trace ([commit 385494ab](https://github.com/Xcceleran-do/Mindplex-Hyperon/commit/385494abfb7a97ebaa11ab0ca636e383f08b6b0c))
+- Full PLN backward chaining engine with depth-controlled recursive inference, rule compilation (supporting `And`, `Or`, `Not`, `LikelierThan`, implication, and inverse implication), and a `PeTTaChainer` Python interface for dynamic rule ingestion and query execution — [PR #32](https://github.com/Xcceleran-do/Mindplex-Hyperon/pull/32) and [PR #34](https://github.com/Xcceleran-do/Mindplex-Hyperon/pull/34)
+
+---
+
+### 5. PeTTa Chainer with STV Value Propagation
+
+The PeTTa-based backward chaining pipeline was extended with full **Simple Truth Value (STV)** propagation throughout the reasoning chain.
+
+Key deliverables:
+- **STV & EMPTV Integration for Pattern Mining** ([PR #29](https://github.com/Xcceleran-do/Mindplex-Hyperon/pull/29)): mined patterns are now annotated with Empirical Mean Probability Truth Values (EMPTV) computed from database support counts; all ingested facts carry STV strength/confidence values
+- **STV-aware fact ingestion**: deterministic facts (e.g. `authored-by`, `category`) receive STV `(1 1)`; AI-inferred properties (e.g. tone, sentiment) receive computed STV values
+- **STV-propagating backward chaining engine**: the `PeTTaChainer` Python interface stores all facts with unique IDs and STV-aware storage, propagates STV through inference steps, and generates explanation prompts that include STV strength/confidence for each step in the proof trace — [PR #32](https://github.com/Xcceleran-do/Mindplex-Hyperon/pull/32) and [PR #34](https://github.com/Xcceleran-do/Mindplex-Hyperon/pull/34)
+
+---
+
+### 6. LLM-Powered AI Chat Interface
+
+An AI chat interface was integrated into the AtomSpace Visualizer, enabling natural-language interaction with both the miner and the backward chainer ([PR #18](https://github.com/Xcceleran-do/Mindplex-Hyperon/pull/18), [commit 385494ab](https://github.com/Xcceleran-do/Mindplex-Hyperon/commit/385494abfb7a97ebaa11ab0ca636e383f08b6b0c)).
+
+Capabilities:
+- Users can type queries like *"why is article X high engagement?"* — the system rewrites the query into MeTTa, runs the PLN backward chainer, and returns a natural-language explanation
+- LLM function-calling integration (Google Gemini) registered for `mine_pattern()`, `getAllFactsAndRules()`, and `getChainerResult()`, making the assistant a multi-tool AI agent
+- Mined pattern results are surfaced in chat as clickable `[Pattern N]` references
+- Mining can be triggered either via the "Mine the Gold" button or through the chat interface, with identical effects
+
+---
+
+### 7. STV & EMPTV Truth Value Integration for Mined Patterns
+
+Beyond the core frequency-based mining, mined patterns were enhanced with structured probabilistic truth values ([PR #29](https://github.com/Xcceleran-do/Mindplex-Hyperon/pull/29)):
+
+- **`emp-tv`** function computes the Empirical Mean Probability Truth Value for each mined rule from its support count and total database size
+- All factual triples in the AtomSpace carry explicit STV annotations, enabling downstream PLN reasoning to weight facts by confidence
+- Continuous numerical attributes (e.g. engagement counts) are discretised into categories (`high` / `medium` / `low`) and assigned appropriate STV values for consistent pattern representation
+
+---
+
 ## Risks & Blockers
 
 | Risk | Impact | Mitigation |
@@ -272,4 +331,5 @@ The PLN backward chaining engine was ported to the MeTTa-Morphism 2 (mm2) runtim
 
 1. Tune minimum support and conjunction depth on the full 169k-datapoint dataset to identify the most actionable engagement patterns.
 2. Evaluate whether Mork space performance advantage materializes as data volume grows.
-3. Integrate mined patterns with PLN backward chaining to produce ranked, explanatory recommendations.
+3. Scale the end-to-end pipeline (mining → PLN backward chaining → LLM explanation → UI) to production Mindplex traffic.
+4. Extend the AtomSpace Visualizer to display STV-annotated patterns and proof traces from the backward chainer side-by-side.
