@@ -31,7 +31,7 @@
 ;;     meeting $minsup
 ( = (absSpeCan $dbspace $minsup)
     (let $specializedPattern (only_unique (collapse (match $dbspace ($link $x $y) ($link left $y))))
-        (candidatePatternMaker $dbspace (hyperpose_runtime $specializedPattern) $minsup))
+        (candidatePatternMaker $dbspace (hyperpose $specializedPattern) $minsup))
 )
 ; --------------------------------------------
 ;;  formatter
