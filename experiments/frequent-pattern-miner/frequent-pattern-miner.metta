@@ -30,7 +30,7 @@
 ;;  3:- Use candidatePatternMaker to instantiate open sides and keep only those
 ;;     meeting $minsup
 ( = (absSpeCan $dbspace $minsup)
-    (let $specializedPattern (only_unique (collapse (match $dbspace ($link $x $y) ($link left $y))))
+    (let $specializedPattern (alpha-unique-atom (collapse (match $dbspace ($link $x $y) ($link left $y))))
         (candidatePatternMaker $dbspace (hyperpose $specializedPattern) $minsup))
 )
 ; --------------------------------------------

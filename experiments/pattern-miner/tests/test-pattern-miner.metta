@@ -21,7 +21,7 @@
 ;; minimum support 3 -3rd arg
 ;; number of conjuncts 3 -4th arg
 
-!(pattern-miner &purifiedDbSpace 800 5) 
+!(pattern-miner &purifiedDbSpace 900 5) 
 !(println! "============ end ================")
 ;; demo result structure
     ; ((supportOf (, (Inheritance $y human) (Inheritance $y man)) 3) 
