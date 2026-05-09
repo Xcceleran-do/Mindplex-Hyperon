@@ -1,8 +1,15 @@
 flask
 flask-cors
+gunicorn
 google-generativeai
 hyperon
-janus-swi
+# Install the local PeTTa Python wrapper as an editable package so
+# `from petta import PeTTa` works without relying on sys.path edits.
+-e ./PeTTa
+# PeTTa uses Janus as the Python bridge to SWI-Prolog. Reinstall this
+# after installing/upgrading SWI-Prolog because libswipl.so.9 is not
+# provided by pip.
+janus-swi==1.5.2
 python-dotenv
 regex
 requests

@@ -1,0 +1,30 @@
+services:
+  mining-api:
+    build:
+      context: .
+    env_file:
+      - .env
+    environment:
+      FLASK_DEBUG: "0"
+      PETTA_DEBUG: "0"
+    ports:
+      - "5000:5000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  frontend:
+    build:
+      context: ./experiments/atomspace_visualizer
+      args:
+        VITE_API_BASE_URL: ""
+        VITE_BYPASS_INGESTION: "false"
+        VITE_MAX_VIS_ARTICLES: "1500"
+    depends_on:
+      mining-api:
+        condition: service_healthy
+    ports:
+      - "3000:80"

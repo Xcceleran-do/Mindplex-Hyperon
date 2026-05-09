@@ -1,12 +1,20 @@
 # experiments/ingestion/converter.py
 from .config import DETERMINISTIC_STV, UNKNOWN_STV
+from .utils import metta_predicate, normalize_property_name, sanitize_atom_id
 
 class JsonToMetta:
+    def __init__(self, include_author_alias=True, excluded=None):
+        self.include_author_alias = include_author_alias
+        self.excluded = {
+            normalize_property_name(item)
+            for item in (excluded or ())
+        }
+
     def convert(self, articles):
         metta_lines = []
         
         for article in articles:
-            art_id = f"A_{article.get('id')}"
+            art_id = f"A_{sanitize_atom_id(article.get('id'))}"
             meta = article.get('enriched_metadata', {})
             
             # Helper to add line with STV
@@ -27,24 +35,16 @@ class JsonToMetta:
                         strength, confidence = stv
                         metta_lines.append(f"(({prop} {art_id} \"{safe_val}\") (STV {strength} {confidence}))")
 
-            # Add all properties with their STVs
-            add_prop("length", "length")
-            add_prop("reading-time", "reading_time")
-            add_prop("tone", "tone")
-            add_prop("audience-expertise", "audience_expertise")
-            add_prop("content-type", "content_type")
-            add_prop("date-period", "date_period")
-            add_prop("primary-goal", "primary_goal")
-            add_prop("audience-sentiment", "audience_sentiment")
-            add_prop("popularity", "popularity")
-            add_prop("engagement", "engagement")
-            add_prop("author", "author")
-            add_prop("category", "category")
-            add_prop("title", "title")
-            add_prop("topic", "topic")
+            # Add every planned property. Metadata keys use Python-safe
+            # underscores; MeTTa predicates use kebab-case.
+            for meta_key in meta.keys():
+                predicate = metta_predicate(meta_key)
+                if predicate in self.excluded:
+                    continue
+                add_prop(predicate, meta_key)
             
             # Add authored-by as alias for author
-            if 'author' in meta:
+            if self.include_author_alias and 'author' in meta and "authored-by" not in self.excluded:
                 author_data = meta['author']
                 if isinstance(author_data, dict) and 'value' in author_data:
                     value = author_data['value']

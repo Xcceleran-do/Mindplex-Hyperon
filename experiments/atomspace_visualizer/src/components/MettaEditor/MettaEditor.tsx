@@ -1,8 +1,8 @@
 import { Component, For, createSignal, onCleanup } from 'solid-js';
+import { minePatterns } from '../../features/mining/api';
 
 export interface MiningProps {
   conjunctionCount?: number;
-  miningApiUrl?: string;
 }
 
 type MiningCard = {
@@ -22,8 +22,6 @@ const MettaEditor: Component<MiningProps> = (props) => {
   onCleanup(() => {
     componentActive = false;
   });
-
-  const apiBase = () => props.miningApiUrl ?? '/api';
 
   const toDisplayResult = (result: unknown) => {
     if (typeof result === 'string') return result;
@@ -78,35 +76,16 @@ const MettaEditor: Component<MiningProps> = (props) => {
     window.addEventListener('pointerup', handleUp);
   };
 
-  const pollJob = async (jobId: string) => {
-    while (componentActive) {
-      const response = await fetch(`${apiBase()}/mine/${jobId}`);
-      if (!response.ok) throw new Error(`Failed to poll job ${jobId}`);
-      const payload = await response.json();
-      if (payload.status === 'completed') return payload.result;
-      if (payload.status === 'error') throw new Error(payload.error || 'Mining failed');
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-    }
-    throw new Error('Mining cancelled');
-  };
-
   const startMining = async () => {
     if (isMining()) return;
     setError(null);
     setIsMining(true);
 
     try {
-      const response = await fetch(`${apiBase()}/mine`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conjunctionCount: props.conjunctionCount ?? 2 }),
-      });
-      if (!response.ok) throw new Error('Failed to start mining');
-      const payload = await response.json();
+      const payload = await minePatterns(props.conjunctionCount ?? 2, 3);
       if (!payload?.jobId) throw new Error('Missing job identifier');
-      const result = await pollJob(payload.jobId);
       if (!componentActive) return;
-      addCard(payload.jobId, result);
+      addCard(payload.jobId, payload.result ?? []);
     } catch (err) {
       if (!componentActive) return;
       setError(err instanceof Error ? err.message : String(err));
@@ -152,7 +131,7 @@ const MettaEditor: Component<MiningProps> = (props) => {
 
       {isMining() && (
         <div style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); text-align:center; animation:pulse 2s infinite ease-in-out;">
-          <div style="width:36px; height:36px; border:4px solid rgba(203,213,225,0.4); border-top-color:var(--accent, #3b82f6); border-radius:50%; animation:metta-spin 1.2s linear infinite; margin:0 auto 16px;"></div>
+          <div style="width:36px; height:36px; border:4px solid rgba(203,213,225,0.4); border-top-color:var(--accent, #0f766e); border-radius:50%; animation:metta-spin 1.2s linear infinite; margin:0 auto 16px;"></div>
           <div style="font-size:16px; font-weight:500; color:#1e293b; margin-bottom:8px;">
             Deep mining in progress...
           </div>

@@ -1,6 +1,7 @@
 # experiments/ingestion/analyzer.py
 import datetime
 import json
+import os
 import re
 import requests
 from .config import (
@@ -9,15 +10,41 @@ from .config import (
     RETENTION_BUCKETS, ANALYSIS_PROMPT_TEMPLATE,
     DETERMINISTIC_STV, AI_FAILURE_STV, UNKNOWN_STV
 )
+from .llm_client import LLMClient
+from .orchestrator import IngestionOrchestrator
+from .planner import ExtractionPlanner
 
 ASI_BASE_URL = "https://api.asi1.ai/v1/chat/completions"
 ASI_MODEL = "asi1-mini"
 
 class ArticleAnalyzer:
-    def __init__(self, api_key):
+    def __init__(self, api_key, require_llm=None):
         self.api_key = api_key
+        self.require_llm = (
+            str(os.getenv("INGESTION_REQUIRE_LLM", "true")).lower() == "true"
+            if require_llm is None
+            else bool(require_llm)
+        )
+        self.plan = None
+        self.orchestrator = None
         if not self.api_key:
             print("Warning: No ASI API key provided. AI enrichment will be skipped.")
+
+    def prepare_corpus(self, records, source_name="json"):
+        """Infer an extraction plan once, then initialize the agent orchestrator."""
+        llm_client = LLMClient.from_env(api_key=self.api_key)
+        planner = ExtractionPlanner(llm_client=llm_client, require_llm=self.require_llm)
+        self.plan = planner.build_plan(records, source_name=source_name)
+        self.orchestrator = IngestionOrchestrator(
+            plan=self.plan,
+            llm_client=llm_client,
+            corpus_records=records,
+        )
+        print(
+            "Ingestion extraction plan: "
+            f"{self.plan.planner} planner, {len(self.plan.properties)} properties"
+        )
+        return self.plan
 
     def call_asi_api(self, messages):
         headers = {
@@ -180,6 +207,9 @@ class ArticleAnalyzer:
 
     def process(self, article, rank_stats=None):
         """Main processing method."""
+        if self.orchestrator:
+            return self.orchestrator.process(article, rank_stats=rank_stats)
+
         # 1. Intrinsic (Calculated) with proportional STVs
         raw_content = article.get('content', [])
         if isinstance(raw_content, list):

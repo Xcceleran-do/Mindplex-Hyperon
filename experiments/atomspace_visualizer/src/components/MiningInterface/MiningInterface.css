@@ -1,5 +1,3 @@
-/* Glass Mining Interface */
-
 .mining-interface {
   position: relative;
   display: flex;
@@ -8,101 +6,118 @@
 
 .mining-controls {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  align-items: stretch;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
-/* Conjunction Input */
 .parameter-panel {
   display: flex;
   align-items: stretch;
   gap: 10px;
-  padding: 8px 12px;
-  border-radius: 14px;
-  border: 1px solid var(--border-subtle);
-  background: var(--bg-glass);
+  padding: 7px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-elevated);
   backdrop-filter: blur(var(--blur-amount));
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-control);
 }
 
 .parameter-field {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 5px;
+  display: grid;
+  grid-template-columns: 1fr 58px;
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  row-gap: 3px;
+  align-items: center;
+  min-width: 150px;
+  padding: 2px 2px 2px 6px;
 }
 
 .parameter-label {
-  font-size: 0.68rem;
-  font-weight: 700;
-  color: var(--text-secondary);
+  color: var(--text-primary);
+  font-size: 0.74rem;
+  font-weight: 800;
   line-height: 1;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0;
 }
 
 .parameter-divider {
   width: 1px;
   align-self: stretch;
-  background: var(--border-subtle);
+  background: var(--color-border);
 }
 
 .parameter-hint {
-  font-size: 0.66rem;
+  grid-column: 1 / 2;
   color: var(--text-secondary);
+  font-size: 0.65rem;
   line-height: 1;
+  white-space: nowrap;
 }
 
 .separate-conj-input {
-  width: 92px;
-  padding: 7px 10px;
-  border-radius: 12px;
-  border: 1px solid var(--border-subtle);
-  background: var(--bg-surface);
+  grid-row: 1 / 3;
+  grid-column: 2 / 3;
+  width: 58px;
+  height: 36px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
   color: var(--text-primary);
   font-family: var(--font-sans);
-  font-weight: 600;
+  font-weight: 800;
   text-align: center;
   outline: none;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
 }
 
 .separate-conj-input:focus {
-  border-color: var(--accent-cyan);
-  box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.2);
+  border-color: var(--color-accent-border);
+  box-shadow: 0 0 0 3px var(--color-focus);
 }
 
-.separate-conj-input:hover {
-  border-color: var(--text-secondary);
+.button-wrapper {
+  position: relative;
+  display: flex;
 }
 
-/* Mine Button */
 .mine-button {
   position: relative;
-  padding: 8px 20px;
+  min-width: 132px;
+  min-height: 52px;
+  padding: 8px 18px;
   border: none;
-  border-radius: 99px;
+  border-radius: 8px;
   cursor: pointer;
   overflow: hidden;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-
-  /* Gradient Background */
-  background: linear-gradient(135deg, var(--accent-cyan) 0%, var(--primary-600) 100%);
-  color: white;
-
+  transition: all 0.22s ease;
+  background: var(--color-text);
+  color: var(--color-bg);
   font-family: var(--font-heading);
   font-size: 0.9rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  box-shadow: 0 4px 12px rgba(6, 182, 212, 0.3);
+  font-weight: 800;
+  letter-spacing: 0;
+  box-shadow: var(--shadow-control);
+}
+
+.mine-button svg,
+.show-rules-btn svg,
+.close-button svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .mine-button:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(6, 182, 212, 0.4);
-  filter: brightness(1.1);
+  box-shadow: var(--shadow-panel);
+  filter: brightness(1.04);
 }
 
 .mine-button:active {
@@ -110,63 +125,46 @@
 }
 
 .mine-button:disabled {
-  opacity: 0.7;
+  opacity: 0.82;
   cursor: not-allowed;
   transform: none;
 }
 
 .mine-button.mining {
-  background: linear-gradient(135deg, var(--accent-purple) 0%, var(--accent-pink) 100%);
-  box-shadow: 0 4px 15px rgba(236, 72, 153, 0.4);
+  min-width: 190px;
+  background: var(--color-warning);
+  color: var(--color-text-inverse);
+  box-shadow: var(--shadow-control);
 }
 
 .button-content {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   z-index: 2;
   position: relative;
 }
 
-/* Animations */
 .mining-animation {
+  width: 100%;
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.pickaxe-swing {
-  display: inline-block;
-  animation: swing 1s infinite ease-in-out;
-}
-
-@keyframes swing {
-
-  0%,
-  100% {
-    transform: rotate(0deg);
-  }
-
-  50% {
-    transform: rotate(-20deg);
-  }
-}
-
 .progress-bar-container {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.1);
+  inset: 0;
+  background: var(--color-border-soft);
   overflow: hidden;
   z-index: 1;
 }
 
 .progress-bar-fill {
   height: 100%;
-  background: rgba(255, 255, 255, 0.2);
-  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  background: var(--color-accent-muted);
+  transition: width 0.4s ease;
 }
 
 .mining-status-content {
@@ -177,74 +175,54 @@
   position: relative;
 }
 
+.button-spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 2px solid var(--color-accent-border);
+  border-top-color: var(--color-accent-foreground);
+  animation: mineSpin 0.8s linear infinite;
+}
+
+@keyframes mineSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .mining-text {
-  font-size: 0.85rem;
-  font-weight: 600;
+  font-size: 0.82rem;
+  font-weight: 800;
   color: white;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  white-space: nowrap;
 }
 
-.sparkles {
-  display: inline-flex;
-}
-
-.sparkle {
-  animation: twinkle 1.5s infinite;
-}
-
-.sparkle:nth-child(2) {
-  animation-delay: 0.5s;
-}
-
-.sparkle:nth-child(3) {
-  animation-delay: 1s;
-}
-
-@keyframes twinkle {
-
-  0%,
-  100% {
-    opacity: 0;
-    transform: scale(0.5);
-  }
-
-  50% {
-    opacity: 1;
-    transform: scale(1.2);
-  }
-}
-
-/* Show Rules Button */
 .show-rules-btn {
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
   padding: 0;
-  border-radius: 50%;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
   color: var(--text-primary);
-  font-size: 1.1rem;
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: var(--shadow-sm);
+  transition: all 0.2s ease;
+  box-shadow: var(--shadow-control);
 }
 
 .show-rules-btn:hover {
-  background: var(--bg-hover);
   transform: translateY(-2px);
-  border-color: var(--accent-cyan);
-  color: var(--accent-cyan);
+  border-color: var(--color-accent-border);
+  color: var(--primary-600);
 }
 
-/* Result Overlay */
 .result-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(4px);
+  background: var(--color-overlay);
+  backdrop-filter: blur(7px);
   z-index: 2000;
   display: flex;
   align-items: center;
@@ -253,73 +231,73 @@
 
 .result-card {
   width: 90%;
-  max-width: 500px;
-  border-radius: 20px;
+  max-width: 540px;
+  border-radius: 8px;
   background: var(--bg-glass-strong);
   backdrop-filter: blur(20px);
   border: 1px solid var(--border-glass);
-  box-shadow: var(--shadow-glass);
+  box-shadow: var(--shadow-popover);
   overflow: hidden;
-  animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: popIn 0.24s ease-out;
 }
 
 @keyframes popIn {
   from {
     opacity: 0;
-    transform: scale(0.9);
+    transform: translateY(10px) scale(0.98);
   }
 
   to {
     opacity: 1;
-    transform: scale(1);
+    transform: translateY(0) scale(1);
   }
 }
 
 .result-header {
-  padding: 24px;
-  text-align: center;
+  padding: 22px 24px;
   color: white;
 }
 
 .result-header.gold {
-  background: linear-gradient(135deg, var(--accent-amber) 0%, var(--primary-600) 100%);
+  background: var(--color-accent);
 }
 
 .result-header.error {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  background: var(--color-danger);
 }
 
 .result-header h2 {
   margin: 0;
   font-family: var(--font-heading);
-  font-size: 1.5rem;
-  margin-bottom: 4px;
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: 0;
 }
 
 .subtitle {
-  margin: 0;
-  opacity: 0.9;
-  font-size: 0.9rem;
+  margin: 5px 0 0;
+  opacity: 0.86;
+  font-size: 0.86rem;
 }
 
 .result-content {
-  padding: 24px;
+  padding: 20px;
 }
 
 .patterns-display {
-  background: var(--bg-surface);
+  background: var(--color-bg-inset);
   border: 1px solid var(--border-subtle);
-  border-radius: 12px;
-  padding: 16px;
-  max-height: 200px;
+  border-radius: 8px;
+  padding: 14px;
+  max-height: 240px;
   overflow-y: auto;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
 .patterns-text {
   margin: 0;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.85rem;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
   color: var(--text-primary);
   white-space: pre-wrap;
 }
@@ -327,36 +305,34 @@
 .mining-stats {
   display: flex;
   justify-content: space-between;
+  gap: 12px;
   padding-top: 12px;
   border-top: 1px solid var(--border-subtle);
-  font-size: 0.85rem;
+  font-size: 0.84rem;
   color: var(--text-secondary);
 }
 
 .close-button {
   position: absolute;
-  top: 16px;
-  right: 16px;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
-  border: none;
+  top: 14px;
+  right: 14px;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
   color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.2rem;
+  display: grid;
+  place-items: center;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .close-button:hover {
-  background: rgba(255, 255, 255, 0.4);
-  transform: rotate(90deg);
+  background: var(--color-bg-inset);
+  transform: translateY(-1px);
 }
 
-/* Utility to hide drag indicator if unused */
 .drag-indicator {
   display: none;
 }

@@ -1,7 +1,25 @@
 import { createSignal, createEffect, Show, onCleanup } from 'solid-js';
-import { Portal } from 'solid-js/web';
-import ButtonParticleEffects from './ButtonEffects';
+import { minePatterns } from '../../features/mining/api';
 import './MiningInterface.css';
+
+const MineIcon = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M4 17.5 17.5 4M14.5 4H20v5.5M6.5 15.5l2 2M3.5 20.5l4-4" />
+  </svg>
+);
+
+const RulesIcon = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M7 4h10a2 2 0 0 1 2 2v14l-3-2-3 2-3-2-3 2V6a2 2 0 0 1 2-2Z" />
+    <path d="M9 8h6M9 12h6M9 16h4" />
+  </svg>
+);
+
+const CloseIcon = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M6 6l12 12M18 6 6 18" />
+  </svg>
+);
 
 export interface MiningResult {
   jobId: string;
@@ -26,14 +44,14 @@ const MiningInterface = (props: MiningInterfaceProps) => {
   const [minSupport, setMinSupport] = createSignal(3);
   const [showResult, setShowResult] = createSignal(false);
   const [miningProgress, setMiningProgress] = createSignal(0);
-  const [miningStatus, setMiningStatus] = createSignal('Preparing mines...');
+  const [miningStatus, setMiningStatus] = createSignal('Preparing inference...');
 
   const statusMessages = [
-    'Scanning AtomSpace...',
-    'Digging for conjuncts...',
-    'Filtering patterns...',
-    'Extracting gold...',
-    'Refining results...'
+    'Scanning AtomSpace',
+    'Compiling conjuncts',
+    'Filtering support',
+    'Ranking rules',
+    'Normalizing results'
   ];
 
   createEffect(() => {
@@ -64,23 +82,8 @@ const MiningInterface = (props: MiningInterfaceProps) => {
 
     // Fallback: if parent handler not provided, call API directly (legacy)
 
-    const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
-
     try {
-      // Start mining job
-      const response = await fetch(`${API_BASE}/api/mine`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ conjunction_count: conjunctionCount(), min_support: minSupport() }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const jobData = await response.json();
+      const jobData = await minePatterns(conjunctionCount(), minSupport());
 
       // Mining now completes immediately with results
       setIsMining(false);
@@ -187,16 +190,16 @@ const MiningInterface = (props: MiningInterfaceProps) => {
           </div>
         </div>
 
-        <div class="button-wrapper" style={{ position: 'relative' }}>
-          <ButtonParticleEffects active={!isMining()} />
+        <div class="button-wrapper">
           <button
             class={`mine-button ${isMining() ? 'mining' : ''}`}
             onClick={startMining}
             disabled={isMining()}
           >
-            <div class="button-content generate-sparkles">
+            <div class="button-content">
               <Show when={!isMining()}>
-                <span class="button-text">Mine</span>
+                <MineIcon />
+                <span class="button-text">Mine Rules</span>
               </Show>
               <Show when={isMining()}>
                 <div class="mining-animation">
@@ -204,13 +207,8 @@ const MiningInterface = (props: MiningInterfaceProps) => {
                     <div class="progress-bar-fill" style={{ width: `${miningProgress()}%` }}></div>
                   </div>
                   <div class="mining-status-content">
-                    <div class="pickaxe-swing">⛏️</div>
+                    <span class="button-spinner" />
                     <span class="mining-text">{miningStatus()}</span>
-                  </div>
-                  <div class="sparkles">
-                    <span class="sparkle">✨</span>
-                    <span class="sparkle">⭐</span>
-                    <span class="sparkle">💫</span>
                   </div>
                 </div>
               </Show>
@@ -223,8 +221,9 @@ const MiningInterface = (props: MiningInterfaceProps) => {
             class="show-rules-btn"
             onClick={props.onShowRules}
             title="Show Mined Rules"
+            aria-label="Show mined rules"
           >
-            📜
+            <RulesIcon />
           </button>
         </Show>
       </div>
@@ -246,8 +245,8 @@ const MiningInterface = (props: MiningInterfaceProps) => {
           >
             <Show when={miningResult()?.status === 'completed'}>
               <div class="result-header gold">
-                <h2>🏆 The Gold 🏆</h2>
-                <p class="subtitle">Precious patterns extracted from the depths</p>
+                <h2>Mining Results</h2>
+                <p class="subtitle">Patterns returned by the PeTTa pipeline</p>
               </div>
               <div class="result-content">
                 <Show when={Array.isArray(miningResult()?.result) && miningResult()?.result?.length === 0}>
@@ -267,8 +266,8 @@ const MiningInterface = (props: MiningInterfaceProps) => {
 
             <Show when={miningResult()?.status === 'error'}>
               <div class="result-header error">
-                <h2>⚠️ Mining Failed ⚠️</h2>
-                <p class="subtitle">The mine collapsed!</p>
+                <h2>Mining Failed</h2>
+                <p class="subtitle">The pipeline returned an error</p>
               </div>
               <div class="result-content">
                 <div class="error-message">
@@ -277,8 +276,8 @@ const MiningInterface = (props: MiningInterfaceProps) => {
               </div>
             </Show>
 
-            <button class="close-button" onClick={closeResult}>
-              ×
+            <button class="close-button" onClick={closeResult} aria-label="Close mining result">
+              <CloseIcon />
             </button>
           </div>
         </div>

@@ -791,8 +791,6 @@ const GraphVisualizer: Component<GraphVisualizerProps> = (props) => {
         height: '100%',
         cursor: 'grab',
         'background-color': 'var(--bg-primary)',
-        'background-image': 'radial-gradient(circle at 1px 1px, rgba(0,0,0,0.02) 1px, transparent 0), linear-gradient(135deg, rgba(102,118,234,0.06), rgba(118,75,162,0.02))',
-        'background-size': '20px 20px, 400%'
       }}
     >
       Your browser does not support the HTML5 canvas element.

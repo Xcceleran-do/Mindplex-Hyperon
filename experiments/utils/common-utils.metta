@@ -860,9 +860,28 @@
 ;; Returns:
 ;;   A flattened list of atoms that forms the antecedent of the pattern,
 ;;   excluding any elements that are solely an engagement relation.
-(= (antecedent $atoms )
-    (collapse (let $sup (superpose $atoms) (if  (= $sup (engagement $x $y)) (empty) $sup)))
-)
+(= (engagement-clause? $atom)
+    (case $atom
+        (((engagement $x $y) True)
+         ($other False))))
+
+(= (remove-engagement-clauses ()) ())
+(= (remove-engagement-clauses $clauses)
+    (let ($head $tail) (decons-atom $clauses)
+        (if (engagement-clause? $head)
+            (remove-engagement-clauses $tail)
+            (cons-atom $head (remove-engagement-clauses $tail)))))
+
+(= (wrap-conjunction $clauses)
+    (if (== $clauses ())
+        ()
+        (if (> (size-atom $clauses) 1)
+            (cons-atom , $clauses)
+            (car-atom $clauses))))
+
+(= (antecedent $atoms)
+    (let $clauses (if (== (car-atom $atoms) ,) (cdr-atom $atoms) ($atoms))
+        (wrap-conjunction (remove-engagement-clauses $clauses))))
 
  ;check if atom is variable or not
 

@@ -135,7 +135,7 @@ export class ColumnarTransformer {
           x: 0,
           y: this.HEADER_HEIGHT + index * this.NODE_SPACING
         },
-        color: '#3b82f6',
+        color: '#0f766e',
         size: 50,
         metadata: {
           originalExpression: articleId,
@@ -238,11 +238,9 @@ export class ColumnarTransformer {
       hash = str.charCodeAt(i) + ((hash << 5) - hash);
     }
 
-    // Hue: Full range 0-360 based on hash
-    const h = Math.abs(hash % 360);
-
-    // Saturation: High for vibrant, appealing colors (70-95%)
-    const s = 70 + (Math.abs(hash >> 8) % 25);
+    const hues = [173, 34, 345, 244, 192, 142, 44, 20, 268, 204];
+    const h = hues[Math.abs(hash) % hues.length];
+    const s = type === 'header' ? 58 + (Math.abs(hash >> 8) % 18) : 48 + (Math.abs(hash >> 8) % 18);
 
     // Lightness:
     let l: number;
@@ -250,18 +248,13 @@ export class ColumnarTransformer {
     let borderColor: string;
 
     if (type === 'header') {
-      // Header: Richer, darker for better contrast with white text, or lighter for black text
-      // Let's force a range that guarantees good contrast with one or the other.
-      // Dark Mode preference: deeply saturated dark colors (L: 20-40%) with White text
-      l = 25 + (Math.abs(hash >> 4) % 20); // 25-45%
+      l = 28 + (Math.abs(hash >> 4) % 15);
       textColor = '#ffffff';
-      borderColor = `hsla(${h}, ${s}%, ${l + 20}%, 0.8)`;
+      borderColor = `hsla(${h}, ${s}%, ${l + 18}%, 0.72)`;
     } else {
-      // Value: Brighter, pastel (L: 70-90%) - Text is OUTSIDE, so this color is just the circle fill.
-      // But if we ever put text inside, it should be black.
-      l = 75 + (Math.abs(hash >> 4) % 15); // 75-90%
-      textColor = '#1e293b'; // Slate-800
-      borderColor = `hsla(${h}, ${s}%, ${l - 20}%, 0.5)`;
+      l = 66 + (Math.abs(hash >> 4) % 14);
+      textColor = '#111716';
+      borderColor = `hsla(${h}, ${s}%, ${Math.max(34, l - 18)}%, 0.46)`;
     }
 
     return {

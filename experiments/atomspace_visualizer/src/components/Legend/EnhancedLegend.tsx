@@ -2,6 +2,17 @@ import { Component, For, Show, createEffect, createMemo, createSignal, onCleanup
 import { GraphData, FilterState } from '../../types';
 import styles from './EnhancedLegend.module.css';
 
+const ChevronIcon = (props: { expanded: boolean }) => (
+  <svg
+    viewBox="0 0 24 24"
+    aria-hidden="true"
+    class={styles.chevron}
+    classList={{ [styles.chevronExpanded]: props.expanded }}
+  >
+    <path d="M9 6l6 6-6 6" />
+  </svg>
+);
+
 export interface EnhancedLegendProps {
   graphData: GraphData;
   onFilterChange: (filter: FilterState) => void;
@@ -10,7 +21,7 @@ export interface EnhancedLegendProps {
 
 const EnhancedLegend: Component<EnhancedLegendProps> = (props) => {
   const [isLegendCollapsed, setIsLegendCollapsed] = createSignal(true);
-  const [areFiltersCollapsed, setAreFiltersCollapsed] = createSignal(true);
+  const [areFiltersCollapsed, setAreFiltersCollapsed] = createSignal(false);
   const [activeFilterCategory, setActiveFilterCategory] = createSignal<string | null>(null);
 
   let filterContentRef: HTMLDivElement | undefined;
@@ -55,6 +66,10 @@ const EnhancedLegend: Component<EnhancedLegendProps> = (props) => {
 
   const getCategoryLabel = (key: string) =>
     key === 'articles' ? 'Articles' : formatPropertyName(key);
+
+  const activeFilterCount = createMemo(() =>
+    (props.filterState.articleIds?.length || 0) + (props.filterState.propertyFilters?.length || 0)
+  );
 
   const toggleFilterCategory = (category: string) => {
     setActiveFilterCategory((previous) => (previous === category ? null : category));
@@ -214,8 +229,11 @@ const EnhancedLegend: Component<EnhancedLegendProps> = (props) => {
     <div class={styles.legendContainer}>
       <div class={styles.toggleGroup}>
         <button class={styles.sectionToggle} onClick={() => setIsLegendCollapsed(!isLegendCollapsed())}>
-          <span>Legend</span>
-          <span class={styles.toggleIcon}>{isLegendCollapsed() ? '▼' : '▲'}</span>
+          <span class={styles.toggleTitle}>
+            <span class={styles.toggleAccent} />
+            Legend
+          </span>
+          <ChevronIcon expanded={!isLegendCollapsed()} />
         </button>
 
         <Show when={!isLegendCollapsed()}>
@@ -226,11 +244,7 @@ const EnhancedLegend: Component<EnhancedLegendProps> = (props) => {
                 {(entry) => (
                   <div class={styles.legendItem}>
                     <div class={styles.legendColor} style={{ 'background-color': entry.color }} />
-                    <span class={styles.colorLabel}>
-                      <span class={styles.colorCode}>{entry.color}</span>
-                      <span>:</span>
-                      <span>{entry.labels}</span>
-                    </span>
+                    <span class={styles.colorLabel}>{entry.labels}</span>
                   </div>
                 )}
               </For>
@@ -239,8 +253,16 @@ const EnhancedLegend: Component<EnhancedLegendProps> = (props) => {
         </Show>
 
         <button class={styles.sectionToggle} onClick={() => setAreFiltersCollapsed(!areFiltersCollapsed())}>
-          <span>Filters</span>
-          <span class={styles.toggleIcon}>{areFiltersCollapsed() ? '▼' : '▲'}</span>
+          <span class={styles.toggleTitle}>
+            <span class={styles.toggleAccent} />
+            Filters
+          </span>
+          <span class={styles.toggleRight}>
+            <Show when={activeFilterCount() > 0}>
+              <span class={styles.filterCount}>{activeFilterCount()}</span>
+            </Show>
+            <ChevronIcon expanded={!areFiltersCollapsed()} />
+          </span>
         </button>
 
         <Show when={!areFiltersCollapsed()}>
@@ -248,7 +270,7 @@ const EnhancedLegend: Component<EnhancedLegendProps> = (props) => {
             <Show when={props.filterState.active}>
               <div class={styles.filterStatus}>
                 <div>
-                  <strong>Active filters:</strong>
+                  <strong>Active selection</strong>
                   <Show when={props.filterState.articleIds && props.filterState.articleIds.length > 0}>
                     <div>Articles: {props.filterState.articleIds!.join(', ')}</div>
                   </Show>
@@ -260,16 +282,15 @@ const EnhancedLegend: Component<EnhancedLegendProps> = (props) => {
                         .join(', ')}
                     </div>
                   </Show>
-                  <small class={styles.multiSelectHint}>Hold Ctrl/Cmd to select multiple</small>
                 </div>
                 <button class={styles.clearButton} onClick={clearFilter}>
-                  Clear All
+                  Clear
                 </button>
               </div>
             </Show>
 
             <div class={styles.legendSection}>
-              <h4>Pick a category</h4>
+              <h4>Categories</h4>
               <div class={styles.categoryGrid}>
                 <For each={filterCategories()}>
                   {(category) => (

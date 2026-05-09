@@ -2,16 +2,18 @@
   "compilerOptions": {
     "strict": true,
     "target": "ESNext",
-    "lib": ["ES2017", "DOM"],
+    "lib": ["ESNext", "DOM"],
     "module": "ESNext",
-    "moduleResolution": "node",
+    "moduleResolution": "Bundler",
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "jsx": "preserve",
     "jsxImportSource": "solid-js",
     "types": ["vite/client"],
     "noEmit": true,
+    "skipLibCheck": true,
     "isolatedModules": true,
     "resolveJsonModule": true
-  }
+  },
+  "include": ["src"]
 }

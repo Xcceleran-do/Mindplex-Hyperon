@@ -1,14 +1,18 @@
 {
-  "name": "vite-template-solid",
-  "version": "0.0.0",
-  "description": "",
+  "name": "mindplex-hyperon-frontend",
+  "version": "0.1.0",
+  "description": "Frontend for Mindplex Hyperon visualization, mining, and reasoning workflows.",
   "type": "module",
   "scripts": {
-    "start": "vite",
-    "dev": "vite",
-    "build": "vite build",
-    "serve": "vite preview",
-    "test": "vitest"
+    "start": "vite --configLoader native",
+    "dev": "vite --configLoader native",
+    "typecheck": "tsc --noEmit",
+    "build": "vite build --configLoader native",
+    "preview": "vite preview --configLoader native",
+    "serve": "vite preview --configLoader native",
+    "serve:dist": "node scripts/serve-dist.mjs",
+    "test": "vitest --configLoader native",
+    "test:run": "vitest run --configLoader native"
   },
   "license": "MIT",
   "devDependencies": {

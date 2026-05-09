@@ -1,0 +1,19 @@
+[project]
+name = "pettachainer"
+version = "0.1.0"
+requires-python = ">=3.10,<3.13"
+dependencies = [
+    "flask",
+    "flask-cors",
+    "gunicorn",
+    "google-generativeai",
+    "hyperon",
+    "janus-swi==1.5.2",
+    "petta",
+    "python-dotenv",
+    "regex",
+    "requests",
+]
+
+[tool.uv.sources]
+petta = { path = "PeTTa", editable = true }

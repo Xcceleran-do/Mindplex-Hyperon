@@ -43,6 +43,29 @@ We welcome contributions to Mindplex Hyperon! Please refer to the [CONTRIBUTING.
 
 To set up the project locally, clone the repository and install any necessary dependencies. Follow the instructions in the `CONTRIBUTING.md` file for detailed setup and contribution guidelines.
 
+For the mining API and PeTTa integration, run these commands from the repository root. Install the Python dependencies and SWI-Prolog >= 9.3.x. The default Ubuntu package can be too old, so use the official SWI-Prolog devel PPA on WSL/Ubuntu:
+
+```bash
+sudo apt update
+sudo apt install software-properties-common build-essential python3-dev
+sudo add-apt-repository ppa:swi-prolog/devel
+sudo apt update
+sudo apt install swi-prolog
+swipl --version
+python -m pip uninstall -y janus-swi
+python -m pip cache purge
+python -m pip install --no-cache-dir -r experiments/requirements.txt
+python -c "from petta import PeTTa; print('petta ok')"
+```
+
+If you use `uv`, the root `pyproject.toml` declares `petta` as an editable local dependency from `PeTTa`. Running `uv sync` from the repository root will generate/update `uv.lock`.
+
+`janus-swi` is listed in `experiments/requirements.txt`, but it is only the Python bridge. The `libswipl.so.9` library in Janus import errors comes from the OS-level SWI-Prolog package, and PeTTa requires SWI-Prolog 9.3.0 or newer.
+
+Reinstall `janus-swi` after installing or upgrading SWI-Prolog. Janus builds/links against the `swipl` found on your PATH, so a cached install can keep pointing at the wrong `libswipl.so.*`.
+
+The mining API uses the Janus-backed PeTTa engine directly. It does not fall back to Hyperon or the PeTTa shell script when the engine is unavailable.
+
 ## Usage Examples
 
 Refer to the individual feature files for usage examples and implementation details. Each feature is designed to be modular and can be integrated into larger systems as needed.

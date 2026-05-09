@@ -1,5 +1,60 @@
-import { createSignal, For, Show, onMount, createEffect } from 'solid-js';
+import { createSignal, For, Show, createEffect } from 'solid-js';
+import { analyzePattern, sendChatMessage, summarizePatterns, type ChatHistoryMessage } from '../../features/chat/api';
 import './ChatInterface.css';
+
+const AssistantGlyph = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M12 3 4.8 7.1v8.2L12 19.5l7.2-4.2V7.1L12 3Z" />
+    <path d="M8.2 10.2h7.6M8.2 13.8h7.6M12 7.4v9.2" />
+    <circle cx="12" cy="12" r="1.6" />
+  </svg>
+);
+
+const ClearIcon = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M5 7h14M9 7V5.5h6V7M9 10v7M15 10v7M7 7l1 13h8l1-13" />
+  </svg>
+);
+
+const SendIcon = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="m4 12 15-7-4.8 14-2.9-5.4L4 12Z" />
+    <path d="m11.3 13.6 3.1-3.8" />
+  </svg>
+);
+
+const DEFAULT_CHAT_CONJUNCT_SIZE = 2;
+const DEFAULT_CHAT_MIN_SUPPORT = 3;
+
+const parseMiningCommand = (text: string): { conjunctSize: number; minSupport: number } | null => {
+  const lower = text.trim().toLowerCase();
+  const hasMiningIntent = /\bmine\b|\b(?:run|start|perform|do)\s+(?:the\s+)?(?:miner|mining|pattern[-\s]?miner)\b/.test(lower)
+    || /\b(find|discover|extract|generate|run)\s+(?:frequent\s+)?(?:patterns?|rules?)\b/.test(lower);
+
+  if (!hasMiningIntent) {
+    return null;
+  }
+
+  const asksForExistingResults = /\b(what|show|list|latest)\b.*\b(patterns?|rules?|results)\b/.test(lower);
+  if (asksForExistingResults && !/\bmine\b|\b(?:run|start|perform|do)\b/.test(lower)) {
+    return null;
+  }
+
+  const countMatch =
+    lower.match(/(?:with|using|for|of|top)\s+(\d+)\s*(?:patterns?|rules?|conjunctions?|conjuncts?|conditions?)/)
+    || lower.match(/(\d+)\s*(?:patterns?|rules?|conjunctions?|conjuncts?|conditions?)/)
+    || lower.match(/(?:conjunction|conjunct|condition|pattern|rule)(?:\s+(?:count|size))?\s*(?:=|:|is|of|to)?\s*(\d+)/)
+    || lower.match(/(\d+)\s*-\s*(?:way|condition|conjunction|conjunct)/);
+
+  const supportMatch =
+    lower.match(/(?:min|minimum)\s*support\s*(?:=|:|of|to|is)?\s*(\d+)/)
+    || lower.match(/support\s*(?:>=|=>|=|:|of|at\s+least|to|is)?\s*(\d+)/);
+
+  return {
+    conjunctSize: Math.max(1, countMatch ? parseInt(countMatch[1], 10) : DEFAULT_CHAT_CONJUNCT_SIZE),
+    minSupport: Math.max(1, supportMatch ? parseInt(supportMatch[1], 10) : DEFAULT_CHAT_MIN_SUPPORT),
+  };
+};
 
 export interface Message {
   id: string;
@@ -18,7 +73,9 @@ export interface ChatInterfaceProps {
   onVisualize: (filter: import('../../types').FilterState) => void;
   miningResults?: Array<{ pattern: string; support: string }>;
   conjunctSize?: number;
-  onMiningStart?: (conjunctSize: number, minSupport?: number) => void;
+  onMiningStart?: (conjunctSize: number, minSupport?: number) => void | Promise<void>;
+  onPatternsFound?: (patterns: Array<{ pattern: string; support: string }>, conjunctSize?: number) => void;
+  onShowRules?: () => void;
   isOpen?: boolean;
   onClose?: () => void;
 }
@@ -75,30 +132,15 @@ const ChatInterface = (props: ChatInterfaceProps) => {
 
       // Request a single summary for all patterns and display it
       (async () => {
-        const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
         try {
-          const resp = await fetch(`${API_BASE}/api/chat/summarize`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ patterns: results })
-          });
-          if (resp.ok) {
-            const data = await resp.json();
-            const assistantMsg: Message = {
-              id: `msg-${Date.now()}-${Math.random()}`,
-              role: 'assistant',
-              content: data.summary,
-              timestamp: new Date()
-            };
-            setMessages(prev => [...prev, assistantMsg]);
-          } else {
-            // Fallback: analyze each conjunct individually
-            results.forEach((result, index) => {
-              setTimeout(() => {
-                analyzeConjunct(result.pattern, result.support);
-              }, index * 500);
-            });
-          }
+          const data = await summarizePatterns(results);
+          const assistantMsg: Message = {
+            id: `msg-${Date.now()}-${Math.random()}`,
+            role: 'assistant',
+            content: data.summary,
+            timestamp: new Date()
+          };
+          setMessages(prev => [...prev, assistantMsg]);
         } catch (e) {
           console.error('Error fetching summary:', e);
           // Fallback behavior
@@ -113,18 +155,8 @@ const ChatInterface = (props: ChatInterfaceProps) => {
   });
 
   const analyzeConjunct = async (pattern: string, support: string) => {
-    const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
-
     try {
-      const response = await fetch(`${API_BASE}/api/chat/analyze`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pattern, support })
-      });
-
-      if (!response.ok) throw new Error('Failed to analyze conjunct');
-
-      const data = await response.json();
+      const data = await analyzePattern(pattern, support);
 
       const assistantMsg: Message = {
         id: `msg-${Date.now()}-${Math.random()}`,
@@ -146,7 +178,7 @@ const ChatInterface = (props: ChatInterfaceProps) => {
       const fallbackMsg: Message = {
         id: `msg-${Date.now()}-${Math.random()}`,
         role: 'assistant',
-        content: `📊 **Pattern Found** (Support: ${support})\n\nThis pattern shows a relationship between topics and their properties:\n\`\`\`\n${pattern}\n\`\`\`\n\nThis pattern appears ${support} times in the dataset.`,
+        content: `**Pattern Found** (Support: ${support})\n\n\`\`\`\n${pattern}\n\`\`\`\n\nThis pattern appears ${support} times in the dataset.`,
         timestamp: new Date(),
         conjunct: { pattern, support }
       };
@@ -155,10 +187,60 @@ const ChatInterface = (props: ChatInterfaceProps) => {
     }
   };
 
+  const applyFunctionCallEffects = (functionCalls: unknown) => {
+    if (!Array.isArray(functionCalls)) {
+      return;
+    }
+
+    const miningNames = new Set(['mine_pattern', 'start_mining_job', 'startMiningJob', 'minePattern']);
+
+    for (const functionCall of functionCalls) {
+      const call = functionCall as {
+        name?: unknown;
+        args?: Record<string, unknown>;
+        result?: any;
+      };
+      if (typeof call.name !== 'string' || !miningNames.has(call.name)) {
+        continue;
+      }
+
+      const result = call.result;
+      const minedPayload = result?.result && typeof result.result === 'object' ? result.result : result;
+      const candidatePatterns = Array.isArray(minedPayload?.patterns)
+        ? minedPayload.patterns
+        : Array.isArray(result?.result)
+          ? result.result
+          : [];
+
+      const patterns = candidatePatterns
+        .filter((item: any) => typeof item?.pattern === 'string')
+        .map((item: any) => ({
+          pattern: item.pattern,
+          support: String(item.support ?? ''),
+        }));
+
+      if (patterns.length === 0) {
+        continue;
+      }
+
+      const rawConjunctSize =
+        minedPayload?.conjunction_count
+        ?? result?.conjunction_count
+        ?? call.args?.conjunction_count
+        ?? call.args?.numberOfConjunction;
+      const conjunctSize = typeof rawConjunctSize === 'number'
+        ? rawConjunctSize
+        : typeof rawConjunctSize === 'string'
+          ? parseInt(rawConjunctSize, 10)
+          : undefined;
+
+      props.onPatternsFound?.(patterns, Number.isFinite(conjunctSize) ? conjunctSize : undefined);
+      props.onShowRules?.();
+    }
+  };
+
   // Send AI message (internal function)
   const sendAIMessage = async (text: string) => {
-    const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
-
     // Show typing indicator
     const typingMsg: Message = {
       id: `typing-${Date.now()}`,
@@ -171,22 +253,14 @@ const ChatInterface = (props: ChatInterfaceProps) => {
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${API_BASE}/api/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: text,
-          history: messages().filter(m => !m.isTyping && m.role !== 'system').map(m => ({
-            role: m.role,
-            content: m.content
-          })),
-          session_id: 'default'
-        })
-      });
-
-      if (!response.ok) throw new Error('Failed to get response');
-
-      const data = await response.json();
+      const history: ChatHistoryMessage[] = messages()
+        .filter(m => !m.isTyping && m.role !== 'system')
+        .map(m => ({
+          role: m.role,
+          content: m.content
+        }));
+      const data = await sendChatMessage(text, history);
+      applyFunctionCallEffects(data.functionCalls);
 
       // Remove typing indicator and add actual response
       setMessages(prev => prev.filter(m => !m.isTyping));
@@ -206,7 +280,7 @@ const ChatInterface = (props: ChatInterfaceProps) => {
       const errorMsg: Message = {
         id: `error-${Date.now()}`,
         role: 'assistant',
-        content: '❌ Sorry, I encountered an error. Please try again.',
+        content: 'Sorry, I encountered an error. Please try again.',
         timestamp: new Date()
       };
       setMessages(prev => [...prev, errorMsg]);
@@ -230,11 +304,9 @@ const ChatInterface = (props: ChatInterfaceProps) => {
     setMessages(prev => [...prev, userMsg]);
     setInputText('');
 
-    // Intercept explicit mining commands and delegate to parent unified miner
-    const mineRegex = /mine(?: rules)?(?: with)?\s*(?:the )?(?:next )?(?:top )?\s*(\d+)\s*(?:patterns?|conjunctions?)/i;
-    const m = text.match(mineRegex);
-    if (m) {
-      const n = parseInt(m[1], 10) || 5;
+    // Intercept explicit mining commands and delegate to parent unified miner.
+    const miningCommand = parseMiningCommand(text);
+    if (miningCommand) {
       // If parent provides the unified mining handler, use it and avoid
       // sending the message to the AI (which may also call the mining
       // function and duplicate work).
@@ -242,14 +314,20 @@ const ChatInterface = (props: ChatInterfaceProps) => {
         const sys: Message = {
           id: `sys-start-${Date.now()}`,
           role: 'system',
-          content: `Starting mining with ${n} patterns...`,
+          content: `Starting mining with conjunction count ${miningCommand.conjunctSize} and min support ${miningCommand.minSupport}...`,
           timestamp: new Date()
         };
         setMessages(prev => [...prev, sys]);
         try {
-          props.onMiningStart(n);
+          setIsLoading(true);
+          await props.onMiningStart(miningCommand.conjunctSize, miningCommand.minSupport);
+          if (props.miningResults && props.miningResults.length > 0) {
+            props.onShowRules?.();
+          }
         } catch (err) {
           console.error('Error delegating mining to parent from chat:', err);
+        } finally {
+          setIsLoading(false);
         }
         return;
       }
@@ -258,11 +336,6 @@ const ChatInterface = (props: ChatInterfaceProps) => {
 
     // Get AI response
     await sendAIMessage(text);
-  };
-
-  const handleFunctionCall = (functionCall: any) => {
-    // Handle various function calls from the AI
-    console.log('Function call:', functionCall);
   };
 
   const handleVisualize = (pattern: string) => {
@@ -344,10 +417,16 @@ const ChatInterface = (props: ChatInterfaceProps) => {
       {/* Chat Interface - Controlled visibility */}
       <Show when={visible()}>
         <div class={`chat-interface ${isMinimized() ? 'minimized' : ''}`}>
-          {/* Header removed as it's now handled by the sidebar container */}
-          <div class="chat-header-actions-floating">
-            <button class="chat-action-btn" onClick={clearChat} title="Clear Chat">
-              🗑️
+          <div class="chat-topbar">
+            <div class="chat-identity">
+              <span class="chat-orb"><AssistantGlyph /></span>
+              <div>
+                <div class="chat-title">Pattern Companion</div>
+                <div class="chat-kicker">PeTTa reasoning</div>
+              </div>
+            </div>
+            <button class="chat-action-btn" onClick={clearChat} title="Clear chat" aria-label="Clear chat">
+              <ClearIcon />
             </button>
           </div>
 
@@ -355,21 +434,20 @@ const ChatInterface = (props: ChatInterfaceProps) => {
             <div class="chat-messages" ref={chatContainerRef}>
               <Show when={messages().length === 0}>
                 <div class="chat-welcome">
-                  <div class="welcome-icon">👋</div>
-                  <h4>Welcome to AtomSpace AI Assistant!</h4>
-                  <p>I can help you understand mining results, analyze patterns, and visualize data.</p>
+                  <div class="welcome-icon"><AssistantGlyph /></div>
+                  <h4>No conversation yet</h4>
                   <div class="welcome-suggestions">
                     <button class="suggestion-btn" onClick={() => {
-                      setInputText('What patterns have been found?');
+                      setInputText('Summarize the mined rules');
                       inputRef?.focus();
                     }}>
-                      What patterns have been found?
+                      Summarize mined rules
                     </button>
                     <button class="suggestion-btn" onClick={() => {
-                      setInputText('Explain the most common pattern');
+                      setInputText('Compare the strongest patterns');
                       inputRef?.focus();
                     }}>
-                      Explain the most common pattern
+                      Compare strongest patterns
                     </button>
                   </div>
                 </div>
@@ -388,7 +466,7 @@ const ChatInterface = (props: ChatInterfaceProps) => {
                     </div>
                   ) : message.role === 'assistant' && message.isTyping ? (
                     <div class="message assistant">
-                      <div class="message-avatar">🤖</div>
+                      <div class="message-avatar"><AssistantGlyph /></div>
                       <div class="message-content">
                         <div class="typing-indicator">
                           <span></span>
@@ -399,12 +477,18 @@ const ChatInterface = (props: ChatInterfaceProps) => {
                     </div>
                   ) : message.role === 'assistant' && !message.conjunct ? (
                     <div class="message assistant">
-                      <div class="message-avatar">🤖</div>
+                      <div class="message-avatar"><AssistantGlyph /></div>
                       <div class="message-content">
                         <div class="message-text" innerHTML={formatMessage(message.content)} onClick={(e) => handlePatternClick(e, message)} />
                         <div class="message-time">
                           {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </div>
+                      </div>
+                    </div>
+                  ) : message.role === 'system' ? (
+                    <div class="message system">
+                      <div class="message-content">
+                        <div class="message-text">{message.content}</div>
                       </div>
                     </div>
                   ) : null
@@ -427,8 +511,11 @@ const ChatInterface = (props: ChatInterfaceProps) => {
                 class="send-btn"
                 onClick={sendMessage}
                 disabled={!inputText().trim() || isLoading()}
+                aria-label="Send message"
               >
-                {isLoading() ? '⏳' : '➤'}
+                <Show when={isLoading()} fallback={<SendIcon />}>
+                  <span class="send-loading" />
+                </Show>
               </button>
             </div>
           </Show>

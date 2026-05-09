@@ -76,7 +76,7 @@ export const renderNode = (
   const textPrimary = computedStyle.getPropertyValue('--text-primary').trim() || '#374151';
   const textDimmed = computedStyle.getPropertyValue('--text-dimmed').trim() || 'rgba(55, 65, 81, 0.3)';
   const nodeHighlight = computedStyle.getPropertyValue('--node-highlight').trim() || '#f59e0b';
-  const nodeHover = computedStyle.getPropertyValue('--node-hover').trim() || '#3b82f6';
+  const nodeHover = computedStyle.getPropertyValue('--node-hover').trim() || '#0f766e';
   const nodeSelected = computedStyle.getPropertyValue('--node-selected').trim() || '#10b981';
 
   // Determine colors based on state

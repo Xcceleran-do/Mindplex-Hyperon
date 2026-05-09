@@ -1,13 +1,14 @@
 import { Component, createSignal, Show } from 'solid-js';
 import styles from './IngestionForm.module.css';
-import { API_CONFIG } from '../../config/api';
+import { ingestUserData } from '../../features/ingestion/api';
+import { env } from '../../shared/config/env';
 
 interface IngestionFormProps {
   onComplete: () => void;
 }
 
 const IngestionForm: Component<IngestionFormProps> = (props) => {
-  const ingestionEnabled = import.meta.env.VITE_BYPASS_INGESTION !== 'true';
+  const ingestionEnabled = env.ingestionEnabled;
   const [username, setUsername] = createSignal('');
   const [isLoading, setIsLoading] = createSignal(false);
   const [error, setError] = createSignal('');
@@ -32,20 +33,7 @@ const IngestionForm: Component<IngestionFormProps> = (props) => {
       // Simulate steps for better UX or actually wait for the backend
       setStatusMessage('Fetching articles from Mindplex...');
       
-      const response = await fetch(API_CONFIG.getUrl(API_CONFIG.ENDPOINTS.INGEST), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ username: username() }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.message || 'Ingestion failed');
-      }
-
-      const result = await response.json();
+      const result = await ingestUserData(username());
       setStatusMessage(result.message || 'Ingestion complete!');
       
       // Short delay to show success message

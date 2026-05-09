@@ -52,3 +52,69 @@ class MindplexFetcher:
             page += 1
             
         return articles[:limit]
+
+
+class JsonApiFetcher:
+    """Generic JSON API fetcher for non-Mindplex ingestion sources.
+
+    Configure with a full ``url`` and optional dotted ``records_path`` pointing
+    to the list inside the JSON response. This keeps source access separate
+    from extraction planning.
+    """
+
+    def __init__(self, url, records_path=None, headers=None):
+        self.url = url
+        self.records_path = records_path
+        self.headers = headers or DEFAULT_HEADERS.copy()
+
+    def fetch_all(self, limit=100):
+        response = requests.get(self.url, headers=self.headers, timeout=30)
+        response.raise_for_status()
+        payload = response.json()
+        records = read_raw_path(payload, self.records_path) if self.records_path else payload
+        if isinstance(records, dict):
+            for key in ("items", "results", "data", "records"):
+                if isinstance(records.get(key), list):
+                    records = records[key]
+                    break
+        if not isinstance(records, list):
+            raise ValueError("Configured JSON API source did not return a record list.")
+        return records[:limit]
+
+
+def build_fetcher(source_name="mindplex", username=None, source_config=None):
+    source_config = source_config or {}
+    if source_name == "mindplex":
+        return MindplexFetcher(username=username or DEFAULT_USERNAME)
+
+    allow_request_url = os.getenv("INGESTION_ALLOW_REQUEST_URLS", "false").lower() == "true"
+    request_url = source_config.get("url")
+    if request_url and not allow_request_url:
+        raise ValueError(
+            "Request-provided ingestion URLs are disabled. "
+            "Set INGESTION_ALLOW_REQUEST_URLS=true for development, "
+            "or configure INGESTION_SOURCE_URL on the server."
+        )
+
+    url = request_url or os.getenv("INGESTION_SOURCE_URL")
+    if not url:
+        raise ValueError("INGESTION_SOURCE_URL is required for non-Mindplex ingestion sources.")
+    records_path = source_config.get("records_path") or os.getenv("INGESTION_RECORDS_PATH")
+    return JsonApiFetcher(url=url, records_path=records_path)
+
+
+def read_raw_path(data, path):
+    current = data
+    for part in str(path or "").split("."):
+        if not part:
+            continue
+        if isinstance(current, dict):
+            current = current.get(part)
+        elif isinstance(current, list):
+            try:
+                current = current[int(part)]
+            except (ValueError, IndexError):
+                return None
+        else:
+            return None
+    return current

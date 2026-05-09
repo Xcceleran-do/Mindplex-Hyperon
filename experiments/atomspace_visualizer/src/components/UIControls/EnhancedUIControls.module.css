@@ -3,7 +3,7 @@
   top: 20px;
   right: 20px;
   background: rgba(255, 255, 255, 0.95);
-  border-radius: 12px;
+  border-radius: 8px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   width: 340px;
   backdrop-filter: blur(10px);
@@ -19,14 +19,14 @@
   padding: 16px 20px;
   cursor: pointer;
   user-select: none;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #111716;
   color: white;
-  border-radius: 12px 12px 0 0;
+  border-radius: 8px 8px 0 0;
   transition: background 0.2s ease;
 }
 
 .controlsHeader:hover {
-  background: linear-gradient(135deg, #5568d3 0%, #6a3f91 100%);
+  background: #18211f;
 }
 
 .controlsHeader h3 {
@@ -91,7 +91,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #0f766e;
   color: white;
   border: none;
   padding: 10px 16px;
@@ -100,18 +100,18 @@
   font-size: 13px;
   font-weight: 500;
   transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 2px 8px rgba(15, 118, 110, 0.22);
 }
 
 .controlButton:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-  background: linear-gradient(135deg, #5568d3 0%, #6a3f91 100%);
+  box-shadow: 0 4px 12px rgba(15, 118, 110, 0.26);
+  background: #0b5f59;
 }
 
 .controlButton:active {
   transform: translateY(0);
-  box-shadow: 0 2px 6px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 2px 6px rgba(15, 118, 110, 0.22);
 }
 
 .controlButton span {

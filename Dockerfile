@@ -1,26 +1,38 @@
-FROM swipl:latest
+FROM swipl:10.0.2
 
-ENV PYTHONUNBUFFERED=1
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    VIRTUAL_ENV=/opt/venv \
+    PATH="/opt/venv/bin:${PATH}"
 
-# Install Python and system build tools (SWI-Prolog is provided by base image)
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        python3 \
-        python3-pip \
-        python3-dev \
         build-essential \
+        ca-certificates \
+        curl \
         git \
-    && rm -rf /var/lib/apt/lists/*
+        pkg-config \
+        python3 \
+        python3-dev \
+        python3-pip \
+        python3-venv \
+    && rm -rf /var/lib/apt/lists/* \
+    && swipl --version \
+    && python3 --version
 
 WORKDIR /app
 
-# Copy source (includes PeTTa submodule contents)
-COPY . /app
+COPY experiments/requirements.txt /app/experiments/requirements.txt
+COPY PeTTa /app/PeTTa
 
-# Install Python dependencies for the experiments service
-RUN pip3 install --no-cache-dir --break-system-packages -r experiments/requirements.txt
+RUN python3 -m venv "${VIRTUAL_ENV}" \
+    && python -m pip install --upgrade pip setuptools wheel \
+    && python -m pip install -r experiments/requirements.txt \
+    && python -c "import janus_swi; print('janus_swi import ok')" \
+    && python -c "from petta import PeTTa; print('petta import ok')"
+
+COPY . /app
 
 EXPOSE 5000
 
-# Render will override CMD if a start command is configured
-CMD ["python3", "experiments/mining_api.py"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "1", "--threads", "4", "--timeout", "180", "experiments.mining_api:create_app()"]

@@ -17,9 +17,6 @@
   height: 100vh;
   cursor: grab;
   background-color: var(--bg-primary);
-  background-image:
-    radial-gradient(circle at 1px 1px, rgba(0, 0, 0, 0.02) 1px, transparent 0);
-  background-size: 20px 20px;
 }
 
 #graph-canvas:active {
@@ -142,7 +139,7 @@
 
 .metta-editor-card:focus-within {
   border-color: rgba(59, 130, 246, 0.5);
-  box-shadow: var(--card-shadow), 0 0 0 2px rgba(59, 130, 246, 0.1);
+  box-shadow: var(--card-shadow), 0 0 0 2px rgba(15, 118, 110, 0.1);
 }
 
 /* Add a subtle resize indicator in the bottom-right corner */
@@ -153,19 +150,8 @@
   right: 0;
   width: 16px;
   height: 16px;
-  background: linear-gradient(-45deg,
-      transparent 30%,
-      var(--border-light) 30%,
-      var(--border-light) 35%,
-      transparent 35%,
-      transparent 45%,
-      var(--border-light) 45%,
-      var(--border-light) 50%,
-      transparent 50%,
-      transparent 60%,
-      var(--border-light) 60%,
-      var(--border-light) 65%,
-      transparent 65%);
+  border-right: 2px solid var(--border-light);
+  border-bottom: 2px solid var(--border-light);
   pointer-events: none;
   opacity: 0.4;
   transition: opacity 0.2s ease;
@@ -746,7 +732,7 @@ ta Editor Error Highlighting Styles */
 
 .editor-container:focus-within {
   border-color: rgba(59, 130, 246, 0.5);
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.1);
 }
 
 /* Line numbers styling */
@@ -903,7 +889,7 @@ out Controls Styling */
 .layout-controls button.active {
   background: rgba(59, 130, 246, 0.1);
   border-color: rgba(59, 130, 246, 0.3);
-  color: #1d4ed8;
+  color: #0f766e;
 }
 
 .layout-controls button.stop-layout {
@@ -978,7 +964,7 @@ out Controls Styling */
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #3b82f6;
+  background: #0f766e;
   cursor: pointer;
   border: 2px solid white;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
@@ -988,7 +974,7 @@ out Controls Styling */
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #3b82f6;
+  background: #0f766e;
   cursor: pointer;
   border: 2px solid white;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
@@ -1019,7 +1005,7 @@ out Controls Styling */
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #3b82f6, #1d4ed8);
+  background: var(--primary-600);
   border-radius: 3px;
   transition: width 0.1s ease;
 }
@@ -1059,8 +1045,8 @@ out Controls Styling */
 }
 
 .checkbox-label input[type="checkbox"]:checked {
-  background: #3b82f6;
-  border-color: #3b82f6;
+  background: #0f766e;
+  border-color: #0f766e;
 }
 
 .checkbox-label input[type="checkbox"]:checked::after {

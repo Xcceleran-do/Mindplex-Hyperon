@@ -1,5 +1,6 @@
 // Mining Interface for pattern discovery
 import { Component, createSignal, Show, For } from 'solid-js';
+import { minePatterns } from '../../features/mining/api';
 import { FilterState } from '../../types';
 import styles from './MiningPanel.module.css';
 
@@ -57,24 +58,8 @@ const MiningPanel: Component<MiningPanelProps> = (props) => {
     setError(null);
     startLoadingAnimation();
 
-    const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
-
     try {
-      const response = await fetch(`${API_BASE}/api/mine`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          conjunction_count: conjunctSize()
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Mining request failed');
-      }
-
-  const res = await response.json();
+      const res = await minePatterns(conjunctSize(), 3);
       const parsedRes = parseMiningResult(res.result);
       setMiningResult(parsedRes);
       setIsResultCollapsed(false);
