@@ -27,6 +27,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)  
 
 
+
 # Add workspace root to path to allow imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
 from experiments.ingestion.pipeline import resolve_output_path, run_ingestion
@@ -122,6 +123,31 @@ def reload_petta_dataset_if_ready(force: bool = False) -> dict:
     if force:
         return service.reload_dataset(module_path, file_path)
     return service.reload_dataset_if_changed(module_path, file_path)
+
+def load_facts_to_chainer(chainer, metta_file_path):
+    """Load MeTTa atoms from a file and insert them into the chainer KB, wrapping as (: factN ...)."""
+    with open(metta_file_path, 'r') as f:
+        fact_id = 1
+        for line in f:
+            atom = line.strip()
+            if atom and not atom.startswith(';;'):
+                if atom.startswith('(') and atom.endswith(')'):
+                    atom_inner = atom[1:-1].strip()
+                else:
+                    atom_inner = atom
+                # Wrap as (: factN ... )
+                wrapped = f'(: fact{fact_id} {atom_inner})'
+                chainer.add_atom(wrapped)
+                fact_id += 1
+
+load_facts_to_chainer(handler, data_path)
+
+def get_facts(handler):  
+    """Get facts using direct match to avoid inference recursion"""  
+    query_result = handler.handler.process_metta_string(  
+        f"!(match &kb (: {handler.kb} $prf $type $tv) (: {handler.kb} $prf $type $tv))"  
+    )  
+    return query_result
 
 # Define tools for ASI API
 tools_schema = [
@@ -517,16 +543,12 @@ def debug_petta_chainer_state(what_to_check: str) -> None:
     if not PETTA_DEBUG:
         return
     try:
-        print("DEBUG: PeTTa probe - get-atoms &res1")
         atoms_lines = run_petta_query_lines(f"!(backward-chain &res1 (S (S Z)) (: $prf {what_to_check}))")
-        print("DEBUG: PeTTa atoms lines (first 10):", atoms_lines)
 
-        print("DEBUG: PeTTa probe - direct match")
         match_query = f"!(match &res1 {what_to_check} $x)"
         match_lines = run_petta_query_lines(match_query)
-        print("DEBUG: PeTTa match lines:", match_lines)
     except Exception as e:
-        print("DEBUG: PeTTa probe failed:", e)
+        pass
 
 def mine_pattern(numberOfConjunction: int, min_support: int = DEFAULT_MIN_SUPPORT) -> dict:
     """
@@ -564,7 +586,6 @@ def mine_pattern(numberOfConjunction: int, min_support: int = DEFAULT_MIN_SUPPOR
         query = f"!(pattern-miner &purifiedDbSpace {min_support} {numberOfConjunction})"
         print(f"DEBUG: Executing PeTTa query: {query}")
         petta_output = run_metta_with_petta(query)
-        print(f"DEBUG: PeTTa execution finished. Output length: {len(petta_output)}")
         normalized_query = query.strip().lstrip("!").strip()
         if petta_output.strip() == normalized_query:
             return {
@@ -574,8 +595,7 @@ def mine_pattern(numberOfConjunction: int, min_support: int = DEFAULT_MIN_SUPPOR
             }
         result_lines = parse_petta_output(petta_output)
         
-        print(f"Debug: PeTTa result lines: {result_lines}")
-        
+
         # Parse the result into JSON-serializable format
         patterns = []
         full_answer_str = " ".join(result_lines)
@@ -940,24 +960,15 @@ def is_backward_chain_intent(message: str) -> bool:
 
 def handle_backward_chain_for_message(message: str) -> tuple[Optional[str], Optional[list]]:
     """Handle natural language queries using backward chaining with STV support."""
-    print(f" DEBUG: Received message: {message}")
     function_calls = []
     # First call getAllFactsAndRules to get canonical atoms
-    print("DEBUG: handle_backward_chain_for_message - calling getAllFactsAndRules()")
-    facts_res = getAllFactsAndRules()
-        
-    # If we couldn't get facts/rules, return early
-    if not isinstance(facts_res, dict) or facts_res.get('status') != 'success':
-        return None, None
-    
-    facts = facts_res.get('facts', []) or []
-    facts_text = "\n".join(facts[:200]) if isinstance(facts, list) else str(facts)
-
+    facts_res =getAllFactsAndRules(handler)  
+  
     # Ask the LLM to rewrite the user's question into a canonical MeTTa query
     # using the facts we retrieved. The model must output only a single MeTTa
     # expression (e.g. (engagement 1 $what)).
     try:
-        facts_text = "\n".join(facts[:200]) if isinstance(facts, list) else str(facts)
+        facts_text = "\n".join(facts_res[:200]) if isinstance(facts_res, list) else str(facts_res)
         rewrite_prompt = f"""
             You are given the following KB atoms (facts/rules), one per line:
             {facts_text}
@@ -970,12 +981,10 @@ def handle_backward_chain_for_message(message: str) -> tuple[Optional[str], Opti
             - If mapping is ambiguous, pick the most semantically likely predicate present in the KB.
             - If you cannot produce a valid MeTTa expression, output the single token NO_QUERY and NOTHING ELSE.
 
-            Example mapping (for clarity only, do not output this): if facts contain (engagement 1 high) -> question "Why article 1 has low engagement?" -> output should be like : "(: $prf (engagement 1 $what) $tv)"
+            Example mapping (for clarity only, do not output this): if facts contain (engagement 1 high) -> question "Why article A_16624 has low engagement?" -> output should be like : "(: $prf (engagement A_16624 \"Low\") $tv)"
 
             OUTPUT ONLY the MeTTa expression or NO_QUERY.
             """
-        print("DEBUG: sending rewrite prompt to LLM (first 500 chars):", rewrite_prompt[:500])
-
         messages = [
             {"role": "system", "content": SYSTEM_INSTRUCTION},
             {"role": "user", "content": rewrite_prompt}
@@ -985,18 +994,14 @@ def handle_backward_chain_for_message(message: str) -> tuple[Optional[str], Opti
         if 'choices' in response_data and response_data['choices']:
             candidate_query = response_data['choices'][0]['message'].get('content', '').strip()
         
-        print("DEBUG: rewrite result:", candidate_query)
         function_calls.append({'name': 'rewrite_query', 'args': {'message': message}, 'result': candidate_query})
     except Exception as e:
-        print('DEBUG: rewrite error:', e)
         return None, None
 
     
     # Call the chainer with the rewritten query and include debug output
     try:
-        print('DEBUG: calling getChainerResult with', candidate_query)
         chainer_result = getChainerResult(candidate_query)
-        print('DEBUG: chainer_result type:', chainer_result)
     except Exception as e:
         print('DEBUG: chainer call error:', e)
         chainer_result = {'status': 'error', 'error': str(e)}
@@ -1015,7 +1020,6 @@ def handle_backward_chain_for_message(message: str) -> tuple[Optional[str], Opti
     else:
         # Apply a friendly/jokey wrapper without revealing internal steps
         resp_text = f"Alright, here's the scoop —\n\n{raw_just}\n\n(That's the reasoning I found.)"
-    print('DEBUG: final response text:', resp_text)
     return resp_text, function_calls
 
 
@@ -1633,7 +1637,6 @@ For WHY / EXPLAIN / PROVE questions you MUST use the backward chainer. No except
 """
 # Store conversation history
 conversations = {}
-
 @dataclass
 class MiningJob:
     job_id: str
@@ -1667,8 +1670,7 @@ def health_check():
 @app.route('/api/mine', methods=['POST'])
 def start_mining():
     """Start a new mining job"""
-    print("🔍 DEBUG: Received mining request")
-    
+
     data = request.get_json() or {}
     conjunction_count = data.get('conjunction_count', DEFAULT_CONJUNCTION_COUNT)
     min_support = data.get('min_support', DEFAULT_MIN_SUPPORT)
@@ -1914,8 +1916,7 @@ def chat():
         # This prevents KeyError when shortcut paths (e.g. backward chaining)
         # attempt to append to conversations[session_id] before it's initialized.
         if session_id not in conversations:
-            print(f"DEBUG: Creating new conversation session '{session_id}'")
-        conversations.setdefault(session_id, [])
+            conversations.setdefault(session_id, [])
 
         if not message:
             return jsonify({'error': 'Message is required'}), 400

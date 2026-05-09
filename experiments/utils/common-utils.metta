@@ -844,6 +844,7 @@
     (pow-math (db_size $db) (n_conjuncts $pattern))
 
 )
+
 ;; Documentation for antecedent:
 ;;
 ;; Description:
@@ -882,8 +883,6 @@
 (= (antecedent $atoms)
     (let $clauses (if (== (car-atom $atoms) ,) (cdr-atom $atoms) ($atoms))
         (wrap-conjunction (remove-engagement-clauses $clauses))))
-
- ;check if atom is variable or not
 
 
  ; THIS IMPLEMENTATION CONSIDERS THE VARIABLE NAMES

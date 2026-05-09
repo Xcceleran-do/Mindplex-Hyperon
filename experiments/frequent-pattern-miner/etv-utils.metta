@@ -72,7 +72,6 @@
 (= (emp-tv $pattern $db)
     (let*
         (  
-             ($_ (println! "======= Emperical Truth Value ======="))
             ($antecedent (antecedent $pattern))
             ( $sup-ante (sup-num $db $antecedent))
             ( $sup (sup-num $db $pattern))
