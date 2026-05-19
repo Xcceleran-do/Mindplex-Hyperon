@@ -16,7 +16,7 @@
 (= (fromNumber $n) (if (<= $n 0) Z (S (fromNumber (- $n 1)))))
 
 
-(= (fromNumberInterface $n) (trace! (--> (fromNumber (- $n 1)) is what i've get) (fromNumber (- $n 1))))
+(= (fromNumberInterface $n) (trace! (--> (fromNumber (- $n 1)) is what i have get) (fromNumber (- $n 1))))
 
 ;; Base case - enhanced to handle STV patterns
 (= (backward-chain_ True $kb $_ (: $prf $ccln)) 

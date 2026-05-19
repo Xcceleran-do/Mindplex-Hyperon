@@ -54,6 +54,7 @@ PROJECT_ROOT_METTA = os.path.abspath(PROJECT_ROOT).replace('\\', '/')
 PETTA_DEBUG = os.getenv("PETTA_DEBUG", "0") == "1"
 DEFAULT_CONJUNCTION_COUNT = 2
 DEFAULT_MIN_SUPPORT = 3
+DEFAULT_CHAIN_DEPTH = int(os.getenv("PETTA_CHAIN_DEPTH", "3"))
 
 
 def dataset_file_path() -> str:
@@ -123,31 +124,6 @@ def reload_petta_dataset_if_ready(force: bool = False) -> dict:
     if force:
         return service.reload_dataset(module_path, file_path)
     return service.reload_dataset_if_changed(module_path, file_path)
-
-def load_facts_to_chainer(chainer, metta_file_path):
-    """Load MeTTa atoms from a file and insert them into the chainer KB, wrapping as (: factN ...)."""
-    with open(metta_file_path, 'r') as f:
-        fact_id = 1
-        for line in f:
-            atom = line.strip()
-            if atom and not atom.startswith(';;'):
-                if atom.startswith('(') and atom.endswith(')'):
-                    atom_inner = atom[1:-1].strip()
-                else:
-                    atom_inner = atom
-                # Wrap as (: factN ... )
-                wrapped = f'(: fact{fact_id} {atom_inner})'
-                chainer.add_atom(wrapped)
-                fact_id += 1
-
-load_facts_to_chainer(handler, data_path)
-
-def get_facts(handler):  
-    """Get facts using direct match to avoid inference recursion"""  
-    query_result = handler.handler.process_metta_string(  
-        f"!(match &kb (: {handler.kb} $prf $type $tv) (: {handler.kb} $prf $type $tv))"  
-    )  
-    return query_result
 
 # Define tools for ASI API
 tools_schema = [
@@ -266,7 +242,7 @@ tools_schema = [
                     "depth": {
                         "type": "integer",
                         "description": "The depth limit for backward chaining.",
-                        "default": 5
+                        "default": DEFAULT_CHAIN_DEPTH
                     }
                 },
                 "required": ["whatToCheck"]
@@ -961,14 +937,19 @@ def is_backward_chain_intent(message: str) -> bool:
 def handle_backward_chain_for_message(message: str) -> tuple[Optional[str], Optional[list]]:
     """Handle natural language queries using backward chaining with STV support."""
     function_calls = []
+
     # First call getAllFactsAndRules to get canonical atoms
-    facts_res =getAllFactsAndRules(handler)  
+    facts_res = getAllFactsAndRules()
+    if not isinstance(facts_res, dict) or facts_res.get("status") != "success":
+        return None, None
+
+    facts = facts_res.get("facts", []) or []
   
     # Ask the LLM to rewrite the user's question into a canonical MeTTa query
     # using the facts we retrieved. The model must output only a single MeTTa
     # expression (e.g. (engagement 1 $what)).
     try:
-        facts_text = "\n".join(facts_res[:200]) if isinstance(facts_res, list) else str(facts_res)
+        facts_text = "\n".join(select_facts_for_prompt(facts, message, limit=200))
         rewrite_prompt = f"""
             You are given the following KB atoms (facts/rules), one per line:
             {facts_text}
@@ -998,6 +979,8 @@ def handle_backward_chain_for_message(message: str) -> tuple[Optional[str], Opti
     except Exception as e:
         return None, None
 
+    if not candidate_query or candidate_query == "NO_QUERY":
+        return None, function_calls
     
     # Call the chainer with the rewritten query and include debug output
     try:
@@ -1236,18 +1219,18 @@ def formatter(mined_patterns):
     print("formatter started :--:")
     return get_petta_service().formatter(mined_patterns)
 
-def backWardChainer(whatToCheck, depth=5):
+def backWardChainer(whatToCheck, depth=DEFAULT_CHAIN_DEPTH):
     proofs = get_petta_service().query(whatToCheck.strip(), depth=depth)
     print("DEBUG chainer normalized proof count:", len(proofs))
     if proofs:
         print("DEBUG chainer proof sample:", proofs[:3])
     return proofs
 
-def getChainerResult(whatToCheck, depth=5):
+def getChainerResult(whatToCheck, depth=DEFAULT_CHAIN_DEPTH):
     """ Get the result of backward chaining for a specific query. 
     Args:
         whatToCheck (str): The query to check, e.g., '(engagement 0 "High")'
-        depth (int): The depth limit for backward chaining. (default 5)
+        depth (int): The depth limit for backward chaining.
     Returns:
         The justification of the backward chaining operation.
     """

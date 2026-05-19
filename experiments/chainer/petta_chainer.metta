@@ -66,6 +66,9 @@
 (= (compileadd $kb $stmt)
   (let $atoms (mm2compile $kb $stmt) (add-atom &kb $atoms)))
 
+(= (compileadd-forward-only $kb $stmt)
+  (let $atoms (mm2compile-forward-only $kb $stmt) (add-atom &kb $atoms)))
+
 
 (= (query $depth $kb $stmt)
   (let (cons (goal $query) $adds) (collapse (mm2compileQuery $kb $stmt))

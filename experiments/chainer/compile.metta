@@ -119,6 +119,7 @@
 (= (postQuery $stmt) (unique-atom (postCore $stmt compile-inputs compile-outputs)))
 
 (= (compile) (.: post compile_))
+(= (compile-forward-only) (.: post compile-forward-only_))
 
 (= (implication $prf $a $b $itv) ( ((: $kb $prfa $a $atv) (CPU MpFormula ($itv $atv) $btv)) |- ((: $kb ($prf $prfa) $b $btv))))
 
@@ -158,6 +159,23 @@
                              (compile-outputs (: $kb $prf $Type $tv))))
          )))
 
+;; Mined association rules are used as forward explanations only.
+;; Compiling their inverse implication makes backward search explode because
+;; the chainer tries to infer broad antecedent conjunctions from common
+;; conclusions such as `(engagement $x "Low")`.
+(= (compile-forward-only_ $kb (@ $stmt (: $prf $Type $tv)))
+    (if (is-var $Type)
+      (empty)
+      (if (and (= $Type ($relation $a $b)) (== $relation ->))
+          (let* ( ($nb (skolemize $prf $a $b)) )
+          (superpose ((implication $prf $a $nb $tv)
+                      (if (is-var $nb) (empty) (compile-outputs (: $kb ($prf $prfa) $nb $btv)))
+                      (if (is-var $a) (empty) (compile-inputs (: $kb $prfa $a $atv)))
+                      )))
+          (superpose ( (() |- ((: $kb $prf $Type $tv)))
+                             (compile-outputs (: $kb $prf $Type $tv))))
+         )))
+
 (= (compileQuery $kb (: $prf $Type $tv))
   (if (is-var $Type)
    ( (() |- ((: $kb $prf $Type $tv))) ())
@@ -177,6 +195,12 @@
   (progn
     (remove-all-atoms ctx)
     (superpose ((mm2stmt (compile $kb $stmt))
+                (get-atoms ctx)))))
+
+(= (mm2compile-forward-only $kb $stmt)
+  (progn
+    (remove-all-atoms ctx)
+    (superpose ((mm2stmt (compile-forward-only $kb $stmt))
                 (get-atoms ctx)))))
  
 (= (mm2stmt $stmt)

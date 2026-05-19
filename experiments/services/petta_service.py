@@ -153,7 +153,20 @@ class PeTTaService:
         self._dataset_module_path: Optional[str] = None
         self._dataset_file_path: Optional[str] = None
         self._dataset_mtime: Optional[float] = None
+        self._dataset_facts: list[dict[str, str]] = []
+        self._fact_index: dict[tuple[str, str], set[str]] = {}
+        self._fact_by_expression: dict[str, dict[str, str]] = {}
+        self._forward_rule_atoms: list[str] = []
+        self._rule_consequent_index: dict[str, list[str]] = {}
+        self._max_grounded_rules_per_pattern = int(os.getenv("PETTA_MAX_GROUNDED_RULES_PER_PATTERN", "200"))
+        self._fast_grounded_queries = os.getenv("PETTA_FAST_GROUNDED_QUERIES", "1") != "0"
         self.atom_re = re.compile(r'\([A-Za-z_][\w\-]*\s+\$[_\w\d]+\s+"[^"]*"\)')
+        self.pattern_atom_re = re.compile(r'\(([A-Za-z_][\w\-]*)\s+\$[_\w\d]+\s+"((?:\\.|[^"\\])*)"\)')
+        self.ground_fact_re = re.compile(r'\(([A-Za-z_][\w\-]*)\s+([^\s()]+)\s+"((?:\\.|[^"\\])*)"\)')
+        self.dataset_fact_re = re.compile(
+            r'^\(\(([A-Za-z_][\w\-]*)\s+([^\s()]+)\s+"((?:\\.|[^"\\])*)"\)\s+'
+            r'\(STV\s+([0-9eE\.\-]+)\s+([0-9eE\.\-]+)\)\)$'
+        )
         self.stv_re = re.compile(r"\(STV\s+([0-9eE\.\-]+)\s+([0-9eE\.\-]+)\)")
 
     @classmethod
@@ -263,6 +276,9 @@ class PeTTaService:
             self._dataset_module_path = dataset_module_path
             self._dataset_file_path = dataset_file_path
             self._dataset_mtime = os.path.getmtime(dataset_file_path)
+            self._load_dataset_fact_index(dataset_file_path)
+            self._forward_rule_atoms.clear()
+            self._rule_consequent_index.clear()
 
         return {
             "status": "success",
@@ -285,28 +301,58 @@ class PeTTaService:
         }
 
     def add_atom(self, atom: str) -> Optional[Any]:
+        return self._compile_atom(atom, "compileadd")
+
+    def add_forward_only_rule(self, atom: str) -> Optional[Any]:
+        result = self._compile_atom(atom, "compileadd-forward-only")
+        if result is not None:
+            self._register_forward_rule(atom)
+        return result
+
+    def _compile_atom(self, atom: str, compiler: str) -> Optional[Any]:
         atom = (atom or "").strip()
         if not atom:
             return None
 
+        cache_key = f"{compiler}:{atom}"
         with self._atoms_lock:
-            if atom in self._added_atoms:
+            if cache_key in self._added_atoms:
                 return None
-            self._added_atoms.add(atom)
+            self._added_atoms.add(cache_key)
 
         try:
-            return self.process_metta_string(f"!(compileadd {self.kb} {atom})")
+            return self.process_metta_string(f"!({compiler} {self.kb} {atom})")
         except Exception:
             with self._atoms_lock:
-                self._added_atoms.discard(atom)
+                self._added_atoms.discard(cache_key)
             raise
 
     def query(self, atom: str, depth: int = 10) -> list[str]:
         atom = (atom or "").strip()
+        if self._fast_grounded_queries:
+            fast_proofs = self.fast_grounded_proofs(atom)
+            if fast_proofs:
+                return fast_proofs
+
         if not atom.startswith("(:"):
             atom = f"(: $prf {atom} $tv)"
         result = self.process_metta_string(f"!(query (fromNumber {depth}) {self.kb} {atom})")
         return normalize_chainer_result(result)
+
+    def fast_grounded_proofs(self, atom: str) -> list[str]:
+        fact_expr = self._extract_ground_fact(atom)
+        if not fact_expr:
+            return []
+
+        proofs = []
+        fact = self._fact_by_expression.get(fact_expr)
+        if fact is not None:
+            proofs.append(
+                f'(: (fact:- {fact_expr}) {fact_expr} '
+                f'(STV {fact["strength"]} {fact["confidence"]}))'
+            )
+        proofs.extend(self._rule_consequent_index.get(fact_expr, []))
+        return unique_preserve_order(proofs)
 
     def formatter(self, mined_patterns: Any) -> dict[str, Any]:
         """Insert mined patterns into the chainer KB as PeTTa rules."""
@@ -329,11 +375,10 @@ class PeTTaService:
             inserted_rules = []
             for idx, pattern in enumerate(patterns, start=1):
                 pattern_text = str(pattern.get("pattern", "")) if isinstance(pattern, dict) else str(pattern)
-                rule_atom = self.pattern_to_rule(pattern_text, idx)
-                if not rule_atom:
-                    continue
-                if self.add_atom(rule_atom) is not None:
-                    inserted_rules.append(rule_atom)
+                rule_atoms = self.pattern_to_rules(pattern_text, idx)
+                for rule_atom in rule_atoms:
+                    if self.add_forward_only_rule(rule_atom) is not None:
+                        inserted_rules.append(rule_atom)
 
             return {
                 "status": "success",
@@ -346,6 +391,42 @@ class PeTTaService:
                 "message": str(exc),
                 "insertedRuleCount": 0,
             }
+
+    def pattern_to_rules(self, pattern_text: str, idx: int) -> list[str]:
+        atoms = self._parse_pattern_atoms(pattern_text)
+        if not atoms:
+            return []
+
+        stv_match = self.stv_re.search(pattern_text or "")
+        strength, confidence = (stv_match.group(1), stv_match.group(2)) if stv_match else ("1.0", "1.0")
+        strength_value = min(max(float(strength), 0.0), 1.0)
+        confidence_value = min(max(float(confidence), 0.0), 1.0)
+
+        consequent = next((atom for atom in atoms if atom["predicate"] == "engagement"), atoms[-1])
+        antecedents = [atom for atom in atoms if atom != consequent]
+        if not antecedents:
+            return []
+
+        entities = self._entities_matching_atoms(atoms)
+        if not entities:
+            fallback = self.pattern_to_rule(pattern_text, idx)
+            return [fallback] if fallback else []
+
+        rules = []
+        for entity in entities[: self._max_grounded_rules_per_pattern]:
+            grounded_antecedents = [
+                self._format_fact(atom["predicate"], entity, atom["value"])
+                for atom in antecedents
+            ]
+            lhs = grounded_antecedents[0] if len(grounded_antecedents) == 1 else f"(And {' '.join(grounded_antecedents)})"
+            grounded_consequent = self._format_fact(consequent["predicate"], entity, consequent["value"])
+            safe_entity = re.sub(r"[^A-Za-z0-9_]+", "_", entity)
+            rules.append(
+                f'(: rule_{idx}_{safe_entity} (-> {lhs} {grounded_consequent}) '
+                f'(STV {strength_value} {confidence_value}))'
+            )
+
+        return rules
 
     def pattern_to_rule(self, pattern_text: str, idx: int) -> Optional[str]:
         atoms = [self._normalize_var(atom) for atom in self.atom_re.findall(pattern_text or "")]
@@ -362,6 +443,75 @@ class PeTTaService:
         lhs = antecedents[0] if len(antecedents) == 1 else f"(And {' '.join(antecedents)})"
 
         return f'(: rule_{idx} (-> {lhs} {consequent}) (STV {strength_value} {confidence_value}))'
+
+    def _load_dataset_fact_index(self, dataset_file_path: str) -> None:
+        facts: list[dict[str, str]] = []
+        index: dict[tuple[str, str], set[str]] = {}
+        by_expression: dict[str, dict[str, str]] = {}
+
+        with open(dataset_file_path, "r", encoding="utf-8") as dataset:
+            for line in dataset:
+                match = self.dataset_fact_re.match(line.strip())
+                if not match:
+                    continue
+                predicate, entity, value, strength, confidence = match.groups()
+                fact = {
+                    "predicate": predicate,
+                    "entity": entity,
+                    "value": value,
+                    "strength": strength,
+                    "confidence": confidence,
+                }
+                facts.append(fact)
+                index.setdefault((predicate, value), set()).add(entity)
+                by_expression[self._format_fact(predicate, entity, value)] = fact
+
+        self._dataset_facts = facts
+        self._fact_index = index
+        self._fact_by_expression = by_expression
+
+    def _parse_pattern_atoms(self, pattern_text: str) -> list[dict[str, str]]:
+        return [
+            {"predicate": predicate, "value": value}
+            for predicate, value in self.pattern_atom_re.findall(pattern_text or "")
+        ]
+
+    def _entities_matching_atoms(self, atoms: list[dict[str, str]]) -> list[str]:
+        entity_sets = [
+            self._fact_index.get((atom["predicate"], atom["value"]), set())
+            for atom in atoms
+        ]
+        if not entity_sets or any(not entity_set for entity_set in entity_sets):
+            return []
+        return sorted(set.intersection(*entity_sets))
+
+    def _format_fact(self, predicate: str, entity: str, value: str) -> str:
+        return f'({predicate} {entity} "{value}")'
+
+    def _extract_ground_fact(self, atom: str) -> Optional[str]:
+        match = self.ground_fact_re.search(atom or "")
+        if not match:
+            return None
+        predicate, entity, value = match.groups()
+        if entity.startswith("$") or "$" in value:
+            return None
+        return self._format_fact(predicate, entity, value)
+
+    def _register_forward_rule(self, atom: str) -> None:
+        consequent = self._extract_rule_consequent(atom)
+        if not consequent:
+            return
+        self._forward_rule_atoms.append(atom)
+        self._rule_consequent_index.setdefault(consequent, []).append(atom)
+
+    def _extract_rule_consequent(self, atom: str) -> Optional[str]:
+        match = re.search(
+            r'\(->\s+.*\s+(\([A-Za-z_][\w\-]*\s+[^\s()]+\s+"(?:\\.|[^"\\])*"\))\)\s+\(STV',
+            atom or "",
+        )
+        if not match:
+            return None
+        return self._extract_ground_fact(match.group(1))
 
     def _verify_janus_and_swi(self) -> None:
         try:

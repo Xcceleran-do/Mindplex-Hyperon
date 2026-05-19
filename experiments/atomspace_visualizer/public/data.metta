@@ -9,7 +9,7 @@
 ((popularity A_16624 "Top_10") (STV 1.0 1.0))
 ((engagement A_16624 "Low") (STV 0.1 0.9))
 ((category A_16624 "opinion") (STV 1.0 1.0))
-((title A_16624 "Community Reward Campaign Guidelines") (STV 1.0 1.0))
+((title A_16624 "Community Reward (Campaign Guidelines") (STV 1.0 1.0))
 ((length A_12110 "Long") (STV 0.902 0.9))
 ((reading-time A_12110 "Long") (STV 0.91 0.9))
 ((tone A_12110 "Formal") (STV 0.9 0.9))
