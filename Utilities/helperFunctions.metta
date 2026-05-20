@@ -3,6 +3,10 @@
 ;; Helper functions that are going to be useful for writing any metta code
 (= (!= $a $b) (not (== $a $b)))
 
+;; A function that returns hi.
+(: hi (-> Atom))
+(= (hi) hi)
+
 ;; INFO: Uncomment for the use of MeTTaLog.
 ;; (: >= (-> Number Number Bool))
 ;; (= (>= $a $b) (or (== $a $b) (> $a $b)))

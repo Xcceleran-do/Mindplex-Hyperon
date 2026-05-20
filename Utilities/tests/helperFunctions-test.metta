@@ -15,6 +15,9 @@
 !(assertEqual (!= True False) True)
 !(assertEqual (!= False False) False)
 
+;; Test cases for hi function
+!(assertEqual (hi) hi)
+
 ;; Test cases for concaTuple function
 !(assertEqual (concatTuple (1 2 3) (4 5 6)) (1 2 3 4 5 6))
 !(assertEqual (concatTuple (a b) ()) (a b))
