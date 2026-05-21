@@ -2,8 +2,7 @@ services:
   mining-api:
     build:
       context: .
-    env_file:
-      - .env
+    env_file: .env
     environment:
       FLASK_DEBUG: "0"
       PETTA_DEBUG: "0"

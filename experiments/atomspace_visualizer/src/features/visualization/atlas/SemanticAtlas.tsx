@@ -1,6 +1,7 @@
 import { Component, createEffect, createMemo, createSignal, onCleanup, onMount, Show } from 'solid-js';
 import type { FilterState, GraphData, GraphNode, Point } from '../../../types';
 import styles from './SemanticAtlas.module.css';
+import { buildPropertyColorMap, colorForAtlasSubject, readAtlasColorTheme } from './colorMapping';
 
 type AtlasNodeKind = 'article' | 'property';
 
@@ -65,21 +66,16 @@ const formatLabel = (value: string) =>
     .replace(/\s+/g, ' ')
     .trim();
 
-const hash = (value: string) => {
-  let result = 0;
-  for (let index = 0; index < value.length; index += 1) {
-    result = value.charCodeAt(index) + ((result << 5) - result);
-  }
-  return Math.abs(result);
-};
-
-const colorForNode = (node: AtlasNode, theme: CanvasTheme) => {
-  if (node.kind === 'article') {
-    return theme.article;
-  }
-
-  const key = node.propertyName || node.label;
-  return theme.palette[hash(key) % theme.palette.length] || theme.article;
+const colorForNode = (node: AtlasNode, theme: CanvasTheme, propertyColors: Map<string, string>) => {
+  return colorForAtlasSubject(
+    {
+      kind: node.kind,
+      label: node.label,
+      propertyName: node.propertyName,
+    },
+    theme,
+    propertyColors,
+  );
 };
 
 const getActiveArticleIds = (filterState: FilterState) => new Set(filterState.articleIds || []);
@@ -233,6 +229,7 @@ const drawEdge = (
   filterState: FilterState,
   hoveredNode: AtlasNode | null,
   theme: CanvasTheme,
+  propertyColors: Map<string, string>,
 ) => {
   const highlighted = shouldHighlightEdge(edge, filterState);
   const hoverLinked = hoveredNode ? edge.source.id === hoveredNode.id || edge.target.id === hoveredNode.id : false;
@@ -240,7 +237,7 @@ const drawEdge = (
 
   ctx.save();
   ctx.globalAlpha = alpha;
-  ctx.strokeStyle = colorForNode(edge.target, theme);
+  ctx.strokeStyle = colorForNode(edge.target, theme, propertyColors);
   ctx.lineWidth = hoverLinked ? 2.4 : highlighted ? 1.45 : 0.8;
   ctx.beginPath();
   const controlX = (edge.source.x + edge.target.x) / 2;
@@ -259,6 +256,7 @@ const drawNode = (
   selectedNode: AtlasNode | null,
   scale: number,
   theme: CanvasTheme,
+  propertyColors: Map<string, string>,
 ) => {
   const highlighted = shouldHighlightNode(node, filterState);
   const hovered = hoveredNode?.id === node.id;
@@ -267,7 +265,7 @@ const drawNode = (
   ctx.save();
   ctx.globalAlpha = highlighted ? 1 : 0.18;
 
-  const nodeColor = colorForNode(node, theme);
+  const nodeColor = colorForNode(node, theme, propertyColors);
   ctx.shadowColor = nodeColor;
   ctx.shadowBlur = (hovered || selected ? 18 : 8) / scale;
 
@@ -412,16 +410,17 @@ const SemanticAtlas: Component<SemanticAtlasProps> = (props) => {
     const dpr = window.devicePixelRatio || 1;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const rootStyle = getComputedStyle(document.documentElement);
+    const atlasTheme = readAtlasColorTheme(rootStyle);
     const theme: CanvasTheme = {
       bg: rootStyle.getPropertyValue('--canvas-bg').trim(),
       grid: rootStyle.getPropertyValue('--canvas-grid').trim(),
       ring: rootStyle.getPropertyValue('--color-border-strong').trim(),
       text: rootStyle.getPropertyValue('--text-primary').trim(),
       surface: rootStyle.getPropertyValue('--color-surface').trim(),
-      article: rootStyle.getPropertyValue('--node-article').trim(),
+      article: atlasTheme.article,
       hover: rootStyle.getPropertyValue('--node-hover').trim(),
       selected: rootStyle.getPropertyValue('--node-selected').trim(),
-      palette: Array.from({ length: 8 }, (_, index) => rootStyle.getPropertyValue(`--viz-${index + 1}`).trim()),
+      palette: atlasTheme.palette,
     };
     drawBackground(ctx, rect.width, rect.height, theme);
 
@@ -430,6 +429,10 @@ const SemanticAtlas: Component<SemanticAtlasProps> = (props) => {
     ctx.scale(transform.scale, transform.scale);
 
     const currentLayout = layout();
+    const propertyColors = buildPropertyColorMap(
+      currentLayout.propertyNodes.map((node) => node.propertyName || node.label),
+      atlasTheme,
+    );
 
     ctx.save();
     ctx.globalAlpha = 0.34;
@@ -443,11 +446,11 @@ const SemanticAtlas: Component<SemanticAtlasProps> = (props) => {
     ctx.restore();
 
     for (const edge of currentLayout.edges) {
-      drawEdge(ctx, edge, props.filterState, hoveredNode, theme);
+      drawEdge(ctx, edge, props.filterState, hoveredNode, theme, propertyColors);
     }
 
     for (const node of currentLayout.nodes) {
-      drawNode(ctx, node, props.filterState, hoveredNode, selectedNode, transform.scale, theme);
+      drawNode(ctx, node, props.filterState, hoveredNode, selectedNode, transform.scale, theme, propertyColors);
     }
 
     ctx.restore();

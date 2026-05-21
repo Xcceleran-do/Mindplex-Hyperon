@@ -1,6 +1,7 @@
 import { Component, For, Show, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import { GraphData, FilterState } from '../../types';
 import styles from './EnhancedLegend.module.css';
+import { buildPropertyColorMap, readAtlasColorTheme } from '../../features/visualization/atlas/colorMapping';
 
 const ChevronIcon = (props: { expanded: boolean }) => (
   <svg
@@ -93,56 +94,36 @@ const EnhancedLegend: Component<EnhancedLegendProps> = (props) => {
   });
 
   const getColorRepresentations = () => {
+    const rootStyle = getComputedStyle(document.documentElement);
+    const theme = readAtlasColorTheme(rootStyle);
     const colorMap = new Map<string, Set<string>>();
-    const propertyColorMap = new Map<string, string>();
+    const propertyNames = props.graphData.nodes
+      .filter((node) => node.metadata.columnType === 'property' && node.label !== 'None')
+      .map((node) => node.metadata.propertyName || node.label);
+    const propertyColorMap = buildPropertyColorMap(propertyNames, theme);
+
+    const addLabel = (color: string, label: string) => {
+      const existing = colorMap.get(color) ?? new Set<string>();
+      existing.add(label);
+      colorMap.set(color, existing);
+    };
 
     for (const node of props.graphData.nodes) {
-      if (!node.color) continue;
-
-      if (node.metadata.propertyName && node.label !== 'None') {
-        propertyColorMap.set(node.metadata.propertyName, node.color);
-      }
-
-      const existing = colorMap.get(node.color) ?? new Set<string>();
-      colorMap.set(node.color, existing);
-
-      if (node.metadata.columnType === 'header') {
-        continue;
-      }
-
       if (node.metadata.columnType === 'article') {
-        existing.add('article');
+        addLabel(theme.article, 'article');
         continue;
       }
 
       if (node.metadata.columnType === 'property') {
-        if (node.label === 'None') {
-          existing.add('none (missing)');
-        } else {
-          const label = formatPropertyName(node.metadata.propertyName || node.label || 'value');
-          existing.add(label);
-        }
+        if (node.label === 'None') continue;
+        const propertyName = node.metadata.propertyName || node.label;
+        const color = propertyColorMap.get(propertyName) || theme.article;
+        const label = formatPropertyName(node.metadata.propertyName || node.label || 'value');
+        addLabel(color, label);
       }
     }
 
-    const filtered = Array.from(colorMap.entries()).filter(([_, labels]) => {
-      if (labels.size === 0) return false;
-      if (labels.size > 1) return true;
-
-      const onlyLabel = Array.from(labels)[0];
-      if (onlyLabel === 'article' || onlyLabel === 'none (missing)') return true;
-
-      const normalizedLabel = onlyLabel.replace(/\s+/g, '_').toLowerCase();
-      for (const propertyName of propertyColorMap.keys()) {
-        if (propertyName.toLowerCase() === normalizedLabel) {
-          return true;
-        }
-      }
-
-      return false;
-    });
-
-    return filtered
+    return Array.from(colorMap.entries())
       .map(([color, labels]) => ({
         color,
         labels: Array.from(labels).sort((a, b) => a.localeCompare(b)).join(', ')

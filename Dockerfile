@@ -26,6 +26,10 @@ COPY experiments/requirements.txt /app/experiments/requirements.txt
 COPY PeTTa /app/PeTTa
 
 RUN python3 -m venv "${VIRTUAL_ENV}" \
+    && if [ ! -f /app/PeTTa/pyproject.toml ]; then \
+        rm -rf /app/PeTTa; \
+        git clone https://github.com/yotors/PeTTa.git /app/PeTTa; \
+    fi \
     && python -m pip install --upgrade pip setuptools wheel \
     && python -m pip install -r experiments/requirements.txt \
     && python -c "import janus_swi; print('janus_swi import ok')" \

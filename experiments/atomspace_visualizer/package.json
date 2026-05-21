@@ -4,15 +4,15 @@
   "description": "Frontend for Mindplex Hyperon visualization, mining, and reasoning workflows.",
   "type": "module",
   "scripts": {
-    "start": "vite --configLoader native",
-    "dev": "vite --configLoader native",
+    "start": "vite",
+    "dev": "vite",
     "typecheck": "tsc --noEmit",
-    "build": "vite build --configLoader native",
-    "preview": "vite preview --configLoader native",
-    "serve": "vite preview --configLoader native",
+    "build": "vite build",
+    "preview": "vite preview",
+    "serve": "vite preview",
     "serve:dist": "node scripts/serve-dist.mjs",
-    "test": "vitest --configLoader native",
-    "test:run": "vitest run --configLoader native"
+    "test": "vitest",
+    "test:run": "vitest run"
   },
   "license": "MIT",
   "devDependencies": {
