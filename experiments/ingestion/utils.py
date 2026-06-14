@@ -7,6 +7,9 @@ from typing import Any, Iterable, List, Mapping, Optional
 
 
 PROPERTY_NAME_RE = re.compile(r"[^a-z0-9-]+")
+METTA_PREDICATE_ALIASES = {
+    "length": "length-bucket",
+}
 DEFAULT_EXCLUDED_PREDICATES = {
     "author",
     "authored-by",
@@ -33,7 +36,8 @@ def normalize_metadata_key(value: str, fallback: str = "property") -> str:
 
 
 def metta_predicate(value: str) -> str:
-    return normalize_property_name(value)
+    normalized = normalize_property_name(value)
+    return METTA_PREDICATE_ALIASES.get(normalized, normalized)
 
 
 def excluded_predicates(include_display: bool = False) -> set[str]:

@@ -445,6 +445,10 @@ class TestConvertMindToMetta(unittest.TestCase):
             
             self.assertIn("output_metta_path", result)
             self.assertTrue(os.path.exists(output_metta))
+            with open(output_metta, "r", encoding="utf-8") as handle:
+                metta_output = handle.read()
+            self.assertIn("(length-bucket A_N1 ", metta_output)
+            self.assertNotIn("(length A_N1 ", metta_output)
 
 
 class TestReadNews(unittest.TestCase):

@@ -66,6 +66,7 @@ class TestSourceAgnosticIngestion(unittest.TestCase):
         metta = JsonToMetta(include_author_alias=False).convert(enriched)
 
         self.assertIn('(genre A_book-1 "technical")', metta)
+        self.assertIn('(length-bucket A_book-1 "Short")', metta)
         self.assertIn("(rating-level A_book-1", metta)
         self.assertIn('(engagement A_book-1 "Low")', metta)
         self.assertNotIn("(author ", metta)

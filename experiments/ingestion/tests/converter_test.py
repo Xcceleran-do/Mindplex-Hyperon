@@ -65,7 +65,8 @@ class TestJsonToMetta(unittest.TestCase):
         self.assertGreaterEqual(len(lines), 13)
         
         # Check specific properties are present
-        self.assertTrue(any("length" in line for line in lines))
+        self.assertTrue(any("(length-bucket " in line for line in lines))
+        self.assertFalse(any("(length A_" in line for line in lines))
         self.assertTrue(any("tone" in line for line in lines))
         self.assertTrue(any("audience-expertise" in line for line in lines))
         self.assertTrue(any("content-type" in line for line in lines))
