@@ -1,0 +1,445 @@
+.simulatorPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-control);
+}
+
+.topLine,
+.predictionRow,
+.resultFooter,
+.probabilityMeta,
+.actionRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.kicker {
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.title {
+  margin-top: 2px;
+  color: var(--text-primary);
+  font-family: var(--font-heading);
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.ruleBadge {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--color-accent-border);
+  background: var(--color-accent-muted);
+  color: var(--color-accent);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.guidanceBox {
+  padding: 9px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--color-warning-border);
+  background: var(--color-warning-muted);
+  color: var(--color-warning);
+  font-size: 0.76rem;
+  line-height: 1.35;
+  font-weight: 700;
+}
+
+.controlsGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 74px;
+  gap: 10px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.field span {
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.field input,
+.attributeRow input,
+.attributeRow select {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  padding: 8px 9px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-elevated);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  outline: none;
+}
+
+.field input:focus,
+.attributeRow input:focus,
+.attributeRow select:focus {
+  border-color: var(--color-accent-border);
+  box-shadow: 0 0 0 3px var(--color-focus);
+}
+
+.attributeList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.attributeCard {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 8px;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 10px;
+  background: var(--color-bg-inset);
+}
+
+.attributeRow {
+  display: grid;
+  grid-template-columns: minmax(96px, 0.95fr) minmax(94px, 1fr) 32px;
+  gap: 7px;
+  align-items: center;
+}
+
+.confidenceControl {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.confidenceControl span {
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.confidenceControl input[type='range'] {
+  width: 100%;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+}
+
+.removeButton {
+  width: 32px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface-elevated);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.removeButton:hover {
+  border-color: var(--color-danger-border);
+  background: var(--color-danger-muted);
+  color: var(--color-danger);
+}
+
+.addButton,
+.runButton {
+  height: 38px;
+  border-radius: 8px;
+  font-family: var(--font-heading);
+  font-size: 0.82rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.addButton {
+  padding: 0 12px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-elevated);
+  color: var(--text-primary);
+}
+
+.runButton {
+  min-width: 128px;
+  padding: 0 14px;
+  border: 1px solid var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-accent-foreground);
+  box-shadow: var(--shadow-accent);
+}
+
+.runButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+  box-shadow: none;
+}
+
+.addButton:hover,
+.runButton:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+
+.errorBox {
+  padding: 10px 11px;
+  border-radius: 8px;
+  border: 1px solid var(--color-danger-border);
+  background: var(--color-danger-muted);
+  color: var(--color-danger);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.resultPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-inset);
+}
+
+.predictionRow span,
+.resultFooter,
+.proofMeta {
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+}
+
+.predictionRow strong {
+  color: var(--text-primary);
+  font-family: var(--font-heading);
+  font-size: 1.18rem;
+}
+
+.probabilityList {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+
+.probabilityItem {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.probabilityMeta {
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.probabilityTrack {
+  height: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--color-border-soft);
+}
+
+.probabilityFill {
+  height: 100%;
+  min-width: 2px;
+  border-radius: inherit;
+  transition: width 0.3s ease;
+}
+
+.fillHigh {
+  background: var(--color-accent);
+}
+
+.fillMedium {
+  background: var(--color-warning);
+}
+
+.fillLow {
+  background: var(--color-danger);
+}
+
+.stvBox {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--color-accent-border);
+  background: var(--color-accent-muted);
+  color: var(--text-primary);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.explanationBox,
+.fallbackBox {
+  padding: 10px 11px;
+  border-radius: 8px;
+  font-size: 0.76rem;
+  line-height: 1.4;
+  font-weight: 700;
+}
+
+.explanationBox {
+  border: 1px solid var(--color-accent-border);
+  background: var(--color-accent-muted);
+  color: var(--text-primary);
+}
+
+.fallbackBox {
+  border: 1px solid var(--color-warning-border);
+  background: var(--color-warning-muted);
+  color: var(--color-warning);
+}
+
+.proofDetails {
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.proofDetails summary {
+  cursor: pointer;
+  padding: 9px 10px;
+  color: var(--text-primary);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.proofDetails pre {
+  margin: 0;
+  padding: 10px;
+  border-top: 1px solid var(--color-border);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.chainList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chainHeading {
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.chainItem,
+.missingRule,
+.suggestionRule {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.chainItem summary {
+  cursor: pointer;
+  padding: 9px 10px;
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.chainBody,
+.missingRule,
+.suggestionRule {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 10px;
+}
+
+.missingRuleTitle {
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.suggestionRule {
+  border-color: var(--color-accent-border);
+  background: var(--color-accent-muted);
+}
+
+.suggestionMeta {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  line-height: 1.4;
+  font-weight: 800;
+}
+
+.chainBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chainBlock span {
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.chainBlock pre,
+.chainBlock code {
+  margin: 0;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-inset);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  line-height: 1.42;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.chainStv {
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--color-accent-border);
+  background: var(--color-accent-muted);
+  color: var(--text-primary);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+@media (max-width: 520px) {
+  .controlsGrid,
+  .attributeRow {
+    grid-template-columns: 1fr;
+  }
+
+  .removeButton {
+    width: 100%;
+  }
+}

@@ -1,10 +1,11 @@
 import type { Component } from 'solid-js';
-import { createSignal, createEffect, createResource, Show, For, onCleanup } from 'solid-js';
+import { createSignal, createEffect, createResource, Show, For, onCleanup, createMemo } from 'solid-js';
 
 import EnhancedLegend from './components/Legend/EnhancedLegend';
 import ChatInterface from './components/ChatInterface/ChatInterface';
 import MiningInterface from './components/MiningInterface/MiningInterface';
 import IngestionForm from './components/IngestionForm/IngestionForm';
+import SimulatorPanel from './components/SimulatorPanel/SimulatorPanel';
 import { loadMettaDataset } from './features/mettaData/api';
 import { useResizableSidebar } from './features/layout/useResizableSidebar';
 import { useMiningWorkflow } from './features/mining/model/useMiningWorkflow';
@@ -109,6 +110,7 @@ const App: Component = () => {
 
   // Chat visibility & theme
   const [isChatOpen, setIsChatOpen] = createSignal(true); // Default to open since it's in sidebar
+  const [isSimulatorOpen, setIsSimulatorOpen] = createSignal(true);
   const { theme, applyTheme } = useTheme();
   const { sidebarWidth, isSidebarCollapsed, setIsSidebarCollapsed, startResizing } = useResizableSidebar();
   const {
@@ -118,6 +120,21 @@ const App: Component = () => {
     startMining,
     setPatternsFound
   } = useMiningWorkflow(graphData, handleFilterChange);
+  const workspaceStats = createMemo(() => {
+    const data = graphData();
+    const articles = data.nodes.filter((node) => node.metadata.columnType === 'article').length;
+    const properties = new Set(
+      data.nodes
+        .filter((node) => node.metadata.columnType === 'header')
+        .map((node) => node.metadata.originalExpression || node.label)
+        .filter(Boolean)
+    ).size;
+    return {
+      articles,
+      properties,
+      rules: miningResults().length,
+    };
+  });
   let lastRulesPanelSignature = '';
 
   // Open chat and the top-right rules panel automatically when fresh mining
@@ -219,7 +236,15 @@ const App: Component = () => {
         <header class={styles.header}>
           <div class={styles.logo}>
             <span class={styles.logoMark}><BrandGlyph /></span>
-            <span class={styles.logoText}>Mindplex Hyperon</span>
+            <span class={styles.logoCopy}>
+              <span class={styles.logoText}>Mindplex Hyperon</span>
+              <span class={styles.logoSubtext}>Article reasoning workbench</span>
+            </span>
+          </div>
+          <div class={styles.workspaceStats} aria-label="Workspace statistics">
+            <span><strong>{workspaceStats().articles}</strong> articles</span>
+            <span><strong>{workspaceStats().properties}</strong> attributes</span>
+            <span><strong>{workspaceStats().rules}</strong> rules</span>
           </div>
           <div class={styles.headerControls}>
             <div class={styles.miningWrapper}>
@@ -261,15 +286,34 @@ const App: Component = () => {
         <aside class={`${styles.sidebar} ${isSidebarCollapsed() ? styles.sidebarCollapsed : ''}`}>
           <div class={styles.sidebarContent}>
             <div class={styles.sidebarHeader}>
-              <div class={styles.sidebarTitle}>Tools</div>
+              <div>
+                <div class={styles.sidebarTitle}>Reasoning Cockpit</div>
+                <div class={styles.sidebarSubtitle}>Simulate, explain, then inspect the graph.</div>
+              </div>
               <button class={styles.minimizeBtn} onClick={() => setIsSidebarCollapsed(true)} aria-label="Collapse tools">
                 <ChevronIcon direction="left" />
               </button>
             </div>
 
             <div class={styles.sidebarSection}>
+              <div class={styles.sectionHeader} onClick={() => setIsSimulatorOpen(!isSimulatorOpen())}>
+                <div>
+                  <div class={styles.sectionTitle}>What-if Simulator</div>
+                  <div class={styles.sectionHint}>Test hypothetical article attributes.</div>
+                </div>
+                <span class={styles.collapseIcon}><ChevronIcon direction={isSimulatorOpen() ? 'up' : 'down'} /></span>
+              </div>
+              <Show when={isSimulatorOpen()}>
+                <SimulatorPanel graphData={graphData()} minedRuleCount={miningResults().length} />
+              </Show>
+            </div>
+
+            <div class={styles.sidebarSection}>
               <div class={styles.sectionHeader} onClick={() => setIsChatOpen(!isChatOpen())}>
-                <div class={styles.sectionTitle}>AI Assistant</div>
+                <div>
+                  <div class={styles.sectionTitle}>AI Assistant</div>
+                  <div class={styles.sectionHint}>Ask for proofs, mined rules, or visual filters.</div>
+                </div>
                 <span class={styles.collapseIcon}><ChevronIcon direction={isChatOpen() ? 'up' : 'down'} /></span>
               </div>
               <Show when={isChatOpen()}>
@@ -289,7 +333,10 @@ const App: Component = () => {
             </div>
 
             <div class={styles.sidebarSection}>
-              <div class={styles.sectionTitle}>Legend</div>
+              <div>
+                <div class={styles.sectionTitle}>Legend</div>
+                <div class={styles.sectionHint}>Click values to filter the atlas.</div>
+              </div>
               <EnhancedLegend
                 graphData={graphData()}
                 onFilterChange={handleFilterChange}
