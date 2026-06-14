@@ -6,6 +6,10 @@ services:
     environment:
       FLASK_DEBUG: "0"
       PETTA_DEBUG: "0"
+      PETTA_MAX_CONJUNCTION_COUNT: "10"
+      PETTA_MINING_TIMEOUT_SECONDS: "90"
+      PETTA_MINING_MAX_OUTPUT_BYTES: "8388608"
+      PETTA_CHAIN_TIMEOUT_SECONDS: "30"
     ports:
       - "5000:5000"
     healthcheck:
@@ -22,6 +26,7 @@ services:
         VITE_API_BASE_URL: ""
         VITE_BYPASS_INGESTION: "false"
         VITE_MAX_VIS_ARTICLES: "1500"
+        VITE_MAX_CONJUNCTION_COUNT: "10"
     depends_on:
       mining-api:
         condition: service_healthy

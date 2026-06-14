@@ -8,41 +8,70 @@ import os
 import sys
 import json
 import time
-import traceback
 import re
+import signal
+import subprocess
+import tempfile
 import requests
-from flask import Flask, request, jsonify
+from flask import Flask
 from flask_cors import CORS
 import threading
 import uuid
 from dataclasses import dataclass
 from typing import Dict, Any, Optional, List
 from dotenv import load_dotenv
-import logging  
+import logging
 
-logging.basicConfig(  
-    format="%(asctime)s [%(levelname)s] %(message)s",  
-    level=logging.INFO  
-)  
-logger = logging.getLogger(__name__)  
-
-
+logging.basicConfig(
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    level=logging.INFO,
+)
+logger = logging.getLogger(__name__)
 
 # Add workspace root to path to allow imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
 from experiments.ingestion.pipeline import resolve_output_path, run_ingestion
+from experiments.ingestion.utils import metta_predicate, normalize_property_name, sanitize_atom_id
 from experiments.services.petta_service import (
     PeTTaService,
     PeTTaStartupError,
     format_proofs_for_prompt,
     unique_preserve_order,
 )
+from experiments.chat_api_prompts import (
+    SYSTEM_INSTRUCTION,
+    build_chainer_analysis_prompt,
+    build_tools_schema,
+)
+from experiments.chat_api_support import (
+    analyze_pattern as analyze_pattern_impl,
+    build_rule_grounded_summary,
+    handle_backward_chain_for_message as handle_backward_chain_for_message_impl,
+    handle_mining_for_message as handle_mining_for_message_impl,
+    is_backward_chain_intent,
+    parse_chat_mining_intent as parse_chat_mining_intent_impl,
+    parse_pattern as parse_pattern_impl,
+    register_chat_routes,
+    summarize_patterns as summarize_patterns_impl,
+)
+from experiments.mining_api_routes import register_core_routes
+from experiments.mining_api_support import (
+    compile_facts_into_chainer,
+    extract_parenthesized_expressions,
+    extract_support_of_expressions,
+    load_dataset_facts_for_chainer,
+    make_json_safe,
+    parse_facts_for_pettachainer,
+    parse_pattern_string,
+    parse_petta_output,
+    select_facts_for_prompt,
+)
 load_dotenv()
 
 # Configure ASI API
 ASI_API_KEY = os.getenv("ASI_API_KEY")
 if not ASI_API_KEY:
-    print("WARNING: ASI_API_KEY environment variable is not set. AI features will fail.")
+    logger.warning("ASI_API_KEY environment variable is not set. AI features will fail.")
 ASI_BASE_URL = "https://api.asi1.ai/v1/chat/completions"
 ASI_MODEL = "asi1-mini"
 ASI_TIMEOUT_SECONDS = float(os.getenv("ASI_TIMEOUT_SECONDS", "45"))
@@ -50,11 +79,13 @@ ASI_TIMEOUT_SECONDS = float(os.getenv("ASI_TIMEOUT_SECONDS", "45"))
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROJECT_ROOT_METTA = os.path.abspath(PROJECT_ROOT).replace('\\', '/')
 
-# Enable extra PeTTa debug probes for backward chaining when set to "1".
-PETTA_DEBUG = os.getenv("PETTA_DEBUG", "0") == "1"
 DEFAULT_CONJUNCTION_COUNT = 2
 DEFAULT_MIN_SUPPORT = 3
+DEFAULT_MAX_CONJUNCTION_COUNT = int(os.getenv("PETTA_MAX_CONJUNCTION_COUNT", "10"))
 DEFAULT_CHAIN_DEPTH = int(os.getenv("PETTA_CHAIN_DEPTH", "3"))
+PETTA_MINING_TIMEOUT_SECONDS = int(os.getenv("PETTA_MINING_TIMEOUT_SECONDS", "90"))
+PETTA_MINING_MAX_OUTPUT_BYTES = int(os.getenv("PETTA_MINING_MAX_OUTPUT_BYTES", str(8 * 1024 * 1024)))
+PETTA_CHAIN_TIMEOUT_SECONDS = int(os.getenv("PETTA_CHAIN_TIMEOUT_SECONDS", "30"))
 
 
 def dataset_file_path() -> str:
@@ -70,7 +101,7 @@ def dataset_module_path() -> str:
         path = path[:-6]
     return path.replace("\\", "/")
 
-METTA_SETUP = f"""
+MINING_METTA_SETUP = f"""
 !(import! &self {PROJECT_ROOT_METTA}/PeTTa/lib/lib_import.metta)
 !(import! &self {PROJECT_ROOT_METTA}/PeTTa/lib/lib_spaces)
 !(import_prolog_functions_from_file "{PROJECT_ROOT_METTA}/experiments/frequent-pattern-miner/conj_exp.pl" (unique_combinations_star cut-first-char promote_engagement_conj))
@@ -78,179 +109,146 @@ METTA_SETUP = f"""
 !(import! &self {PROJECT_ROOT_METTA}/experiments/frequent-pattern-miner/etv-utils)
 !(import! &self {PROJECT_ROOT_METTA}/experiments/frequent-pattern-miner/frequent-pattern-miner)
 !(import! &self {PROJECT_ROOT_METTA}/experiments/pattern-miner/pattern-miner)
-!(import! &self {PROJECT_ROOT_METTA}/experiments/chainer/main)
-!(import! &tempo {dataset_module_path()})
-!(import! &stv-formulas {PROJECT_ROOT_METTA}/experiments/PLN/Formulas)
-
-!(let $atom (match &tempo ($fact $stv) (: (fact:- $fact) $fact $stv)) (add-atom &res1 $atom))
-!(let $atom (match &tempo ($fact $stv) $fact) (add-atom &purifiedDbSpace $atom))
 """
 
-petta_service: Optional[PeTTaService] = None
+CHAINER_METTA_SETUP = f"""
+!(import! &self {PROJECT_ROOT_METTA}/experiments/utils/common-utils)
+!(import! &self {PROJECT_ROOT_METTA}/experiments/frequent-pattern-miner/etv-utils)
+"""
+
+ENGAGEMENT_FACT_RE = re.compile(
+    r'^\(:\s+\(fact:-\s+\(engagement\s+[^\s()]+\s+"([^"]+)"\)\)'
+)
+STV_CAPTURE_RE = re.compile(r"\(STV\s+([0-9eE\.\-]+)\s+([0-9eE\.\-]+)\)")
+SIMULATION_FACT_RE = re.compile(
+    r'^\(:\s+([^\s()]+)\s+'
+    r'(\([A-Za-z_][\w\-]*\s+[^\s()]+\s+"[^"]*"\))\s+'
+    r'\(STV\s+([0-9eE\.\-]+)\s+([0-9eE\.\-]+)\)\s*\)$'
+)
+SIMULATION_RULE_ID_RE = re.compile(r"\brule_[A-Za-z0-9_\-]+\b")
+SIMULATION_FACT_ID_RE = re.compile(r"\bsim_fact_\d+\b")
+SIMULATION_ATOM_RE = re.compile(r'\(([A-Za-z_][\w\-]*)\s+([^\s()]+)\s+"([^"]*)"\)')
+SIMULATION_ENGAGEMENT_LEVELS = ("High", "Medium", "Low")
+SIMULATION_PREDICATE_ALIASES = {
+    "length": ("length-bucket", "length"),
+    "length-bucket": ("length-bucket", "length"),
+}
+
+chainer_service: Optional[PeTTaService] = None
+chainer_dataset_path: Optional[str] = None
+chainer_dataset_mtime: Optional[float] = None
+chainer_dataset_facts: list[str] = []
+chainer_dataset_compile_errors: list[dict[str, str]] = []
+chainer_dataset_compiled_count: int = 0
+chainer_rule_atoms: list[str] = []
 runtime_lock = threading.Lock()
+tools_schema = build_tools_schema(DEFAULT_CHAIN_DEPTH)
+
+
+def ordered_chainer_rules() -> list[str]:
+    """PeTTaChainer rule aggregation is order-sensitive; keep ordering stable."""
+    return sorted(unique_preserve_order(chainer_rule_atoms))
+
+
+def _dataset_runtime_payload(status: str, dataset_path: str, dataset_mtime: float) -> dict[str, Any]:
+    service = get_chainer_service()
+    dataset_errors = list(chainer_dataset_compile_errors)
+    dataset_facts = list(chainer_dataset_facts)
+    return {
+        "status": status,
+        "dataset_path": dataset_path,
+        "dataset_mtime": dataset_mtime,
+        "fact_count": len(dataset_facts),
+        "compiled_fact_count": chainer_dataset_compiled_count,
+        "compile_error_count": len(dataset_errors),
+        "compile_errors": dataset_errors[:5],
+        "chainer": service.health(),
+        "mining": {"mode": "subprocess"},
+    }
+
+def _create_chainer_service() -> PeTTaService:
+    return PeTTaService.create_required(
+        project_root=PROJECT_ROOT,
+        setup_metta=CHAINER_METTA_SETUP,
+        verbose=False,
+    )
+
 
 def bootstrap_runtime() -> PeTTaService:
-    """Initialize the mandatory PeTTa runtime exactly once."""
-    global petta_service
-    if petta_service is not None:
-        return petta_service
+    """Initialize the lean chainer runtime and preload the current dataset once."""
+    reload_petta_dataset_if_ready(force=False)
+    return get_chainer_service()
 
-    with runtime_lock:
-        if petta_service is None:
-            logger.info("Initializing mandatory PeTTa runtime")
-            petta_service = PeTTaService.create_required(
-                project_root=PROJECT_ROOT,
-                setup_metta=METTA_SETUP,
-                verbose=False,
-            )
-            petta_service.reload_dataset(dataset_module_path(), dataset_file_path())
-            logger.info("PeTTa runtime initialized: %s", petta_service.health())
-    return petta_service
 
-def get_petta_service() -> PeTTaService:
-    if petta_service is None:
+def get_chainer_service() -> PeTTaService:
+    if chainer_service is None:
         raise PeTTaStartupError(
-            "PeTTa runtime has not been initialized. Start the app through create_app() "
+            "Chainer runtime has not been initialized. Start the app through create_app() "
             "or call bootstrap_runtime() before serving requests."
         )
-    return petta_service
+    return chainer_service
+
+
+def get_petta_service() -> PeTTaService:
+    return get_chainer_service()
 
 
 def reload_petta_dataset_if_ready(force: bool = False) -> dict:
-    """Keep PeTTa mining/chainer spaces aligned with the generated data file."""
-    service = get_petta_service()
-    module_path = dataset_module_path()
+    """Ensure the lean chainer runtime matches the current dataset on disk."""
+    global chainer_service, chainer_dataset_path, chainer_dataset_mtime
+    global chainer_dataset_facts, chainer_dataset_compile_errors, chainer_dataset_compiled_count
+    global chainer_rule_atoms
     file_path = dataset_file_path()
-    if force:
-        return service.reload_dataset(module_path, file_path)
-    return service.reload_dataset_if_changed(module_path, file_path)
+    current_mtime = os.path.getmtime(file_path)
+    changed = (
+        force
+        or chainer_service is None
+        or chainer_dataset_path != file_path
+        or chainer_dataset_mtime != current_mtime
+    )
+    if changed:
+        with runtime_lock:
+            file_path = dataset_file_path()
+            current_mtime = os.path.getmtime(file_path)
+            changed = (
+                force
+                or chainer_service is None
+                or chainer_dataset_path != file_path
+                or chainer_dataset_mtime != current_mtime
+            )
+            if changed:
+                status = "initialized" if chainer_service is None and not force else "reinitialized"
+                logger.info("Syncing chainer runtime from dataset: %s", file_path)
+                service = _create_chainer_service()
+                facts = load_dataset_facts_for_chainer(file_path)
+                compiled_count, compile_errors = compile_facts_into_chainer(service, facts)
+                service.set_dataset_metadata(
+                    dataset_module_path=dataset_module_path(),
+                    dataset_file_path=file_path,
+                    dataset_mtime=current_mtime,
+                )
 
-# Define tools for ASI API
-tools_schema = [
-    {
-        "type": "function",
-        "function": {
-            "name": "mine_pattern",
-            "description": "Runs the PeTTa pattern miner with a specified number of conjunctions and optional minimum support.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "numberOfConjunction": {
-                        "type": "integer",
-                        "description": "The number of conjunctions to use in pattern mining."
-                    },
-                    "min_support": {
-                        "type": "integer",
-                        "description": "Minimum support threshold for returned patterns. Defaults to 3."
-                    }
-                },
-                "required": ["numberOfConjunction"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "start_mining_job",
-            "description": "Starts a PeTTa pattern mining job with a specified number of conjunctions and optional minimum support.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "conjunction_count": {
-                        "type": "integer",
-                        "description": "The number of conjunctions to use in pattern mining."
-                    },
-                    "min_support": {
-                        "type": "integer",
-                        "description": "Minimum support threshold for returned patterns. Defaults to 3."
-                    }
-                },
-                "required": ["conjunction_count"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_mining_results",
-            "description": "Retrieves the latest pattern mining results from the system.",
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "required": []
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "analyze_specific_pattern",
-            "description": "Analyzes a specific pattern in detail, extracting properties and values.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "pattern": {
-                        "type": "string",
-                        "description": "The pattern string to analyze."
-                    }
-                },
-                "required": ["pattern"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_pattern_statistics",
-            "description": "Gets statistics about all mining results including total jobs and patterns.",
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "required": []
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "visualize_pattern_request",
-            "description": "Requests visualization of a specific pattern on the graph canvas.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "pattern": {
-                        "type": "string",
-                        "description": "The pattern string to visualize."
-                    }
-                },
-                "required": ["pattern"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "getChainerResult",
-            "description": "Get the result of backward chaining for a specific query.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "whatToCheck": {
-                        "type": "string",
-                        "description": "The query to check, e.g., '(reputation 0 \"\\High\")'"
-                    },
-                    "depth": {
-                        "type": "integer",
-                        "description": "The depth limit for backward chaining.",
-                        "default": DEFAULT_CHAIN_DEPTH
-                    }
-                },
-                "required": ["whatToCheck"]
-            }
-        }
-    }
-]
+                chainer_service = service
+                chainer_dataset_path = file_path
+                chainer_dataset_mtime = current_mtime
+                chainer_dataset_facts = facts
+                chainer_dataset_compile_errors = compile_errors
+                chainer_dataset_compiled_count = compiled_count
+                chainer_rule_atoms = []
+                logger.info(
+                    "Chainer runtime %s: facts=%s compiled=%s errors=%s health=%s",
+                    status,
+                    len(chainer_dataset_facts),
+                    chainer_dataset_compiled_count,
+                    len(chainer_dataset_compile_errors),
+                    chainer_service.health(),
+                )
+            else:
+                status = "unchanged"
+    else:
+        status = "unchanged"
 
+    return _dataset_runtime_payload(status, file_path, current_mtime)
 def call_asi_api(messages: List[Dict[str, Any]], tools: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     """Calls the ASI API with the given messages and tools."""
     headers = {
@@ -270,261 +268,650 @@ def call_asi_api(messages: List[Dict[str, Any]], tools: Optional[List[Dict[str, 
         response = requests.post(ASI_BASE_URL, headers=headers, json=payload, timeout=ASI_TIMEOUT_SECONDS)
         response.raise_for_status()
         return response.json()
-    except requests.exceptions.RequestException as e:
-        print(f"ASI API Error: {e}")
-        if hasattr(e, 'response') and e.response is not None:
-            print(f"Response content: {e.response.text}")
-        return {"error": str(e)}
+    except requests.exceptions.RequestException as exc:
+        if hasattr(exc, "response") and exc.response is not None:
+            logger.warning("ASI API request failed: %s | response=%s", exc, exc.response.text)
+        else:
+            logger.warning("ASI API request failed: %s", exc)
+        return {"error": str(exc)}
+
 
 def run_metta_with_petta(metta_code: str) -> str:
     """
-    Run MeTTa code using the mandatory in-process PeTTa service.
-    There is intentionally no CLI or Hyperon fallback in production mode.
+    Run mining MeTTa in a fresh worker process so heavy mining imports do not
+    poison the persistent chainer runtime.
     """
-    return get_petta_service().run_metta_string(metta_code)
+    worker_code = f"""
+import sys
+from experiments.services.petta_service import PeTTaService
 
-def parse_petta_output(output: str):
-    """
-    Parses the output from petta to extract the final result.
-    Removes ANSI escape codes and debug lines.
-    """
-    # Remove ANSI escape codes
-    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-    clean_output = ansi_escape.sub('', output)
-    
-    lines = clean_output.splitlines()
-    result_lines = []
-    capture = False
-    
-    # Simple heuristic to find the result line(s)
-    # PeTTa output usually has debug info then the actual result
-    # In my test it looked like:
-    # "Hello from PeTTa"
-    # true
-    # We want the lines that aren't debug info.
-    
-    for line in lines:
-        line = line.strip()
-        if not line: continue
-        if line.startswith("-->") or line.startswith("prolog goal") or line.startswith("metta runnable"):
-            continue
-        if line.startswith("^^^^^"):
-            continue
-        result_lines.append(line)
-    
-    return result_lines
-
-def parse_pattern_string(p_str: str):
-    """
-    Parses a pattern string like (supportOf ((length $x "low") (engagement $x "high")) 3)
-    into a dictionary with 'pattern' and 'support' keys.
-    """
-    # Capture the last numeric token as support, everything before it as pattern.
-    match = re.match(r'^\(supportOf\s+(.+)\s+(\d+)\)$', p_str.strip(), re.DOTALL)
-    if match:
-        return {
-            "pattern": match.group(1).strip(),
-            "support": match.group(2).strip()
-        }
-    return None
-
-def extract_support_of_expressions(text: str) -> list[str]:
-    """Extract all (supportOf ...) expressions from text with balanced parentheses."""
-    results = []
-    start = 0
-    while True:
-        idx = text.find("(supportOf", start)
-        if idx == -1:
-            break
-        depth = 0
-        end = None
-        for i in range(idx, len(text)):
-            ch = text[i]
-            if ch == '(':
-                depth += 1
-            elif ch == ')':
-                depth -= 1
-                if depth == 0:
-                    end = i + 1
-                    break
-        if end is None:
-            break
-        results.append(text[idx:end])
-        start = end
-    return results
-
-STV_EXPR_RE = re.compile(
-    r"\(STV\s+"
-    r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?\s+"
-    r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?"
-    r"\)"
+service = PeTTaService.create_required(
+    project_root={PROJECT_ROOT!r},
+    setup_metta={MINING_METTA_SETUP!r},
+    verbose=False,
 )
+service.reload_dataset({dataset_module_path()!r}, {dataset_file_path()!r})
+result = service.run_metta_string({metta_code!r})
+sys.stdout.write(result)
+"""
+    env = os.environ.copy()
+    env["PYTHONPATH"] = PROJECT_ROOT + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+
+    stdout_path = ""
+    stderr_path = ""
+    process: Optional[subprocess.Popen] = None
+    try:
+        with tempfile.NamedTemporaryFile(prefix="petta-mine-out-", delete=False) as stdout_file:
+            stdout_path = stdout_file.name
+        with tempfile.NamedTemporaryFile(prefix="petta-mine-err-", delete=False) as stderr_file:
+            stderr_path = stderr_file.name
+
+        with open(stdout_path, "wb") as stdout_file, open(stderr_path, "wb") as stderr_file:
+            process = subprocess.Popen(
+                [sys.executable, "-c", worker_code],
+                stdout=stdout_file,
+                stderr=stderr_file,
+                env=env,
+                start_new_session=True,
+            )
+
+            started_at = time.monotonic()
+            killed_reason: Optional[str] = None
+            while process.poll() is None:
+                elapsed = time.monotonic() - started_at
+                output_size = os.path.getsize(stdout_path)
+                error_size = os.path.getsize(stderr_path)
+
+                if elapsed > PETTA_MINING_TIMEOUT_SECONDS:
+                    killed_reason = f"exceeded {PETTA_MINING_TIMEOUT_SECONDS}s timeout"
+                    break
+                if output_size > PETTA_MINING_MAX_OUTPUT_BYTES:
+                    killed_reason = (
+                        f"produced more than {PETTA_MINING_MAX_OUTPUT_BYTES} bytes of output"
+                    )
+                    break
+                if error_size > PETTA_MINING_MAX_OUTPUT_BYTES:
+                    killed_reason = (
+                        f"produced more than {PETTA_MINING_MAX_OUTPUT_BYTES} bytes of stderr"
+                    )
+                    break
+
+                time.sleep(0.25)
+
+            if killed_reason:
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                process.wait(timeout=5)
+                raise TimeoutError(f"Mining worker {killed_reason}.")
+
+            process.wait()
+
+        with open(stdout_path, "rb") as handle:
+            stdout = handle.read().decode("utf-8", errors="replace")
+        with open(stderr_path, "rb") as handle:
+            stderr = handle.read().decode("utf-8", errors="replace")
+
+        if process.returncode != 0:
+            stderr = stderr.strip() or "unknown mining worker failure"
+            raise RuntimeError(f"Mining worker failed: {stderr}")
+        return stdout
+    finally:
+        if process is not None and process.poll() is None:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        for path in (stdout_path, stderr_path):
+            if path:
+                try:
+                    os.unlink(path)
+                except FileNotFoundError:
+                    pass
 
 
-def _balanced_expression_at(text: str, idx: int) -> Optional[str]:
-    """Return the balanced expression starting at idx, ignoring parens in strings."""
-    if idx < 0 or idx >= len(text) or text[idx] != "(":
-        return None
-
-    depth = 0
-    in_string = False
-    escaped = False
-    for i in range(idx, len(text)):
-        ch = text[i]
-        if in_string:
-            if escaped:
-                escaped = False
-            elif ch == "\\":
-                escaped = True
-            elif ch == '"':
-                in_string = False
-            continue
-
-        if ch == '"':
-            in_string = True
-        elif ch == "(":
-            depth += 1
-        elif ch == ")":
-            depth -= 1
-            if depth == 0:
-                return text[idx:i + 1]
-            if depth < 0:
-                return None
-
-    return None
+def _predicate_is_active(predicate: str) -> bool:
+    token = f"({predicate} "
+    return any(token in fact for fact in chainer_dataset_facts) or any(token in rule for rule in chainer_rule_atoms)
 
 
-def extract_prefixed_expressions(text: str, prefix: str) -> list[str]:
-    """Extract balanced expressions that begin with a given textual prefix."""
-    results = []
-    idx = 0
-    in_string = False
-    escaped = False
-    while idx < len(text):
-        ch = text[idx]
-        if in_string:
-            if escaped:
-                escaped = False
-            elif ch == "\\":
-                escaped = True
-            elif ch == '"':
-                in_string = False
-            idx += 1
-            continue
+def simulation_predicates_for(raw_predicate: str) -> list[str]:
+    normalized = normalize_property_name(raw_predicate)
+    aliases = SIMULATION_PREDICATE_ALIASES.get(normalized)
+    if aliases:
+        active = [predicate for predicate in aliases if _predicate_is_active(predicate)]
+        if active:
+            return list(unique_preserve_order(active))
+        return [aliases[0]]
+    return [metta_predicate(raw_predicate)]
 
-        if ch == '"':
-            in_string = True
-            idx += 1
-            continue
 
-        if text.startswith(prefix, idx):
-            expr = _balanced_expression_at(text, idx)
-            if expr is not None:
-                results.append(expr)
-                idx += len(expr)
+def _escape_metta_string(value: Any) -> str:
+    return str(value).replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ").strip()
+
+
+def build_simulation_fact_atoms(payload: dict, article_id: str) -> list[str]:
+    attributes = payload.get("attributes")
+    facts = payload.get("facts")
+    if not attributes and not facts:
+        raise ValueError("Simulation requires either 'attributes' or 'facts'.")
+
+    fact_atoms: list[str] = []
+    fact_counter = 0
+    if isinstance(attributes, dict):
+        for raw_predicate, raw_value in attributes.items():
+            if isinstance(raw_value, dict):
+                value = raw_value.get("value")
+                strength = raw_value.get("strength", 1.0)
+                confidence = raw_value.get("confidence", 1.0)
+            else:
+                value = raw_value
+                strength = 1.0
+                confidence = 1.0
+
+            if value in (None, ""):
                 continue
-            idx += len(prefix)
+            for predicate in simulation_predicates_for(raw_predicate):
+                fact_counter += 1
+                fact_atoms.append(
+                    f'(: sim_fact_{fact_counter} ({predicate} {article_id} "{_escape_metta_string(value)}") '
+                    f'(STV {float(strength)} {float(confidence)}))'
+                )
+
+    if isinstance(facts, list):
+        for idx, item in enumerate(facts, start=1):
+            if not isinstance(item, dict):
+                raise ValueError("Simulation facts must be objects with predicate and value.")
+            raw_predicate = item.get("predicate")
+            value = item.get("value")
+            if not raw_predicate or value in (None, ""):
+                continue
+            strength = item.get("strength", 1.0)
+            confidence = item.get("confidence", 1.0)
+            for predicate in simulation_predicates_for(raw_predicate):
+                fact_counter += 1
+                fact_atoms.append(
+                    f'(: sim_fact_{fact_counter} ({predicate} {article_id} "{_escape_metta_string(value)}") '
+                    f'(STV {float(strength)} {float(confidence)}))'
+                )
+
+    return unique_preserve_order(fact_atoms)
+
+
+def extract_stv_from_proof(proof: str) -> Optional[tuple[float, float]]:
+    matches = STV_CAPTURE_RE.findall(proof or "")
+    if not matches:
+        return None
+    strength, confidence = matches[-1]
+    return float(strength), float(confidence)
+
+
+def truth_revision(left: tuple[float, float], right: tuple[float, float]) -> tuple[float, float]:
+    def confidence_to_weight(confidence: float) -> float:
+        if confidence >= 0.999999:
+            return 1_000_000.0
+        if confidence <= 0.0:
+            return 0.0
+        return confidence / max(1.0 - confidence, 1e-9)
+
+    left_strength, left_confidence = left
+    right_strength, right_confidence = right
+    left_weight = confidence_to_weight(left_confidence)
+    right_weight = confidence_to_weight(right_confidence)
+    total_weight = left_weight + right_weight
+    if total_weight <= 0.0:
+        return 0.0, max(left_confidence, right_confidence)
+
+    strength = ((left_weight * left_strength) + (right_weight * right_strength)) / total_weight
+    derived_confidence = total_weight / (total_weight + 1.0)
+    confidence = min(1.0, max(derived_confidence, left_confidence, right_confidence))
+    return min(1.0, strength), confidence
+
+
+def aggregate_proof_stvs(proofs: list[str]) -> Optional[tuple[float, float]]:
+    aggregate: Optional[tuple[float, float]] = None
+    for proof in proofs:
+        stv = extract_stv_from_proof(proof)
+        if stv is None:
+            continue
+        aggregate = stv if aggregate is None else truth_revision(aggregate, stv)
+    return aggregate
+
+
+def engagement_priors() -> dict[str, float]:
+    counts = {level: 0 for level in SIMULATION_ENGAGEMENT_LEVELS}
+    total = 0
+    for fact in chainer_dataset_facts:
+        match = ENGAGEMENT_FACT_RE.match(fact)
+        if not match:
+            continue
+        level = match.group(1)
+        if level in counts:
+            counts[level] += 1
+            total += 1
+
+    if total <= 0:
+        uniform = 1.0 / len(SIMULATION_ENGAGEMENT_LEVELS)
+        return {level: uniform for level in SIMULATION_ENGAGEMENT_LEVELS}
+    return {level: counts[level] / total for level in SIMULATION_ENGAGEMENT_LEVELS}
+
+
+def normalize_bucket_scores(scores: dict[str, float]) -> dict[str, float]:
+    total = sum(max(score, 0.0) for score in scores.values())
+    priors = engagement_priors()
+    if total <= 0.0:
+        return priors
+
+    evidence_distribution = {
+        bucket: max(score, 0.0) / total for bucket, score in scores.items()
+    }
+    evidence_mass = min(1.0, total)
+    prior_mass = 1.0 - evidence_mass
+    return {
+        bucket: (evidence_distribution[bucket] * evidence_mass) + (priors[bucket] * prior_mass)
+        for bucket in scores
+    }
+
+
+def _parse_simulation_fact(fact: str) -> dict[str, Any]:
+    match = SIMULATION_FACT_RE.match(fact.strip())
+    if not match:
+        return {"id": "", "atom": fact, "strength": None, "confidence": None}
+    fact_id, atom, strength, confidence = match.groups()
+    return {
+        "id": fact_id,
+        "atom": atom,
+        "strength": float(strength),
+        "confidence": float(confidence),
+    }
+
+
+def _parse_simulation_rule(rule_atom: str) -> dict[str, Any]:
+    rule_id_match = re.match(r"^\(:\s+([^\s()]+)", rule_atom.strip())
+    stv = extract_stv_from_proof(rule_atom)
+    atoms = [
+        {
+            "atom": match.group(0),
+            "predicate": match.group(1),
+            "subject": match.group(2),
+            "value": match.group(3),
+        }
+        for match in SIMULATION_ATOM_RE.finditer(rule_atom)
+    ]
+    consequent = next((atom for atom in atoms if atom["predicate"] == "engagement"), None)
+    antecedents = [atom for atom in atoms if atom is not consequent]
+    return {
+        "id": rule_id_match.group(1) if rule_id_match else "",
+        "atom": rule_atom,
+        "antecedents": antecedents,
+        "consequent": consequent,
+        "stv": (
+            {"strength": stv[0], "confidence": stv[1]}
+            if stv is not None
+            else None
+        ),
+    }
+
+
+def _ground_rule_atom(atom: dict[str, str], article_id: str) -> str:
+    return f'({atom["predicate"]} {article_id} "{atom["value"]}")'
+
+
+def _fact_key_from_atom_text(atom_text: str) -> Optional[tuple[str, str]]:
+    match = SIMULATION_ATOM_RE.search(atom_text or "")
+    if not match:
+        return None
+    return match.group(1), match.group(3)
+
+
+def _rule_atom_key(atom: dict[str, str]) -> tuple[str, str]:
+    return atom["predicate"], atom["value"]
+
+
+def _score_stv(stv: Optional[tuple[float, float]]) -> float:
+    if stv is None:
+        return 0.0
+    return max(0.0, min(1.0, stv[0])) * max(0.0, min(1.0, stv[1]))
+
+
+def _combine_rule_and_fact_stvs(
+    rule_stv: Optional[tuple[float, float]],
+    matched_facts: list[dict[str, Any]],
+) -> tuple[float, float]:
+    strength, confidence = rule_stv if rule_stv is not None else (1.0, 1.0)
+    for fact in matched_facts:
+        fact_strength = fact.get("strength")
+        fact_confidence = fact.get("confidence")
+        strength *= float(fact_strength if fact_strength is not None else 1.0)
+        confidence *= float(fact_confidence if fact_confidence is not None else 1.0)
+    return max(0.0, min(1.0, strength)), max(0.0, min(1.0, confidence))
+
+
+def build_conditional_rule_matches(
+    *,
+    article_id: str,
+    hypothetical_facts: list[str],
+    rule_atoms: list[str],
+) -> tuple[dict[str, list[dict[str, Any]]], dict[str, Optional[tuple[float, float]]]]:
+    fact_details = [_parse_simulation_fact(fact) for fact in hypothetical_facts]
+    selected_by_key: dict[tuple[str, str], dict[str, Any]] = {}
+    selected_values_by_predicate: dict[str, set[str]] = {}
+    for fact in fact_details:
+        key = _fact_key_from_atom_text(fact.get("atom", ""))
+        if not key:
+            continue
+        selected_by_key[key] = fact
+        selected_values_by_predicate.setdefault(key[0], set()).add(key[1])
+
+    suggestions_by_level: dict[str, list[dict[str, Any]]] = {
+        level: [] for level in SIMULATION_ENGAGEMENT_LEVELS
+    }
+    stv_by_level: dict[str, Optional[tuple[float, float]]] = {
+        level: None for level in SIMULATION_ENGAGEMENT_LEVELS
+    }
+
+    for rule_atom in rule_atoms:
+        rule = _parse_simulation_rule(rule_atom)
+        consequent = rule.get("consequent")
+        if not consequent or consequent.get("predicate") != "engagement":
+            continue
+        level = consequent.get("value")
+        if level not in suggestions_by_level:
             continue
 
-        idx += 1
-    return results
+        matched = []
+        missing = []
+        conflict = False
+        for antecedent in rule.get("antecedents", []):
+            antecedent_key = _rule_atom_key(antecedent)
+            if antecedent_key in selected_by_key:
+                matched.append({
+                    "required": _ground_rule_atom(antecedent, article_id),
+                    "fact": selected_by_key[antecedent_key],
+                })
+                continue
+
+            selected_values = selected_values_by_predicate.get(antecedent_key[0], set())
+            if selected_values and antecedent_key[1] not in selected_values:
+                conflict = True
+                break
+            missing.append(_ground_rule_atom(antecedent, article_id))
+
+        if conflict or not matched:
+            continue
+
+        rule_stv = extract_stv_from_proof(rule_atom)
+        conditional_stv = _combine_rule_and_fact_stvs(
+            rule_stv,
+            [item["fact"] for item in matched],
+        )
+        suggestion = {
+            "rule_id": rule.get("id"),
+            "consequent": consequent,
+            "matched_antecedents": matched,
+            "missing_antecedents": missing,
+            "assumed_antecedents": missing,
+            "rule": rule,
+            "conditional_stv": {
+                "strength": conditional_stv[0],
+                "confidence": conditional_stv[1],
+            },
+            "conditional_score": _score_stv(conditional_stv),
+            "matched_count": len(matched),
+            "missing_count": len(missing),
+            "summary": (
+                f"If you also use {len(missing)} missing attribute"
+                f"{'' if len(missing) == 1 else 's'}, this rule predicts {level}."
+            ),
+        }
+        suggestions_by_level[level].append(suggestion)
+        stv_by_level[level] = (
+            conditional_stv
+            if stv_by_level[level] is None
+            else truth_revision(stv_by_level[level], conditional_stv)
+        )
+
+    for level in SIMULATION_ENGAGEMENT_LEVELS:
+        suggestions_by_level[level].sort(
+            key=lambda item: (
+                item["conditional_score"],
+                item["matched_count"],
+                -item["missing_count"],
+            ),
+            reverse=True,
+        )
+
+    return suggestions_by_level, stv_by_level
 
 
-def is_pettachainer_fact_atom(expr: str) -> bool:
-    """True for facts that can be compiled into PeTTaChainer's KB."""
-    stripped = (expr or "").strip()
-    if not stripped.startswith("(:"):
-        return False
-    if not STV_EXPR_RE.search(stripped):
-        return False
+def build_simulation_explanation(
+    *,
+    article_id: str,
+    hypothetical_facts: list[str],
+    rule_atoms: list[str],
+    proofs_by_level: dict[str, list[str]],
+    used_prior_fallback: bool,
+    conditional_suggestions_by_level: Optional[dict[str, list[dict[str, Any]]]] = None,
+) -> dict[str, Any]:
+    fact_details = [_parse_simulation_fact(fact) for fact in hypothetical_facts]
+    facts_by_id = {fact["id"]: fact for fact in fact_details if fact.get("id")}
+    facts_by_atom = {fact["atom"]: fact for fact in fact_details if fact.get("atom")}
+    rule_details = [_parse_simulation_rule(rule) for rule in rule_atoms]
+    rules_by_id = {rule["id"]: rule for rule in rule_details if rule.get("id")}
 
-    return bool(
-        re.match(r"^\(:\s+\(fact:-\s+\(", stripped)
-        or re.match(r"^\(:\s+fact[\w\-]*\s+\(", stripped)
+    chains_by_level: dict[str, list[dict[str, Any]]] = {}
+    for level in SIMULATION_ENGAGEMENT_LEVELS:
+        chains = []
+        for proof in proofs_by_level.get(level, []):
+            rule_id_match = SIMULATION_RULE_ID_RE.search(proof)
+            rule_id = rule_id_match.group(0) if rule_id_match else ""
+            fact_ids = unique_preserve_order(SIMULATION_FACT_ID_RE.findall(proof))
+            stv = extract_stv_from_proof(proof)
+            chains.append({
+                "proof": proof,
+                "rule_id": rule_id,
+                "rule": rules_by_id.get(rule_id),
+                "facts": [facts_by_id[fact_id] for fact_id in fact_ids if fact_id in facts_by_id],
+                "stv": (
+                    {"strength": stv[0], "confidence": stv[1]}
+                    if stv is not None
+                    else None
+                ),
+            })
+        chains_by_level[level] = chains
+
+    unmatched_rules = []
+    for rule in rule_details:
+        matched = []
+        missing = []
+        for antecedent in rule.get("antecedents", []):
+            grounded = _ground_rule_atom(antecedent, article_id)
+            if grounded in facts_by_atom:
+                matched.append({"required": grounded, "fact": facts_by_atom[grounded]})
+            else:
+                missing.append(grounded)
+        unmatched_rules.append({
+            "rule_id": rule.get("id"),
+            "consequent": rule.get("consequent"),
+            "matched_antecedents": matched,
+            "missing_antecedents": missing,
+            "rule": rule,
+        })
+
+    has_exact_chains = any(proofs_by_level.get(level) for level in SIMULATION_ENGAGEMENT_LEVELS)
+    has_conditional_suggestions = any(
+        conditional_suggestions_by_level.get(level)
+        for level in SIMULATION_ENGAGEMENT_LEVELS
     )
 
+    if used_prior_fallback:
+        summary = (
+            "No mined rule matched the selected hypothetical facts. "
+            "The probabilities are historical engagement priors, not a rule proof."
+        )
+    elif has_exact_chains:
+        summary = "At least one mined rule fired; probabilities were normalized from proof and STV scores."
+    elif has_conditional_suggestions:
+        summary = (
+            "No complete rule fired yet, but compatible partial rules were scored as conditional "
+            "what-if suggestions using the selected fact STVs."
+        )
+    else:
+        summary = "Probabilities were normalized from mined rule STV scores."
 
-def parse_facts_for_pettachainer(facts_output):  
-    """  
-    Parse nested facts output and convert to PeTTaChainer-compatible format.  
-    Args:  
-        facts_output: List containing a single string with nested facts  
-    Returns:  
-        List of individual fact strings ready for PeTTaService.add_atom()
-    """  
-    if not facts_output:
-        return []
-    nested_facts = "\n".join(str(item) for item in facts_output) if isinstance(facts_output, list) else str(facts_output)
-    matches = [
-        expr
-        for expr in extract_prefixed_expressions(nested_facts, "(:")
-        if is_pettachainer_fact_atom(expr)
-    ]
-    return unique_preserve_order(matches)
+    conditional_suggestions_by_level = conditional_suggestions_by_level or {
+        level: [] for level in SIMULATION_ENGAGEMENT_LEVELS
+    }
 
-
-def select_facts_for_prompt(facts: list[str], query: str, limit: int = 80) -> list[str]:
-    """Keep the LLM explanation prompt focused without starving the chainer."""
-    if len(facts) <= limit:
-        return facts
-
-    terms = re.findall(r'A_[A-Za-z0-9_-]+|"[^"]+"', query or "")
-    predicate_match = re.match(r"\s*\(\s*([A-Za-z_][\w\-]*)", query or "")
-    if predicate_match:
-        terms.append(f"({predicate_match.group(1)} ")
-    terms = unique_preserve_order(terms)
-
-    if not terms:
-        return facts[:limit]
-
-    scored = []
-    for idx, fact in enumerate(facts):
-        score = sum(1 for term in terms if term in fact)
-        if score:
-            scored.append((-score, idx, fact))
-
-    selected = [fact for _, _, fact in sorted(scored)[:limit]]
-    seen = set(selected)
-    for fact in facts:
-        if len(selected) >= limit:
-            break
-        if fact not in seen:
-            selected.append(fact)
-            seen.add(fact)
-
-    return selected
+    return {
+        "summary": summary,
+        "input_facts": fact_details,
+        "rules": rule_details,
+        "chains_by_level": chains_by_level,
+        "unmatched_rules": unmatched_rules,
+        "conditional_suggestions_by_level": conditional_suggestions_by_level,
+        "conditional_suggestions": [
+            suggestion
+            for level in SIMULATION_ENGAGEMENT_LEVELS
+            for suggestion in conditional_suggestions_by_level.get(level, [])[:4]
+        ],
+    }
 
 
-def extract_parenthesized_expressions(text: str) -> list[str]:
-    """Extract all balanced parenthesized expressions from text."""
-    results = []
-    start = 0
-    while True:
-        idx = text.find("(", start)
-        if idx == -1:
-            break
-        expr = _balanced_expression_at(text, idx)
-        if expr is None:
-            break
-        results.append(expr)
-        start = idx + len(expr)
-    return results
+def run_simulation_worker(payload: dict[str, Any]) -> dict[str, Any]:
+    process = subprocess.run(
+        [sys.executable, "-m", "experiments.simulation_worker"],
+        input=json.dumps(payload),
+        text=True,
+        capture_output=True,
+        cwd=PROJECT_ROOT,
+    )
+    if process.returncode != 0:
+        return {
+            "status": "error",
+            "message": "Simulation worker failed.",
+            "stderr": process.stderr.strip(),
+            "stdout": process.stdout.strip(),
+        }
 
-def run_petta_query_lines(metta_code: str) -> list[str]:
-    """Run MeTTa code through PeTTa and return cleaned output lines."""
-    return get_petta_service().query_lines(metta_code)
+    stdout = (process.stdout or "").strip()
+    if not stdout:
+        return {"status": "error", "message": "Simulation worker produced no output."}
 
-def debug_petta_chainer_state(what_to_check: str) -> None:
-    """Log a few diagnostic probes to confirm what PeTTa sees."""
-    if not PETTA_DEBUG:
-        return
     try:
-        atoms_lines = run_petta_query_lines(f"!(backward-chain &res1 (S (S Z)) (: $prf {what_to_check}))")
+        return json.loads(stdout)
+    except json.JSONDecodeError:
+        return {
+            "status": "error",
+            "message": "Simulation worker returned invalid JSON.",
+            "stdout": stdout,
+            "stderr": process.stderr.strip(),
+        }
 
-        match_query = f"!(match &res1 {what_to_check} $x)"
-        match_lines = run_petta_query_lines(match_query)
-    except Exception as e:
-        pass
+
+def simulate_engagement(payload: dict[str, Any]) -> dict[str, Any]:
+    dataset_reload = reload_petta_dataset_if_ready(force=False)
+    rules = ordered_chainer_rules()
+    if not rules:
+        return {
+            "status": "error",
+            "message": "No mined rules are loaded. Run /api/mine first.",
+            "dataset": dataset_reload,
+        }
+
+    raw_article_id = str(payload.get("article_id") or f"sim_{uuid.uuid4().hex[:8]}")
+    if raw_article_id.startswith("H_"):
+        raw_article_id = raw_article_id[2:]
+    article_id = f'H_{sanitize_atom_id(raw_article_id)}'
+    depth = int(payload.get("depth", DEFAULT_CHAIN_DEPTH))
+    if depth < 1:
+        raise ValueError("depth must be a positive integer")
+
+    hypothetical_facts = build_simulation_fact_atoms(payload, article_id)
+    if not hypothetical_facts:
+        raise ValueError("No valid hypothetical facts were provided for simulation.")
+
+    worker_payload = {
+        "project_root": PROJECT_ROOT,
+        "setup_metta": CHAINER_METTA_SETUP,
+        "base_facts": list(chainer_dataset_facts),
+        "rules": rules,
+        "hypothetical_facts": hypothetical_facts,
+        "article_id": article_id,
+        "depth": depth,
+        "engagement_levels": list(SIMULATION_ENGAGEMENT_LEVELS),
+    }
+    worker_result = run_simulation_worker(worker_payload)
+    if worker_result.get("status") != "success":
+        worker_result["dataset"] = dataset_reload
+        return worker_result
+
+    proofs_by_level = worker_result.get("proofs_by_level", {})
+    conditional_suggestions_by_level, conditional_stv_by_level = build_conditional_rule_matches(
+        article_id=article_id,
+        hypothetical_facts=hypothetical_facts,
+        rule_atoms=rules,
+    )
+    bucket_results: dict[str, Any] = {}
+    raw_scores: dict[str, float] = {}
+    proof_count = 0
+    for level in SIMULATION_ENGAGEMENT_LEVELS:
+        proofs = proofs_by_level.get(level, [])
+        aggregated_stv = aggregate_proof_stvs(proofs)
+        exact_score = _score_stv(aggregated_stv)
+        conditional_stv = conditional_stv_by_level.get(level)
+        conditional_score = _score_stv(conditional_stv)
+        score = max(exact_score, conditional_score)
+        raw_scores[level] = score
+        proof_count += len(proofs)
+        bucket_results[level] = {
+            "proofs": proofs,
+            "proof_count": len(proofs),
+            "aggregated_stv": (
+                {"strength": aggregated_stv[0], "confidence": aggregated_stv[1]}
+                if aggregated_stv is not None
+                else None
+            ),
+            "conditional_stv": (
+                {"strength": conditional_stv[0], "confidence": conditional_stv[1]}
+                if conditional_stv is not None
+                else None
+            ),
+            "conditional_score": conditional_score,
+            "conditional_suggestions": conditional_suggestions_by_level.get(level, [])[:6],
+            "exact_score": exact_score,
+            "raw_score": score,
+        }
+
+    probabilities = normalize_bucket_scores(raw_scores)
+    used_prior_fallback = sum(raw_scores.values()) <= 0.0
+    best_level = max(probabilities.items(), key=lambda item: item[1])[0]
+    for level, probability in probabilities.items():
+        bucket_results[level]["probability"] = probability
+    explanation = build_simulation_explanation(
+        article_id=article_id,
+        hypothetical_facts=hypothetical_facts,
+        rule_atoms=rules,
+        proofs_by_level=proofs_by_level,
+        used_prior_fallback=used_prior_fallback,
+        conditional_suggestions_by_level=conditional_suggestions_by_level,
+    )
+
+    return {
+        "status": "success",
+        "article_id": article_id,
+        "depth_used": depth,
+        "dataset": dataset_reload,
+        "rules_used": len(rules),
+        "used_prior_fallback": used_prior_fallback,
+        "proof_count": proof_count,
+        "input_facts": hypothetical_facts,
+        "probabilities": probabilities,
+        "predicted_engagement": best_level,
+        "buckets": bucket_results,
+        "explanation": explanation,
+    }
 
 def mine_pattern(numberOfConjunction: int, min_support: int = DEFAULT_MIN_SUPPORT) -> dict:
     """
@@ -537,14 +924,8 @@ def mine_pattern(numberOfConjunction: int, min_support: int = DEFAULT_MIN_SUPPOR
     Returns:
         A dictionary containing the mining results with parsed patterns.
     """
-    print(
-        "Debug: mine pattern function being called with "
-        f"conjunction count {numberOfConjunction} and min_support {min_support}"
-    )
-    
     try:
         dataset_reload = reload_petta_dataset_if_ready(force=False)
-        print(f"DEBUG: dataset reload status before mining: {dataset_reload}")
         numberOfConjunction = int(numberOfConjunction)
         min_support = int(min_support)
         if numberOfConjunction < 1:
@@ -552,15 +933,21 @@ def mine_pattern(numberOfConjunction: int, min_support: int = DEFAULT_MIN_SUPPOR
                 "status": "error",
                 "message": "numberOfConjunction must be a positive integer",
             }
+        if numberOfConjunction > DEFAULT_MAX_CONJUNCTION_COUNT:
+            return {
+                "status": "error",
+                "message": (
+                    f"numberOfConjunction must be <= {DEFAULT_MAX_CONJUNCTION_COUNT}. "
+                    "Use PETTA_MAX_CONJUNCTION_COUNT to raise this limit after validating the dataset."
+                ),
+            }
         if min_support < 1:
             return {
                 "status": "error",
                 "message": "min_support must be a positive integer",
             }
 
-        # Run the miner with petta
         query = f"!(pattern-miner &purifiedDbSpace {min_support} {numberOfConjunction})"
-        print(f"DEBUG: Executing PeTTa query: {query}")
         petta_output = run_metta_with_petta(query)
         normalized_query = query.strip().lstrip("!").strip()
         if petta_output.strip() == normalized_query:
@@ -571,16 +958,8 @@ def mine_pattern(numberOfConjunction: int, min_support: int = DEFAULT_MIN_SUPPOR
             }
         result_lines = parse_petta_output(petta_output)
         
-
-        # Parse the result into JSON-serializable format
         patterns = []
         full_answer_str = " ".join(result_lines)
-        
-        # In PeTTa, the output might be one or more lists.
-        # We look for (supportOf ...) patterns in the output.
-        # The regex in parse_pattern_string is already designed for this.
-        
-        # Find all occurrences of (supportOf ...) with balanced parentheses
         support_matches = extract_support_of_expressions(full_answer_str)
 
         for match in support_matches:
@@ -601,67 +980,13 @@ def mine_pattern(numberOfConjunction: int, min_support: int = DEFAULT_MIN_SUPPOR
             "total_count": len(patterns)
         }
         
-    except Exception as e:
-        print(f"ERROR in mine_pattern: {traceback.format_exc()}")
+    except Exception as exc:
+        logger.exception("mine_pattern failed")
         return {
             "status": "error",
-            "message": f"Failed to run pattern mining or parse result: {str(e)}",
+            "message": f"Failed to run pattern mining or parse result: {str(exc)}",
             "raw_result": locals().get('petta_output', 'Command failed before output')
         }
-
-
-def make_json_safe(o):
-    """Recursively convert common non-JSON-serializable objects into JSON-safe types.
-
-    - Keeps primitives as-is
-    - Converts mappings/lists/tuples/sets recursively
-    - For objects, tries common serialization helpers (__dict__, to_dict, as_dict) then falls back to str()
-    This version is defensive: it will not call .items() on lists.
-    """
-    from collections.abc import Mapping
-
-    # primitives
-    if o is None or isinstance(o, (str, int, float, bool)):
-        return o
-
-    # Mapping types (dict-like)
-    if isinstance(o, Mapping):
-        safe = {}
-        for k, v in o.items():
-            # keys must be JSON-serializable (convert non-str keys to str)
-            if not isinstance(k, (str, int, float, bool)):
-                key = str(k)
-            else:
-                key = k
-            safe[key] = make_json_safe(v)
-        return safe
-
-    # list/tuple/set
-    if isinstance(o, (list, tuple, set)):
-        return [make_json_safe(x) for x in o]
-
-    # Objects that expose a dict-like __dict__
-    try:
-        d = getattr(o, '__dict__', None)
-        if isinstance(d, Mapping):
-            return {str(k): make_json_safe(v) for k, v in d.items()}
-    except Exception:
-        pass
-
-    # If the object provides a to_dict/as_dict helper, use it
-    try:
-        if hasattr(o, 'to_dict') and callable(getattr(o, 'to_dict')):
-            return make_json_safe(o.to_dict())
-        if hasattr(o, 'as_dict') and callable(getattr(o, 'as_dict')):
-            return make_json_safe(o.as_dict())
-    except Exception:
-        pass
-
-    # Fallback: convert to string
-    try:
-        return str(o)
-    except Exception:
-        return repr(o)
 
 
 app = Flask(__name__)
@@ -675,80 +1000,6 @@ CORS(app, resources={r"/api/*": {
     "max_age": 3600
 }})
 
-@app.route('/api/ingest', methods=['POST'])
-def ingest_data():
-    """
-    Trigger the ingestion pipeline for a specific user.
-    Expects JSON: { "username": "some_user" }
-    """
-    try:
-        data = request.get_json()
-        username = data.get('username') if data else None
-        source_name = data.get('source') if data else None
-        source_name = source_name or "mindplex"
-        limit = data.get('limit') if data else None
-        source_config = data.get('source_config') if data else None
-
-        if source_name == "mindplex" and not username:
-            return jsonify({"status": "error", "message": "Username is required"}), 400
-
-        print(f"Received ingestion request for source: {source_name}")
-        result = run_ingestion(
-            username=username,
-            source_name=source_name,
-            limit=int(limit or 50),
-            source_config=source_config,
-        )
-
-        if result.get("status") == "error":
-            return jsonify(result), 500
-
-        try:
-            result["runtime_dataset_reload"] = reload_petta_dataset_if_ready(force=True)
-        except Exception as reload_error:
-            print(f"Dataset reload error after ingestion: {reload_error}")
-            traceback.print_exc()
-            return jsonify({
-                "status": "error",
-                "message": "Ingestion wrote data.metta, but PeTTa failed to reload it.",
-                "ingestion": result,
-                "reload_error": str(reload_error),
-            }), 500
-
-        return jsonify(result)
-
-    except Exception as e:
-        print(f"Ingestion error: {e}")
-        traceback.print_exc()
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-@app.route('/api/data.metta', methods=['GET'])
-def get_metta_dataset():
-    """Return the current MeTTa dataset produced by ingestion.
-
-    The frontend must read this endpoint in production because Nginx serves
-    static build files from a different container filesystem.
-    """
-    try:
-        path = dataset_file_path()
-        if not os.path.exists(path):
-            return jsonify({
-                "status": "error",
-                "message": f"MeTTa dataset not found at {path}",
-            }), 404
-
-        with open(path, "r", encoding="utf-8") as f:
-            content = f.read()
-
-        response = app.response_class(content, mimetype="text/plain")
-        response.headers["Cache-Control"] = "no-store, max-age=0"
-        return response
-    except Exception as e:
-        print(f"Dataset read error: {e}")
-        traceback.print_exc()
-        return jsonify({"status": "error", "message": str(e)}), 500
-
 def getAllFactsAndRules():
     """Return current facts and rules from the MeTTa knowledge base.
 
@@ -760,36 +1011,23 @@ def getAllFactsAndRules():
     rewrite as `(engagement 1 $whatIsIt)`, then call getChainerResult.
     """
     try:
-        service = get_petta_service()
-        lines = service.query_lines("!(collapse (get-atoms &res1))")
-        joined = " ".join(lines)
-        aligned_facts = parse_facts_for_pettachainer(joined or lines)
-        compile_errors = []
-        compiled_count = 0
-        for fact in aligned_facts:
-            try:
-                if service.add_atom(fact) is not None:
-                    compiled_count += 1
-            except Exception as exc:
-                compile_errors.append({"fact": fact, "error": str(exc)})
-
-        print(
-            "DEBUG: getAllFactsAndRules: "
-            f"raw_lines={len(lines)}, parsed_facts={len(aligned_facts)}, "
-            f"compiled_new={compiled_count}, compile_errors={len(compile_errors)}, "
-            f"sample={aligned_facts[:3]}"
-        )
+        dataset_reload = reload_petta_dataset_if_ready(force=False)
+        aligned_facts = list(chainer_dataset_facts)
+        compile_errors = list(chainer_dataset_compile_errors)
+        compiled_count = chainer_dataset_compiled_count
 
         if aligned_facts and len(compile_errors) == len(aligned_facts):
             return {
                 "status": "error",
                 "error": "Failed to compile every fact into PeTTaChainer.",
+                "dataset": dataset_reload,
                 "fact_count": len(aligned_facts),
                 "compile_errors": compile_errors[:5],
             }
 
         return {
             "status": "success",
+            "dataset": dataset_reload,
             "facts": aligned_facts,
             "fact_count": len(aligned_facts),
             "compiled_new_count": compiled_count,
@@ -800,210 +1038,33 @@ def getAllFactsAndRules():
         return {"status": "error", "error": str(e)}
 
 def parse_chat_mining_intent(message: str) -> Optional[Dict[str, int]]:
-    """Return mining parameters when a chat message asks to run the miner."""
-    if not message:
-        return None
-
-    text = message.strip().lower()
-
-    run_miner_pattern = re.compile(
-        r"\bmine\b|"
-        r"\b(?:run|start|perform|do)\s+(?:the\s+)?(?:miner|mining|pattern[-\s]?miner)\b"
-    )
-    discovery_phrases = (
-        "find patterns",
-        "find rules",
-        "discover patterns",
-        "discover rules",
-        "extract patterns",
-        "extract rules",
-        "generate patterns",
-        "generate rules",
-        "run patterns",
-        "run rules",
-    )
-    result_only_phrases = (
-        "what patterns",
-        "show patterns",
-        "show me patterns",
-        "list patterns",
-        "latest patterns",
-        "mining results",
-        "patterns were found",
+    return parse_chat_mining_intent_impl(
+        message,
+        default_conjunction_count=DEFAULT_CONJUNCTION_COUNT,
+        default_min_support=DEFAULT_MIN_SUPPORT,
     )
 
-    has_mining_verb = bool(run_miner_pattern.search(text))
-    has_discovery_phrase = any(phrase in text for phrase in discovery_phrases)
-    asks_for_existing_results = any(phrase in text for phrase in result_only_phrases)
-
-    if not has_mining_verb and not has_discovery_phrase:
-        return None
-    if asks_for_existing_results and not has_mining_verb:
-        return None
-
-    conjunction_count = DEFAULT_CONJUNCTION_COUNT
-    min_support = DEFAULT_MIN_SUPPORT
-
-    count_patterns = [
-        r"(?:with|using|for|of|top)\s+(\d+)\s*(?:patterns?|rules?|conjunctions?|conjuncts?|conditions?)",
-        r"(\d+)\s*(?:patterns?|rules?|conjunctions?|conjuncts?|conditions?)",
-        r"(?:conjunction|conjunct|condition|pattern|rule)(?:\s+(?:count|size))?\s*(?:=|:|is|of|to)?\s*(\d+)",
-        r"(\d+)\s*-\s*(?:way|condition|conjunction|conjunct)",
-    ]
-    for pattern in count_patterns:
-        match = re.search(pattern, text)
-        if match:
-            conjunction_count = int(match.group(1))
-            break
-
-    support_patterns = [
-        r"(?:min|minimum)\s*support\s*(?:=|:|of|to|is)?\s*(\d+)",
-        r"support\s*(?:>=|=>|=|:|of|at\s+least|to|is)?\s*(\d+)",
-    ]
-    for pattern in support_patterns:
-        match = re.search(pattern, text)
-        if match:
-            min_support = int(match.group(1))
-            break
-
-    return {
-        "conjunction_count": max(1, conjunction_count),
-        "min_support": max(1, min_support),
-    }
 
 def handle_mining_for_message(message: str) -> tuple[Optional[str], Optional[list]]:
-    """Run pattern mining directly when the chat message asks for it."""
-    mining_params = parse_chat_mining_intent(message)
-    if mining_params is None:
-        return None, None
-
-    function_calls = []
-    result = start_mining_job(**mining_params)
-    function_calls.append({
-        "name": "start_mining_job",
-        "args": mining_params,
-        "result": result,
-    })
-
-    if not isinstance(result, dict):
-        return f"Mining failed: {result}", function_calls
-
-    if result.get("error"):
-        return f"Mining failed: {result['error']}", function_calls
-
-    mined_result = result.get("result") if isinstance(result.get("result"), dict) else {}
-    status = mined_result.get("status") or result.get("status")
-    patterns = mined_result.get("patterns", []) if isinstance(mined_result, dict) else []
-
-    if status == "no_results":
-        return (
-            "I ran the PeTTa pattern miner, but no patterns matched those parameters. "
-            "Try lowering the minimum support or using a smaller conjunction count.",
-            function_calls,
-        )
-
-    if status == "error":
-        return f"Mining failed: {mined_result.get('message', 'Unknown mining error')}", function_calls
-
-    if not patterns:
-        return (
-            "I ran the PeTTa pattern miner, but it returned no parsed patterns.",
-            function_calls,
-        )
-
-    summary = summarize_patterns(patterns)
-    heading = (
-        f"Mining complete: found {len(patterns)} pattern"
-        f"{'' if len(patterns) == 1 else 's'} with "
-        f"conjunction count {mining_params['conjunction_count']} and "
-        f"minimum support {mining_params['min_support']}."
+    return handle_mining_for_message_impl(
+        message,
+        default_conjunction_count=DEFAULT_CONJUNCTION_COUNT,
+        default_min_support=DEFAULT_MIN_SUPPORT,
+        start_mining_job=start_mining_job,
+        summarize_patterns=summarize_patterns,
     )
-    return f"{heading}\n\n{summary}", function_calls
 
-def is_backward_chain_intent(message: str) -> bool:
-    """Return True when the chat message asks for proof-style reasoning."""
-    text = f" {message.lower()} "
-    proof_terms = (
-        " why ",
-        " prove ",
-        " explain ",
-        " how come ",
-        " what explains ",
-        " what caused ",
-        " how did ",
-    )
-    return any(term in text for term in proof_terms)
 
 def handle_backward_chain_for_message(message: str) -> tuple[Optional[str], Optional[list]]:
-    """Handle natural language queries using backward chaining with STV support."""
-    function_calls = []
-
-    # First call getAllFactsAndRules to get canonical atoms
-    facts_res = getAllFactsAndRules()
-    if not isinstance(facts_res, dict) or facts_res.get("status") != "success":
-        return None, None
-
-    facts = facts_res.get("facts", []) or []
-  
-    # Ask the LLM to rewrite the user's question into a canonical MeTTa query
-    # using the facts we retrieved. The model must output only a single MeTTa
-    # expression (e.g. (engagement 1 $what)).
-    try:
-        facts_text = "\n".join(select_facts_for_prompt(facts, message, limit=200))
-        rewrite_prompt = f"""
-            You are given the following KB atoms (facts/rules), one per line:
-            {facts_text}
-
-            User question: "{message}"
-
-            Task (STRICT):
-            - Do NOT narrate or describe any internal steps.
-            - Do NOT output anything except a SINGLE canonical MeTTa expression that uses predicate and constant names from the KB above.
-            - If mapping is ambiguous, pick the most semantically likely predicate present in the KB.
-            - If you cannot produce a valid MeTTa expression, output the single token NO_QUERY and NOTHING ELSE.
-
-            Example mapping (for clarity only, do not output this): if facts contain (engagement 1 high) -> question "Why article A_16624 has low engagement?" -> output should be like : "(: $prf (engagement A_16624 \"Low\") $tv)"
-
-            OUTPUT ONLY the MeTTa expression or NO_QUERY.
-            """
-        messages = [
-            {"role": "system", "content": SYSTEM_INSTRUCTION},
-            {"role": "user", "content": rewrite_prompt}
-        ]
-        response_data = call_asi_api(messages)
-        candidate_query = None
-        if 'choices' in response_data and response_data['choices']:
-            candidate_query = response_data['choices'][0]['message'].get('content', '').strip()
-        
-        function_calls.append({'name': 'rewrite_query', 'args': {'message': message}, 'result': candidate_query})
-    except Exception as e:
-        return None, None
-
-    if not candidate_query or candidate_query == "NO_QUERY":
-        return None, function_calls
-    
-    # Call the chainer with the rewritten query and include debug output
-    try:
-        chainer_result = getChainerResult(candidate_query)
-    except Exception as e:
-        print('DEBUG: chainer call error:', e)
-        chainer_result = {'status': 'error', 'error': str(e)}
-
-    function_calls.append({'name': 'getChainerResult', 'args': {'whatToCheck': candidate_query}, 'result': chainer_result})
-
-    # Use the chainer's justification as the assistant response text (don't reveal internal steps)
-    resp_text = ''
-    if isinstance(chainer_result, dict):
-        raw_just = chainer_result.get('justification') or chainer_result.get('error') or ''
-    else:
-        raw_just = str(chainer_result)
-
-    if not raw_just:
-        resp_text = "No proof was found."
-    else:
-        # Apply a friendly/jokey wrapper without revealing internal steps
-        resp_text = f"Alright, here's the scoop —\n\n{raw_just}\n\n(That's the reasoning I found.)"
-    return resp_text, function_calls
+    return handle_backward_chain_for_message_impl(
+        message,
+        get_all_facts_and_rules=getAllFactsAndRules,
+        select_facts_for_prompt=select_facts_for_prompt,
+        call_asi_api=call_asi_api,
+        system_instruction=SYSTEM_INSTRUCTION,
+        get_chainer_result=getChainerResult,
+        logger=logger,
+    )
 
 
 # Define available functions for the AI with proper docstrings for automatic function calling
@@ -1053,7 +1114,7 @@ def analyze_specific_pattern(pattern: str) -> dict:
     """Analyzes a specific pattern in detail, extracting properties and values.
     
     Args:
-        pattern: The pattern string to analyze, e.g., '((length $x "low") (engagement $x "high"))'
+        pattern: The pattern string to analyze, e.g., '((length-bucket $x "low") (engagement $x "high"))'
         
     Returns:
         A dictionary with pattern analysis including properties and their values.
@@ -1106,6 +1167,7 @@ def visualize_pattern_request(pattern: str) -> dict:
 
 def insert_mined_rules_into_chainer(mining_result: dict) -> dict:
     """Compile mined patterns into PeTTa rules before returning mining results."""
+    global chainer_rule_atoms
     if not isinstance(mining_result, dict):
         return mining_result
     if mining_result.get("status") != "success":
@@ -1122,7 +1184,7 @@ def insert_mined_rules_into_chainer(mining_result: dict) -> dict:
         mining_result["inserted_rule_count"] = 0
         return mining_result
 
-    insertion_result = get_petta_service().formatter({"patterns": patterns})
+    insertion_result = get_chainer_service().formatter({"patterns": patterns})
     mining_result["rule_insertion"] = insertion_result
     mining_result["rules"] = insertion_result.get("rules", []) if isinstance(insertion_result, dict) else []
     mining_result["inserted_rule_count"] = (
@@ -1130,7 +1192,16 @@ def insert_mined_rules_into_chainer(mining_result: dict) -> dict:
         if isinstance(insertion_result, dict)
         else 0
     )
+    if isinstance(insertion_result, dict) and insertion_result.get("status") == "success":
+        chainer_rule_atoms = unique_preserve_order(
+            [*chainer_rule_atoms, *insertion_result.get("rules", [])]
+        )
     return mining_result
+
+def run_mining_task_inprocess(conjunction_count: int, min_support: int = DEFAULT_MIN_SUPPORT) -> dict:
+    result = mine_pattern(conjunction_count, min_support)
+    return insert_mined_rules_into_chainer(result)
+
 
 def run_mining_task(job_id: str, conjunction_count: int, min_support: int = DEFAULT_MIN_SUPPORT):
     """
@@ -1142,14 +1213,80 @@ def run_mining_task(job_id: str, conjunction_count: int, min_support: int = DEFA
     Returns:
         dict: A dictionary containing the job status, result, error (if any), and timestamps.
     """
+    global chainer_rule_atoms
     job = mining_jobs[job_id]
     job.start_time = time.time()
     job.min_support = min_support
+
+    result_path = ""
+    stdout_path = ""
+    stderr_path = ""
+    process: Optional[subprocess.Popen] = None
     try:
-        result = mine_pattern(conjunction_count, min_support)
-        result = insert_mined_rules_into_chainer(result)
-        job.status = 'completed'
-        job.result = result  # Store the dict directly, not result[0][0]
+        with tempfile.NamedTemporaryFile(prefix=f"petta-job-{job_id}-", suffix=".json", delete=False) as result_file:
+            result_path = result_file.name
+        with tempfile.NamedTemporaryFile(prefix=f"petta-job-{job_id}-out-", delete=False) as stdout_file:
+            stdout_path = stdout_file.name
+        with tempfile.NamedTemporaryFile(prefix=f"petta-job-{job_id}-err-", delete=False) as stderr_file:
+            stderr_path = stderr_file.name
+
+        with open(stdout_path, "wb") as stdout_file, open(stderr_path, "wb") as stderr_file:
+            process = subprocess.Popen(
+                [
+                    sys.executable,
+                    "-m",
+                    "experiments.mining_job_worker",
+                    "--conjunction-count",
+                    str(conjunction_count),
+                    "--min-support",
+                    str(min_support),
+                    "--result-path",
+                    result_path,
+                ],
+                cwd=PROJECT_ROOT,
+                stdout=stdout_file,
+                stderr=stderr_file,
+                env={
+                    **os.environ,
+                    "PYTHONPATH": PROJECT_ROOT
+                    + (os.pathsep + os.environ["PYTHONPATH"] if os.environ.get("PYTHONPATH") else ""),
+                },
+                start_new_session=True,
+            )
+
+            started_at = time.monotonic()
+            while process.poll() is None:
+                elapsed = time.monotonic() - started_at
+                stdout_size = os.path.getsize(stdout_path)
+                stderr_size = os.path.getsize(stderr_path)
+                result_size = os.path.getsize(result_path)
+
+                if elapsed > PETTA_MINING_TIMEOUT_SECONDS:
+                    raise TimeoutError(f"Mining worker exceeded {PETTA_MINING_TIMEOUT_SECONDS}s timeout.")
+                if max(stdout_size, stderr_size, result_size) > PETTA_MINING_MAX_OUTPUT_BYTES:
+                    raise RuntimeError(
+                        f"Mining worker output exceeded {PETTA_MINING_MAX_OUTPUT_BYTES} bytes."
+                    )
+                time.sleep(0.25)
+
+            if process.returncode != 0:
+                with open(stderr_path, "rb") as handle:
+                    stderr = handle.read(4096).decode("utf-8", errors="replace").strip()
+                raise RuntimeError(stderr or f"Mining worker exited with code {process.returncode}.")
+
+        with open(result_path, "r", encoding="utf-8") as handle:
+            result = json.load(handle)
+
+        job.result = result
+        if isinstance(result, dict) and result.get("status") == "error":
+            job.status = 'error'
+            job.error = result.get("message", "Mining failed")
+        else:
+            job.status = 'completed'
+            if isinstance(result, dict) and result.get("status") == "success":
+                chainer_rule_atoms = unique_preserve_order(
+                    [*chainer_rule_atoms, *result.get("rules", [])]
+                )
         job.end_time = time.time()
         return {
             'jobId': job_id,
@@ -1159,9 +1296,14 @@ def run_mining_task(job_id: str, conjunction_count: int, min_support: int = DEFA
             'start_time': job.start_time,
             'end_time': job.end_time
         }
-    except Exception as e:
+    except Exception as exc:
+        if process is not None and process.poll() is None:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
         job.status = 'error'
-        job.error = str(e)
+        job.error = str(exc)
         job.end_time = time.time()
         return {
             'jobId': job_id,
@@ -1171,6 +1313,13 @@ def run_mining_task(job_id: str, conjunction_count: int, min_support: int = DEFA
             'start_time': job.start_time,
             'end_time': job.end_time
         }
+    finally:
+        for path in (result_path, stdout_path, stderr_path):
+            if path:
+                try:
+                    os.unlink(path)
+                except FileNotFoundError:
+                    pass
 
 def start_mining_job(conjunction_count: int = DEFAULT_CONJUNCTION_COUNT, min_support: int = DEFAULT_MIN_SUPPORT):
     """
@@ -1191,6 +1340,13 @@ def start_mining_job(conjunction_count: int = DEFAULT_CONJUNCTION_COUNT, min_sup
         return { 'error': 'min_support must be an integer' }
     if conjunction_count < 1:
         return { 'error': 'conjunction_count must be a positive integer' }
+    if conjunction_count > DEFAULT_MAX_CONJUNCTION_COUNT:
+        return {
+            'error': (
+                f'conjunction_count must be <= {DEFAULT_MAX_CONJUNCTION_COUNT}. '
+                'Use PETTA_MAX_CONJUNCTION_COUNT to raise this limit after validating the dataset.'
+            )
+        }
     if min_support < 1:
         return { 'error': 'min_support must be a positive integer' }
 
@@ -1203,10 +1359,8 @@ def start_mining_job(conjunction_count: int = DEFAULT_CONJUNCTION_COUNT, min_sup
     )
     mining_jobs[job_id] = job
 
-    # Run synchronously (this will call mine_pattern internally)
     result = run_mining_task(job_id, conjunction_count, min_support)
 
-    # Return a normalized result
     return {
         'jobId': job_id,
         'status': mining_jobs[job_id].status,
@@ -1216,15 +1370,67 @@ def start_mining_job(conjunction_count: int = DEFAULT_CONJUNCTION_COUNT, min_sup
     }
 
 def formatter(mined_patterns):
-    print("formatter started :--:")
-    return get_petta_service().formatter(mined_patterns)
+    return get_chainer_service().formatter(mined_patterns)
+
+
+def run_chainer_query_worker(what_to_check: str, depth: int = DEFAULT_CHAIN_DEPTH) -> list[str]:
+    reload_petta_dataset_if_ready(force=False)
+    payload = {
+        "project_root": PROJECT_ROOT,
+        "setup_metta": CHAINER_METTA_SETUP,
+        "facts": list(chainer_dataset_facts),
+        "rules": ordered_chainer_rules(),
+        "query": what_to_check,
+        "depth": int(depth),
+    }
+    process = subprocess.run(
+        [sys.executable, "-m", "experiments.chainer_query_worker"],
+        input=json.dumps(payload),
+        text=True,
+        capture_output=True,
+        cwd=PROJECT_ROOT,
+        timeout=PETTA_CHAIN_TIMEOUT_SECONDS,
+        env={
+            **os.environ,
+            "PYTHONPATH": PROJECT_ROOT
+            + (os.pathsep + os.environ["PYTHONPATH"] if os.environ.get("PYTHONPATH") else ""),
+        },
+    )
+    stdout = (process.stdout or "").strip()
+    stderr = (process.stderr or "").strip()
+    if not stdout:
+        raise RuntimeError(stderr or "Backward chainer worker produced no output.")
+
+    try:
+        worker_result = json.loads(stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Backward chainer worker returned invalid JSON: {stdout[:500]}") from exc
+
+    if process.returncode != 0 or worker_result.get("status") != "success":
+        message = worker_result.get("message") if isinstance(worker_result, dict) else None
+        raise RuntimeError(message or stderr or f"Backward chainer worker exited with code {process.returncode}.")
+
+    proofs = worker_result.get("proofs", [])
+    return proofs if isinstance(proofs, list) else [str(proofs)]
+
+
+def safe_chainer_failure(what_to_check: str, depth: int, exc: Exception) -> dict[str, Any]:
+    logger.exception("Backward chainer query failed")
+    return {
+        "query": what_to_check,
+        "status": "error",
+        "justification": (
+            "The backward chainer could not safely complete this proof "
+            f"within depth {depth}. The query may be too broad, recursive, or expensive for the current "
+            "rule set. Try a more concrete article/engagement query or lower the depth."
+        ),
+        "technical_error": str(exc)[:1000],
+        "depth_used": depth,
+    }
+
 
 def backWardChainer(whatToCheck, depth=DEFAULT_CHAIN_DEPTH):
-    proofs = get_petta_service().query(whatToCheck.strip(), depth=depth)
-    print("DEBUG chainer normalized proof count:", len(proofs))
-    if proofs:
-        print("DEBUG chainer proof sample:", proofs[:3])
-    return proofs
+    return run_chainer_query_worker(whatToCheck.strip(), depth=depth)
 
 def getChainerResult(whatToCheck, depth=DEFAULT_CHAIN_DEPTH):
     """ Get the result of backward chaining for a specific query. 
@@ -1235,135 +1441,27 @@ def getChainerResult(whatToCheck, depth=DEFAULT_CHAIN_DEPTH):
         The justification of the backward chaining operation.
     """
     facts_res = getAllFactsAndRules()
-    chainAnswer = backWardChainer(whatToCheck, depth)
+    try:
+        chainAnswer = backWardChainer(whatToCheck, depth)
+    except subprocess.TimeoutExpired as exc:
+        return safe_chainer_failure(whatToCheck, depth, exc)
+    except Exception as exc:
+        return safe_chainer_failure(whatToCheck, depth, exc)
+
     proof_text = format_proofs_for_prompt(chainAnswer)
     all_facts = facts_res.get("facts", []) if isinstance(facts_res, dict) else []
     prompt_facts = select_facts_for_prompt(all_facts, whatToCheck)
     fact_text = format_proofs_for_prompt(prompt_facts) if prompt_facts else str(facts_res)
     if len(all_facts) > len(prompt_facts):
         fact_text += f"\n\nShowing {len(prompt_facts)} of {len(all_facts)} facts most relevant to the query."
-    print("DEBUG: getChainerResult - chainAnswer type:", chainAnswer)
-    # If no proofs found, return early
     if not chainAnswer or len(chainAnswer) == 0:
         return {
             "query": whatToCheck,
             "status": "no_proof",
             "justification": f"No logical proof could be found for the query '{whatToCheck}' within depth {depth}. This means the query cannot be deduced from the available rules and facts in the knowledge base."
         }
-    
-    # Simple prompt that relies on system instruction for formatting guidance
-    prompt = f"""Analyze this backward chaining result with STV truth values and provide a clear logical justification.
-
-    Query: {whatToCheck}
-
-    Backward Chaining Results:
-    {proof_text}
-
-    Fact Content From Knowledge Base:
-    {fact_text}
-
-    The backward chaining system attempted to prove the query using logical rules and facts from the knowledge base.
-
-    Your task is to explain:
-    • Why the conclusion holds  
-    • Which facts support it  
-    • Which rules were applied  
-    • How the truth values (STV) support the reasoning chain
-
-    Your explanation must follow the reasoning process used by the inference engine, but **do not show internal calculations or formulas**.
-
-    Subjective Truth Value (STV)
-
-    Every statement has an STV in the form:
-    (STV strength confidence)
-
-    Strength range: 0.0 – 1.0  
-    Confidence range: 0.0 – 1.0  
-
-    Meaning:
-    Strength → how strongly the conclusion follows logically  
-    Confidence → how reliable the supporting evidence is  
-
-    Example:
-    (STV 1.0 1.0) means the statement is certain.  
-    (STV 0.8 0.7) means strong but somewhat uncertain support.
-
-    How to structure your response
-
-    Start with a short statement explaining the result.  
-    Example:
-    "I found 2 logical proofs explaining why the query holds."
-
-    Then describe each proof.
-
-    Proof 1 — Direct Fact
-
-    If the conclusion appears directly as a fact, explain it as a known fact.
-
-    Example:
-    Article 1 has high engagement.
-
-    Fact:
-    (engagement 1 "High") STV (1.0 1.0)
-
-    Interpretation:
-    This is a direct fact stored in the knowledge base with maximum certainty.
-
-    Proof 2 — Rule-Based Inference
-
-    Show:
-    1. The rule
-    2. The supporting facts
-    3. How the rule logically leads to the conclusion
-
-    Example structure:
-
-    Rule:
-    If (topic 1 "AI") then (engagement 1 "High")
-
-    Supporting Fact:
-    (topic 1 "AI") STV (0.9 0.8)
-
-    Conclusion:
-    (engagement 1 "High")
-
-    Interpretation:
-    The rule combined with the supporting fact logically explains the conclusion.
-
-    Important requirements
-
-    You MUST:
-    • Extract the actual rule content from the proof structures  
-    • Show the real facts from the fact content above
-    • Display them exactly like:
-    (topic 3 "AI")
-    (audience 3 "Professionals")
-
-    Convert rule structures like:
-    (-> (and A B) C)
-
-    Into human readable form:
-    "If A and B then C"
-
-    NEVER use placeholders such as:
-    fact52, rule_1, factx
-
-    Always show the real facts and rules.
-
-    Final summary
-
-    After explaining all proofs, provide a short summary explaining:
-    • how many proofs support the conclusion  
-    • which proof appears strongest  
-    • what the STV values indicate about certainty
-
-    Example:
-    "The conclusion is supported by two independent proofs. One is a direct fact with very high certainty, while the rule-based inference provides additional logical support."
-
-    Your explanation must combine logical reasoning, STV interpretation, and human-readable explanation, without exposing internal calculations.
-    """
+    prompt = build_chainer_analysis_prompt(whatToCheck, proof_text, fact_text)
     try:
-        # Use ASI1 to analyze the results
         messages = [
             {"role": "system", "content": SYSTEM_INSTRUCTION},
             {"role": "user", "content": prompt}
@@ -1407,67 +1505,13 @@ def getChainerResult(whatToCheck, depth=DEFAULT_CHAIN_DEPTH):
             "error": str(e)
         }
 
-
-def build_rule_grounded_summary(patterns: list) -> str:
-    """Deterministic fallback that never makes claims beyond mined rules."""
-    lines = [
-        "Here are the mined rules, grounded directly in the PeTTa output:"
-    ]
-    for i, p in enumerate(patterns, 1):
-        patt = p.get('pattern') if isinstance(p, dict) else str(p)
-        supp = p.get('support', '') if isinstance(p, dict) else ''
-        support_text = f"Support {supp}" if supp != "" else "Support not reported"
-        lines.append(f"- [Rule {i}] {support_text}: `{patt}`")
-    lines.append(
-        "These rules should be read as mined associations unless the rule itself "
-        "and the proof chain explicitly support a stronger explanation."
-    )
-    return "\n".join(lines)
-
 def summarize_patterns(patterns: list) -> str:
-    """Use the Gemini model to create a single comprehensive summary of the
-    supplied mined patterns. The summary will reference patterns as [N]
-    so the frontend can make them clickable for visualization.
-    """
-    if not patterns:
-        return "No patterns to summarize."
-
-    # Build a compact prompt that forces every claim to be grounded in the
-    # mined rules. This keeps chat summaries aligned with the actual PeTTa
-    # mining output instead of free-form model interpretation.
-    prompt_parts = ["""Analyze the following mined PeTTa rules.
-
-Strict requirements:
-- Every factual statement or insight must cite at least one rule as [Rule N].
-- Do not claim a trend unless it is directly supported by one of the listed rules.
-- Explain the antecedent conditions, the conclusion, and the support value.
-- Prefer short, concrete bullet points.
-- If a rule is only an association, call it an association instead of a causal explanation.
-- Do not invent facts that are not present in the rules."""]
-    for i, p in enumerate(patterns, 1):
-        patt = p.get('pattern') if isinstance(p, dict) else str(p)
-        supp = p.get('support', '') if isinstance(p, dict) else ''
-        prompt_parts.append(f"[Rule {i}]\nPattern: {patt}\nSupport: {supp}")
-
-    prompt = "\n\n".join(prompt_parts)
-
-    try:
-        messages = [
-            {"role": "system", "content": SYSTEM_INSTRUCTION},
-            {"role": "user", "content": prompt}
-        ]
-        response_data = call_asi_api(messages)
-        text = None
-        if 'choices' in response_data and response_data['choices']:
-            text = response_data['choices'][0]['message'].get('content', '')
-
-        if text and "[Rule" in text:
-            return text
-        return build_rule_grounded_summary(patterns)
-    except Exception as e:
-        print('summarize_patterns error:', e)
-        fallback = build_rule_grounded_summary(patterns)
-        return f"{fallback}\n\nSummary generation note: {e}"
+    return summarize_patterns_impl(
+        patterns,
+        call_asi_api=call_asi_api,
+        system_instruction=SYSTEM_INSTRUCTION,
+        logger=logger,
+    )
 
 # Function name to actual function mapping (for execution)
 available_functions = {
@@ -1482,143 +1526,6 @@ available_functions = {
     "visualize_pattern_request": visualize_pattern_request,
     "getChainerResult": getChainerResult
 }
-
-SYSTEM_INSTRUCTION = """
-You are a friendly and knowledgeable AI assistant with expertise in data mining patterns, knowledge graphs, probabilistic reasoning, and pattern analysis. Your reasoning system integrates pattern mining insights with symbolic reasoning using the PeTTaChainer inference engine and Subjective Truth Values (STV).
-
-PRIMARY SPECIALTY
-You excel at:
-• Analyzing pattern mining results
-• Explaining relationships discovered in data
-• Interpreting knowledge graph structures
-• Explaining logical proofs produced by the backward chainer
-• Interpreting probabilistic truth values (STV)
-• Explaining how rule-based reasoning leads to conclusions
-
-Your reasoning explanations must combine logical reasoning, STV interpretation, and clear human explanations.
-
-WHEN TO USE FUNCTIONS
-User says "Mine rules with X patterns", "What patterns were found?", "Show me the patterns" → ALWAYS call mine_pattern()
-User says "Analyze this pattern", "Explain this pattern" → call analyze_specific_pattern()
-User says "Statistics", "How many patterns" → call get_pattern_statistics()
-User says "Visualize pattern", "Show me rule", "Display this pattern" → call visualize_pattern_request()
-
-MANDATORY RULE FOR WHY / EXPLAIN / PROVE QUESTIONS
-If the user question contains any of these words:
-why, explain, prove, how come, what explains, how did, what caused
-YOU MUST CALL getChainerResult() immediately. This is not optional.
-
-Workflow:
-1. Convert the user question into a MeTTa query.
-2. Call getChainerResult(query)
-3. Wait for the result.
-4. Use only the returned proofs.
-5. Never invent explanations.
-6. Never answer from general knowledge.
-
-Example:
-User: Why is article 1 engagement high?
-Step 1: Call getChainerResult("(engagement 1 $x)")
-Step 2: Wait for proofs
-Step 3: Explain the proofs
-
-If you answer without calling getChainerResult(), you have failed.
-If the chainer returns no proofs respond: "No logical proof was found in the knowledge base."
-
-TRUTH VALUE SYSTEM (STV)
-The reasoning engine uses Subjective Truth Values (STV). Each statement has (STV strength confidence).
-
-Strength range: 0.0–1.0  
-Confidence range: 0.0–1.0  
-
-Strength = how true the statement is.  
-Confidence = how reliable the evidence is.
-
-Examples:
-(STV 1.0 1.0) Certain fact  
-(STV 0.8 0.9) Strong but slightly uncertain evidence  
-(STV 0.2 0.3) Weak support with low reliability
-
-The STV system allows the inference engine to reason under uncertainty.
-
-PROOF EXPLANATION REQUIREMENT
-When explaining proofs returned by the backward chainer you must show:
-1. The rule that was used
-2. The supporting facts
-3. The STV values associated with those facts and rules
-4. The logical reasoning that leads to the conclusion
-
-IMPORTANT:
-Do NOT show internal calculations or formulas used by the inference engine. Explain the reasoning conceptually.
-
-BACKWARD CHAINER RESPONSE FORMAT
-When the chainer returns proofs explain them clearly.
-
-Example:
-Based on the logical analysis the article has high engagement. The inference engine discovered logical evidence supporting this conclusion.
-
-Proof:
-Rule:
-If (audience 3 "Professionals") and (length 3 "high") then (engagement_level 3 "high")
-
-Supporting Facts:
-(audience 3 "Professionals") (STV 1.0 1.0)
-(length 3 "high") (STV 0.9 0.8)
-
-Rule Confidence:
-(STV 0.7 0.6)
-
-Conclusion:
-(engagement_level 3 "high")
-
-Interpretation:
-The rule combined with the supporting facts provides strong logical support that the article achieves high engagement.
-
-TRUTH VALUE INTERPRETATION
-Strength indicates how strongly the conclusion follows logically.  
-Confidence indicates how reliable the supporting evidence is.  
-Higher STV values indicate stronger and more reliable support.
-
-PATTERN MINING SUMMARY RULE
-When the user says "Mine rules with X patterns":
-1. Call mine_pattern()
-2. Analyze all patterns
-3. Produce one combined insight summary.
-
-Example:
-"Based on the mining results high engagement articles are associated with professional audiences and longer article lengths [Rule 1]. Archived articles tend to receive lower engagement [Rule 3]."
-
-Reference patterns using:
-[Rule 1]
-[Rule 2]
-[Rule 3]
-
-Do NOT use: [Rule 1, Rule 2]
-
-PATTERN ANALYSIS
-When analyzing a pattern explain:
-• what the pattern represents
-• what variables mean ($x)
-• what entities satisfy the rule
-• real-world interpretation
-
-All conditions must be satisfied simultaneously (AND logic).
-
-COMMUNICATION STYLE
-• Friendly and clear
-• Conversational tone
-• Use markdown formatting
-• Use emojis occasionally 🙂
-• Avoid heavy MeTTa syntax in explanations
-• Translate logical reasoning into human language
-
-GENERAL CONVERSATION
-For normal questions that do NOT contain why/explain/prove keywords you may answer using general knowledge. You are a helpful conversational assistant.
-
-REMEMBER:
-For WHY / EXPLAIN / PROVE questions you MUST use the backward chainer. No exceptions.
-"""
-# Store conversation history
 conversations = {}
 @dataclass
 class MiningJob:
@@ -1633,472 +1540,49 @@ class MiningJob:
 # In-memory storage for mining jobs
 mining_jobs: Dict[str, MiningJob] = {}
 
-@app.route('/api/health', methods=['GET'])
-def health_check():
-    """Health check endpoint"""
-    try:
-        service = get_petta_service()
-        return jsonify({
-            'status': 'healthy',
-            'service': 'mining-api',
-            'petta': service.health(),
-        })
-    except PeTTaStartupError as exc:
-        return jsonify({
-            'status': 'unhealthy',
-            'service': 'mining-api',
-            'error': str(exc),
-        }), 503
 
-@app.route('/api/mine', methods=['POST'])
-def start_mining():
-    """Start a new mining job"""
-
-    data = request.get_json() or {}
-    conjunction_count = data.get('conjunction_count', DEFAULT_CONJUNCTION_COUNT)
-    min_support = data.get('min_support', DEFAULT_MIN_SUPPORT)
-    
-    # Validate conjunction count
-    if not isinstance(conjunction_count, int) or conjunction_count < 1:
-        return jsonify({'error': 'conjunctionCount must be a positive integer'}), 400
-    if not isinstance(min_support, int) or min_support < 1:
-        return jsonify({'error': 'min_support must be a positive integer'}), 400
-    
-    # Generate unique job ID
-    job_id = str(uuid.uuid4())
-    
-    # Create new job
-    job = MiningJob(
-        job_id=job_id,
-        status='running',
-        conjunction_count=conjunction_count,
-        min_support=min_support
-    )
-    mining_jobs[job_id] = job
-    run_mining_task(job_id, conjunction_count, min_support)
-    print(
-        f"🔍 DEBUG: Starting mining job {job_id} with conjunction count {conjunction_count} and min_support {min_support}"
-    )
-    result = mining_jobs[job_id].result
-    print("🔍 DEBUG: Result after rule insertion =", result)
-    print(f"🔍 DEBUG: result type = {type(result)}")
-    print(f"🔍 DEBUG: result = {result}")
-    
-    # Check mining status
-    if isinstance(result, dict):
-        mining_status = result.get('status')
-
-        if mining_status == 'success':
-            rules = result.get('patterns', [])
-            print(f"✅ Mining job {job_id} finished with {len(rules)} patterns")
-            return jsonify({
-                'jobId': job_id,
-                'status': 'finished',
-                'conjunction_count': conjunction_count,
-                'min_support': min_support,
-                'message': 'Mining job finished successfully',
-                'result': rules,
-                'inserted_rules': result.get('rules', []),
-                'rule_insertion': result.get('rule_insertion')
-            })
-
-        if mining_status == 'no_results':
-            print(f"ℹ️ Mining job {job_id} finished with no patterns")
-            return jsonify({
-                'jobId': job_id,
-                'status': 'no_results',
-                'conjunction_count': conjunction_count,
-                'min_support': min_support,
-                'message': result.get('message', 'No patterns found for the selected parameters.'),
-                'result': []
-            })
-
-    # Handle error case
-    error_msg = result.get('message', 'Mining failed') if isinstance(result, dict) else str(result)
-    print(f"❌ Mining error: {error_msg}")
-    return jsonify({
-        'jobId': job_id,
-        'status': 'error',
-        'message': error_msg
-    }), 500
-
-
-@app.route('/api/mine/<job_id>', methods=['GET'])
-def get_mining_status(job_id: str):
-    """Get the status of a mining job"""
-    if job_id not in mining_jobs:
-        return jsonify({'error': 'Job not found'}), 404
-    
-    job = mining_jobs[job_id]
-    
-    response = {
-        'jobId': job_id,
-        'status': job.status,
-        'conjunction count': job.conjunction_count,
-        'min_support': job.min_support,
-        'startTime': job.start_time
-    }
-    
-    if job.end_time:
-        response['endTime'] = job.end_time
-        response['duration'] = job.end_time - job.start_time
-    
-    if job.status == 'completed' and job.result is not None:
-        # Ensure PeTTa/MeTTa results are safe for Flask's JSON encoder.
-        response['result'] = make_json_safe(job.result)
-    elif job.status == 'error' and job.error:
-        response['error'] = job.error
-    
-    return jsonify(response)
-
-@app.route('/api/mine', methods=['GET'])
-def list_mining_jobs():
-    """List all mining jobs"""
-    jobs = []
-    for job_id, job in mining_jobs.items():
-        job_info = {
-            'jobId': job_id,
-            'status': job.status,
-            'conjunctionCount': job.conjunction_count,
-            'minSupport': job.min_support,
-            'startTime': job.start_time
-        }
-        if job.end_time:
-            job_info['endTime'] = job.end_time
-            job_info['duration'] = job.end_time - job.start_time
-        jobs.append(job_info)
-    
-    return jsonify({'jobs': jobs})
-
-@app.errorhandler(404)
-def not_found(error):
-    return jsonify({'error': 'Endpoint not found'}), 404
-
-@app.errorhandler(500)
-def internal_error(error):
-    return jsonify({'error': 'Internal server error'}), 500
+register_core_routes(
+    app,
+    logger=logger,
+    run_ingestion=run_ingestion,
+    reload_petta_dataset_if_ready=reload_petta_dataset_if_ready,
+    dataset_file_path=dataset_file_path,
+    get_chainer_service=get_chainer_service,
+    petta_startup_error_type=PeTTaStartupError,
+    default_conjunction_count=DEFAULT_CONJUNCTION_COUNT,
+    default_min_support=DEFAULT_MIN_SUPPORT,
+    max_conjunction_count=DEFAULT_MAX_CONJUNCTION_COUNT,
+    mining_jobs=mining_jobs,
+    mining_job_type=MiningJob,
+    run_mining_task=run_mining_task,
+    simulate_engagement=simulate_engagement,
+    make_json_safe=make_json_safe,
+)
 
 # ============= CHAT API ENDPOINTS =============
 
 def parse_pattern(pattern: str) -> dict:
-    """Parse a pattern string to extract properties and values"""
-    properties = {}
-    pattern = pattern.strip()
-    if pattern.startswith('(') and pattern.endswith(')'):
-        pattern = pattern[1:-1]
-    
-    matches = re.findall(r'\((\w+)\s+\$\w+\s+"([^"]+)"\)', pattern)
-    for prop, value in matches:
-        properties[prop] = value
-    
-    return properties
+    return parse_pattern_impl(pattern)
 
 def analyze_pattern(pattern: str, support: str) -> str:
-    """Analyze a pattern and generate a summary"""
-    properties = parse_pattern(pattern)
-    
-    if not properties:
-        return f"📊 **Pattern Analysis**\n\nPattern: `{pattern}`\nSupport: **{support}**\n\nThis pattern appears {support} times in the dataset."
-    
-    property_descriptions = []
-    for prop, value in properties.items():
-        property_descriptions.append(f"**{prop}** = `{value}`")
-    
-    description = " AND ".join(property_descriptions)
-    
-    summary = f"""📊 **Pattern Analysis**
-
-        **Support:** {support} occurrences
-
-        This pattern identifies topics that have:
-        {chr(10).join(f"• {prop}: **{value}**" for prop, value in properties.items())}
-
-        **Interpretation:**
-        Topics matching this pattern combine {description}. 
-        The support value of {support} indicates this specific combination appears {support} times in your dataset.
-
-        **Example Use Case:**
-        This pattern can help identify content that has this specific combination of characteristics, useful for content recommendation, categorization, or trend analysis.
-        """
-    
-    return summary
-
-@app.route('/api/chat/health', methods=['GET'])
-def chat_health_check():
-    """Chat health check endpoint"""
-    return jsonify({'status': 'healthy', 'service': 'chat-api'})
-
-@app.route('/api/chat/analyze', methods=['POST', 'OPTIONS'])
-def analyze_conjunct():
-    """Analyze a pattern/conjunct and return a summary"""
-    if request.method == 'OPTIONS':
-        response = jsonify({'status': 'ok'})
-        response.headers.add('Access-Control-Allow-Origin', '*')
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
-        return response, 200
-    
-    try:
-        data = request.get_json()
-        pattern = data.get('pattern', '')
-        support = data.get('support', '0')
-        
-        summary = analyze_pattern(pattern, support)
-        
-        return jsonify({
-            'summary': summary,
-            'pattern': pattern,
-            'support': support
-        })
-        
-    except Exception as e:
-        print(f"Error in analyze_conjunct: {e}")
-        return jsonify({'error': str(e)}), 500
+    return analyze_pattern_impl(pattern, support)
 
 
-@app.route('/api/chat/summarize', methods=['POST', 'OPTIONS'])
-def summarize_patterns_endpoint():
-    """Summarize a list of patterns into one comprehensive analysis string."""
-    if request.method == 'OPTIONS':
-        response = jsonify({'status': 'ok'})
-        response.headers.add('Access-Control-Allow-Origin', '*')
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
-        return response, 200
-
-    try:
-        data = request.get_json() or {}
-        patterns = data.get('patterns', [])
-        summary = summarize_patterns(patterns)
-        return jsonify({'summary': summary})
-    except Exception as e:
-        print('Error in summarize_patterns_endpoint:', e)
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/chat', methods=['POST', 'OPTIONS'])
-def chat():
-    """Main chat endpoint with ASI and automatic function calling
-
-    This cleaned implementation centralizes error handling and ensures the
-    returned payload is JSON-serializable by sanitizing function call results.
-    """
-    if request.method == 'OPTIONS':
-        response = jsonify({'status': 'ok'})
-        response.headers.add('Access-Control-Allow-Origin', '*')
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
-        return response, 200
-
-    try:
-        data = request.get_json() or {}
-        message = data.get('message', '')
-        history = data.get('history', [])
-        session_id = data.get('session_id', 'default')
-
-        # Ensure a conversation list exists for this session before any writes.
-        # This prevents KeyError when shortcut paths (e.g. backward chaining)
-        # attempt to append to conversations[session_id] before it's initialized.
-        if session_id not in conversations:
-            conversations.setdefault(session_id, [])
-
-        if not message:
-            return jsonify({'error': 'Message is required'}), 400
-
-        # Special-case miner requests before proof rewriting. Mining is an
-        # action, so it should not be sent through the backward-chain query
-        # rewriter.
-        mining_text, mining_calls = handle_mining_for_message(message)
-        print('DEBUG: mining shortcut result:', mining_text, mining_calls)
-        if mining_text is not None:
-            conversations[session_id].append({'role': 'user', 'content': message})
-            conversations[session_id].append({'role': 'assistant', 'content': mining_text})
-            try:
-                safe_calls = make_json_safe(mining_calls)
-            except Exception:
-                safe_calls = str(mining_calls)
-            return jsonify({'response': mining_text, 'functionCalls': safe_calls, 'session_id': session_id})
-
-        # Proof-style questions should run through the backward chainer.
-        try:
-            if is_backward_chain_intent(message):
-                bc_text, bc_calls = handle_backward_chain_for_message(message)
-                print('DEBUG: backward chain shortcut result:', bc_text, bc_calls)
-                if bc_text is not None:
-                    # store in history (conversations[session_id] is guaranteed to exist now)
-                    conversations[session_id].append({'role': 'user', 'content': message})
-                    print('DEBUG: stored backward chain shortcut in history')
-                    conversations[session_id].append({'role': 'assistant', 'content': bc_text})
-                    try:
-                        safe_calls = make_json_safe(bc_calls)
-                    except Exception:
-                        safe_calls = str(bc_calls)
-                    return jsonify({'response': bc_text, 'functionCalls': safe_calls, 'session_id': session_id})
-        except Exception as e:
-            print('Error handling backward chain shortcut:', e)
-            # fall through to normal chat flow
-
-        conversations.setdefault(session_id, [])
-
-        # Build conversation history for ASI
-        asi_messages = [{"role": "system", "content": SYSTEM_INSTRUCTION}]
-        for msg in history[-10:]:
-            role = msg.get('role')
-            if role == 'assistant':
-                role = 'assistant'
-            elif role == 'user':
-                role = 'user'
-            asi_messages.append({'role': role, 'content': msg.get('content', '')})
-
-        asi_messages.append({'role': 'user', 'content': message})
-
-        response_data = call_asi_api(asi_messages, tools=tools_schema)
-
-        # Handle function calling loop
-        max_iterations = 5
-        iteration = 0
-        function_results = []
-
-        while iteration < max_iterations:
-            iteration += 1
-
-            if 'error' in response_data:
-                print(f"ASI API Error: {response_data['error']}")
-                break
-
-            if 'choices' not in response_data or not response_data['choices']:
-                break
-
-            choice = response_data['choices'][0]
-            message_obj = choice['message']
-
-            # Append assistant message to history
-            asi_messages.append(message_obj)
-
-            if 'tool_calls' in message_obj and message_obj['tool_calls']:
-                tool_calls = message_obj['tool_calls']
-
-                for tool_call in tool_calls:
-                    function_name = tool_call['function']['name']
-                    function_args_str = tool_call['function']['arguments']
-                    try:
-                        function_args = json.loads(function_args_str)
-                    except json.JSONDecodeError:
-                        function_args = {}
-
-                    print(f"🔧 Function call: {function_name}({function_args})")
-
-                    if function_name not in available_functions:
-                        print(f"✗ Unknown function: {function_name}")
-                        function_result = {"error": f"Unknown function {function_name}"}
-                    else:
-                        try:
-                            # Normalize args (alias mapping and numeric normalization)
-                            norm_args = {}
-                            for k, v in function_args.items():
-                                key = k
-                                if k in ('conjunction_count', 'conjunctions', 'conjunctionCount', 'numberOfConjunction', 'n'):
-                                    key = 'conjunction_count'
-                                elif k in ('min_support', 'minimum_support', 'minSupport', 'minimumSupport', 'support'):
-                                    key = 'min_support'
-
-                                if isinstance(v, str) and re.fullmatch(r"\d+", v):
-                                    norm_args[key] = int(v)
-                                elif isinstance(v, float) and v.is_integer():
-                                    norm_args[key] = int(v)
-                                else:
-                                    norm_args[key] = v
-
-                            function_result = available_functions[function_name](**norm_args)
-                            function_results.append({'name': function_name, 'args': norm_args, 'result': function_result})
-                        except Exception as func_error:
-                            print(f"✗ Function error: {func_error}")
-                            function_result = {'error': str(func_error)}
-
-                    # Append tool output to messages
-                    asi_messages.append({
-                        "role": "tool",
-                        "tool_call_id": tool_call['id'],
-                        "content": json.dumps(function_result)
-                    })
-
-                # Call API again with tool outputs
-                response_data = call_asi_api(asi_messages, tools=tools_schema)
-            else:
-                # No more tool calls, we have the final response
-                break
-
-        # Extract final text response
-        response_text = ''
-        if 'choices' in response_data and response_data['choices']:
-            response_text = response_data['choices'][0]['message'].get('content', '')
-
-        # If the model didn't generate text but mining results exist, synthesize a summary
-        if not response_text:
-            mining_function_names = {'mine_pattern', 'start_mining_job', 'startMiningJob', 'minePattern'}
-            mining_fr = next(
-                (
-                    fr for fr in function_results
-                    if fr.get('name') in mining_function_names and isinstance(fr.get('result'), dict)
-                ),
-                None,
-            )
-            if mining_fr:
-                mining_payload = mining_fr['result']
-                patterns = []
-                try:
-                    candidate = mining_payload.get('result') if isinstance(mining_payload, dict) else None
-                    if isinstance(candidate, dict):
-                        patterns = candidate.get('patterns', [])
-                except Exception:
-                    patterns = []
-
-                if patterns:
-                    try:
-                        response_text = summarize_patterns(patterns)
-                    except Exception as e:
-                        print('Error generating summary after function call:', e)
-
-        if not response_text:
-            response_text = "I apologize, but I couldn't generate a proper response. Please try again."
-
-        # Store conversation
-        conversations[session_id].append({'role': 'user', 'content': message})
-        conversations[session_id].append({'role': 'assistant', 'content': response_text})
-
-        # Sanitize function results and return
-        try:
-            safe_function_results = make_json_safe(function_results)
-        except Exception as e:
-            print('Failed to sanitize function_results:', e)
-            safe_function_results = str(function_results)
-
-        return jsonify({'response': response_text, 'functionCalls': safe_function_results, 'session_id': session_id})
-
-    except Exception as e:
-        print(f"Error in chat endpoint: {e}")
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
-@app.route('/api/chat/clear', methods=['POST', 'OPTIONS'])
-def clear_chat():
-    """Clear conversation history"""
-    if request.method == 'OPTIONS':
-        response = jsonify({'status': 'ok'})
-        response.headers.add('Access-Control-Allow-Origin', '*')
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
-        return response, 200
-    
-    try:
-        data = request.get_json()
-        session_id = data.get('session_id', 'default')
-        
-        if session_id in conversations:
-            del conversations[session_id]
-        
-        return jsonify({'status': 'cleared'})
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+register_chat_routes(
+    app,
+    logger=logger,
+    conversations=conversations,
+    call_asi_api=call_asi_api,
+    system_instruction=SYSTEM_INSTRUCTION,
+    tools_schema=tools_schema,
+    handle_mining_for_message=handle_mining_for_message,
+    is_backward_chain_intent=is_backward_chain_intent,
+    handle_backward_chain_for_message=handle_backward_chain_for_message,
+    available_functions=available_functions,
+    summarize_patterns=summarize_patterns,
+    analyze_pattern=analyze_pattern,
+    make_json_safe=make_json_safe,
+)
 
 def create_app():
     """Application factory used by production WSGI servers.
@@ -2111,21 +1595,8 @@ def create_app():
     return app
 
 if __name__ == '__main__':
-    print("Starting Unified API Server (Mining + Chat)...")
-    print("Available endpoints:")
-    print("  GET  /api/health - Health check")
-    print("  POST /api/mine - Start mining job")
-    print("  GET  /api/mine/<job_id> - Get job status")
-    print("  GET  /api/mine - List all jobs")
-    print("  GET  /api/chat/health - Chat health check")
-    print("  POST /api/chat/analyze - Analyze a pattern")
-    print("  POST /api/chat - Chat with AI assistant")
-    print("  POST /api/chat/clear - Clear conversation history")
-    print()
-    
+    logger.info("Starting Unified API Server (Mining + Chat)")
     create_app()
-
-    # Run the Flask app
     app.run(
         host='0.0.0.0',
         port=5000,
