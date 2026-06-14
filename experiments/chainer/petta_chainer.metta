@@ -20,14 +20,19 @@
 ;; Chainer ;;
 ;;;;;;;;;;;;;
 
-(= (chainer $depth $goal) (match &kb $goal $goal))
-
 (= (chainer $depth (CPU $fun $args $res)) (let $call (cons $fun $args) (let $res (eval $call) (CPU $fun $args $res))))
 
-(= (chainer (S $depth) $goal)
-  (let $_ (match &kb (rules ($args |- $goal)) (rules ($args |- $goal)))
-  (let $args (chain-rec $depth $args)
-  $goal)))
+(= (chainer $depth $goal) (let $resolved-depth (eval $depth) (chainer-step $resolved-depth $goal)))
+
+(= (chainer-step Z $goal) (match &kb $goal $goal))
+
+(= (chainer-step (S $depth) $goal)
+  (superpose (
+    (match &kb $goal $goal)
+    (let $_ (match &kb (rules ($args |- $goal)) (rules ($args |- $goal)))
+    (let $args (chain-rec $depth $args)
+    $goal))
+  )))
 
 (= (chain-rec $depth ($goal Nil))  ((chainer $depth $goal) Nil))
 (= (chain-rec $depth ($goal $dep)) ((chainer $depth $goal) (chain-rec $depth $dep)))
