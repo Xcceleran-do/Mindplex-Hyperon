@@ -5,7 +5,10 @@
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  background-color: var(--bg-app);
+  background:
+    radial-gradient(circle at 18% 18%, var(--app-glow-a, rgba(0, 135, 90, 0.12)), transparent 32%),
+    radial-gradient(circle at 84% 12%, var(--app-glow-b, rgba(180, 83, 9, 0.1)), transparent 28%),
+    linear-gradient(135deg, var(--bg-app), var(--color-bg-inset));
   color: var(--text-primary);
 }
 
@@ -26,9 +29,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px;
+  padding: 0 22px;
   pointer-events: none;
   /* Let clicks pass through to canvas where empty */
+  gap: 16px;
 }
 
 /* Logo Badge */
@@ -80,7 +84,52 @@
 }
 
 .logoText {
+  display: block;
   white-space: nowrap;
+}
+
+.logoCopy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.logoSubtext {
+  color: var(--text-secondary);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.workspaceStats {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: auto;
+}
+
+.workspaceStats span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface-elevated);
+  color: var(--text-secondary);
+  box-shadow: var(--shadow-control);
+  font-size: 0.72rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.workspaceStats strong {
+  color: var(--text-primary);
+  font-family: var(--font-heading);
+  font-size: 0.9rem;
 }
 
 .headerControls {
@@ -141,15 +190,15 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  padding: 18px;
+  gap: 14px;
+  padding: 16px;
   overflow-y: auto;
 
   background: var(--color-surface-elevated);
   backdrop-filter: blur(var(--blur-amount));
   -webkit-backdrop-filter: blur(var(--blur-amount));
   border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border-radius: 18px;
   box-shadow: var(--shadow-panel);
   transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   opacity: 1;
@@ -226,19 +275,26 @@
 .sidebarHeader {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-  padding-bottom: 10px;
+  align-items: flex-start;
+  margin-bottom: 2px;
+  padding-bottom: 14px;
   border-bottom: 1px solid var(--border-subtle);
 }
 
 .sidebarTitle {
   font-family: var(--font-heading);
   font-weight: 700;
-  font-size: 0.78rem;
-  color: var(--text-secondary);
+  font-size: 0.88rem;
+  color: var(--text-primary);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
+}
+
+.sidebarSubtitle {
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+  line-height: 1.3;
 }
 
 .minimizeBtn {
@@ -291,21 +347,24 @@
 .sidebarSection {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .sectionHeader {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   cursor: pointer;
-  padding: 8px 12px;
-  border-radius: 8px;
-  transition: background 0.2s;
+  padding: 10px 11px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  transition: background 0.2s, border-color 0.2s, transform 0.2s;
 }
 
 .sectionHeader:hover {
   background: var(--bg-hover);
+  border-color: var(--color-border);
+  transform: translateY(-1px);
 }
 
 .sectionTitle {
@@ -313,8 +372,15 @@
   font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--text-secondary);
+  color: var(--text-primary);
   font-weight: 700;
+}
+
+.sectionHint {
+  margin-top: 3px;
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  line-height: 1.3;
 }
 
 .collapseIcon {
@@ -324,11 +390,11 @@
 
 /* Chat Container Restyling */
 .chatContainer {
-  min-height: 420px;
+  min-height: 430px;
   max-height: 56vh;
   display: flex;
   flex-direction: column;
-  border-radius: 8px;
+  border-radius: 14px;
   overflow: hidden;
   border: 1px solid var(--color-border);
   background: var(--color-surface);
@@ -366,7 +432,7 @@
 .controlBtn {
   width: 44px;
   height: 44px;
-  border-radius: 8px;
+  border-radius: 14px;
   border: 1px solid var(--color-border);
   background: var(--color-surface-elevated);
   backdrop-filter: blur(var(--blur-amount));
@@ -400,7 +466,7 @@
   padding: 11px 12px;
   background: var(--color-accent-muted);
   border: 1px solid var(--color-accent-border);
-  border-radius: 8px;
+  border-radius: 14px;
   cursor: pointer;
   color: var(--text-secondary);
   font-size: 0.9rem;
@@ -603,6 +669,22 @@
   color: var(--text-secondary);
   font-weight: 500;
   white-space: nowrap;
+}
+
+@media (max-width: 980px) {
+  .workspaceStats {
+    display: none;
+  }
+
+  .header {
+    padding: 0 14px;
+  }
+
+  .sidebar {
+    left: 12px;
+    right: 12px;
+    width: auto !important;
+  }
 }
 
 .rulePattern {

@@ -1,5 +1,6 @@
 import { createSignal, createEffect, Show, onCleanup } from 'solid-js';
 import { minePatterns } from '../../features/mining/api';
+import { env } from '../../shared/config/env';
 import './MiningInterface.css';
 
 const MineIcon = () => (
@@ -40,7 +41,10 @@ export interface MiningInterfaceProps {
 const MiningInterface = (props: MiningInterfaceProps) => {
   const [isMining, setIsMining] = createSignal(false);
   const [miningResult, setMiningResult] = createSignal<MiningResult | null>(null);
-  const [conjunctionCount, setConjunctionCount] = createSignal(5);
+  const maxConjunctionCount = Number.isFinite(env.maxConjunctionCount) && env.maxConjunctionCount > 0
+    ? env.maxConjunctionCount
+    : 10;
+  const [conjunctionCount, setConjunctionCount] = createSignal(Math.min(5, maxConjunctionCount));
   const [minSupport, setMinSupport] = createSignal(3);
   const [showResult, setShowResult] = createSignal(false);
   const [miningProgress, setMiningProgress] = createSignal(0);
@@ -155,26 +159,26 @@ const MiningInterface = (props: MiningInterfaceProps) => {
       <div class="mining-controls">
         <div class="parameter-panel">
           <div class="parameter-field">
-            <label for="conjunction-count" class="parameter-label">Conjunct count</label>
+            <label for="conjunction-count" class="parameter-label">Conditions / rule</label>
             <input
               id="conjunction-count"
               type="number"
               min="1"
-              max="10"
+              max={maxConjunctionCount}
               value={conjunctionCount()}
-              onInput={(e) => setConjunctionCount(parseInt(e.target.value) || 5)}
+              onInput={(e) => setConjunctionCount(Math.min(maxConjunctionCount, Math.max(1, parseInt(e.target.value) || 5)))}
               disabled={isMining()}
               class="separate-conj-input"
               aria-label="Conjunct count"
               title="Number of conditions joined in each mined pattern."
             />
-            <span class="parameter-hint">Pattern complexity</span>
+            <span class="parameter-hint">Complexity, max {maxConjunctionCount}</span>
           </div>
 
           <div class="parameter-divider" />
 
           <div class="parameter-field">
-            <label for="min-support" class="parameter-label">Min support</label>
+            <label for="min-support" class="parameter-label">Min examples</label>
             <input
               id="min-support"
               type="number"
@@ -186,7 +190,7 @@ const MiningInterface = (props: MiningInterfaceProps) => {
               aria-label="Minimum support"
               title="Minimum number of occurrences required for a pattern to be returned."
             />
-            <span class="parameter-hint">Frequency threshold</span>
+            <span class="parameter-hint">Required matches</span>
           </div>
         </div>
 
