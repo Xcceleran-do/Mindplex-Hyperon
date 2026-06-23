@@ -8,7 +8,7 @@ from typing import List
   
 from petta import PeTTa  
 from langchain_google_genai import ChatGoogleGenerativeAI  
-
+from experiments.services.mwj_client import MWJClient
 
 from dotenv import load_dotenv
 import pathlib
@@ -25,12 +25,16 @@ logger = logging.getLogger(__name__)
   
 LOADEDLIB = False  
 LOADED_LOCK = threading.Lock()  
-  
+
+USE_MWJ = True  
   
 class PeTTaChainer:  
     def __init__(self):  
-        global LOADEDLIB  
-        self.handler = PeTTa()  
+        global LOADEDLIB 
+        if USE_MWJ:
+            self.handler = MWJClient() 
+        else:
+            self.handler = PeTTa()  
           
         self.kb = "kb" + uuid.uuid4().hex  
         self._base_dir = os.path.dirname(__file__)  
