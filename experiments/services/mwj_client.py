@@ -19,4 +19,10 @@ class MWJClient:
         print(response.text)
         response.raise_for_status()
         return response.text
-
+    def load_metta_file(self, filepath):
+        """
+        Load a .metta file into MWJ by sending its contents.
+        """
+        with open(filepath, "r", encoding="utf-8") as f:
+            metta_code = f.read()
+        return self.process_metta_string(metta_code)
