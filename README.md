@@ -35,3 +35,7 @@ To set up the project locally, clone the repository and install any necessary de
 ## Usage Examples
 
 Refer to the individual feature files for usage examples and implementation details. Each feature is designed to be modular and can be integrated into larger systems as needed.
+
+## Documentation 
+
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Xcceleran-do/Mindplex-Hyperon)
