@@ -69,7 +69,6 @@ def dataset_module_path() -> str:
     if path.endswith(".metta"):
         path = path[:-6]
     return path.replace("\\", "/")
-
 METTA_SETUP = f"""
 !(import! &self {PROJECT_ROOT_METTA}/PeTTa/lib/lib_import.metta)
 !(import! &self {PROJECT_ROOT_METTA}/PeTTa/lib/lib_spaces)
@@ -79,7 +78,7 @@ METTA_SETUP = f"""
 !(import! &self {PROJECT_ROOT_METTA}/experiments/frequent-pattern-miner/frequent-pattern-miner)
 !(import! &self {PROJECT_ROOT_METTA}/experiments/pattern-miner/pattern-miner)
 !(import! &self {PROJECT_ROOT_METTA}/experiments/chainer/main)
-!(import! &tempo {dataset_module_path()})
+!(import! &tempo {PROJECT_ROOT_METTA}/experiments/atomspace_visualizer/public/data.metta)
 !(import! &stv-formulas {PROJECT_ROOT_METTA}/experiments/PLN/Formulas)
 
 !(let $atom (match &tempo ($fact $stv) (: (fact:- $fact) $fact $stv)) (add-atom &res1 $atom))
