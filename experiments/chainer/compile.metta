@@ -37,7 +37,12 @@
         (&^& $to-proj $cmp-out (superpose $idtail)))))
       (empty)))
 
-(= (in_map $kb $elem) (let $temp (cut) (: $kb $prf $elem $tv)))
+; Match compound children against the KB so lifted rule variables bind to
+; grounded facts during conjunction proofs.
+(= (in_map $kb $elem)
+   (match &kb
+          (: $kb $prf $elem $tv)
+          (: $kb $prf $matched $tv)))
 
 ;Helper to match only on the tv of a statement
 (= (tv $tv) (: $kb $prf $elem $tv))

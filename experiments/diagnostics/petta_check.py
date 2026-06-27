@@ -9,12 +9,18 @@ from __future__ import annotations
 
 import json
 
-from experiments.mining_api import create_app, get_petta_service
+from experiments.mining_api import create_app, dataset_file_path, get_chainer_service
 
 
 def main() -> int:
     create_app()
-    print(json.dumps(get_petta_service().health(), indent=2, sort_keys=True))
+    print(json.dumps({
+        "mining": {
+            "mode": "subprocess",
+            "dataset_path": dataset_file_path(),
+        },
+        "chainer": get_chainer_service().health(),
+    }, indent=2, sort_keys=True))
     return 0
 
 

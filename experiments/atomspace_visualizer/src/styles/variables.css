@@ -1,10 +1,9 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700;800&display=swap');
 
 :root {
-  --font-sans: 'Inter', system-ui, sans-serif;
-  --font-heading: 'Outfit', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Consolas', monospace;
+  --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-heading: 'Space Grotesk', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'Consolas', monospace;
 
   /* Flat palette inspired by restrained product UIs: neutral first, green only for intent. */
   --color-bg: #fafafa;
@@ -29,6 +28,8 @@
   --color-accent-muted: #e7f6ef;
   --color-accent-border: #b9e5cf;
   --color-focus: rgba(0, 135, 90, 0.18);
+  --app-glow-a: rgba(0, 135, 90, 0.14);
+  --app-glow-b: rgba(180, 83, 9, 0.1);
 
   --color-warning: #b45309;
   --color-warning-muted: #fff7ed;
@@ -129,6 +130,8 @@
   --color-accent-muted: rgba(62, 207, 142, 0.12);
   --color-accent-border: rgba(62, 207, 142, 0.28);
   --color-focus: rgba(62, 207, 142, 0.22);
+  --app-glow-a: rgba(62, 207, 142, 0.14);
+  --app-glow-b: rgba(245, 158, 11, 0.1);
 
   --color-warning: #f59e0b;
   --color-warning-muted: rgba(245, 158, 11, 0.12);

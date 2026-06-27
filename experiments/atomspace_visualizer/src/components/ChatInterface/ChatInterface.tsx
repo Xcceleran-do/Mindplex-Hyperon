@@ -26,6 +26,32 @@ const SendIcon = () => (
 const DEFAULT_CHAT_CONJUNCT_SIZE = 2;
 const DEFAULT_CHAT_MIN_SUPPORT = 3;
 
+const summarizeFunctionCalls = (functionCalls: unknown): string => {
+  if (!Array.isArray(functionCalls) || functionCalls.length === 0) {
+    return '';
+  }
+
+  const parts = functionCalls
+    .map((item) => {
+      const call = item as { name?: unknown; result?: any };
+      if (typeof call.name !== 'string') {
+        return null;
+      }
+      if (call.name === 'getChainerResult' && call.result && typeof call.result === 'object') {
+        const status = call.result.status ? String(call.result.status) : 'unknown';
+        const proofs = typeof call.result.proof_count === 'number' ? `, ${call.result.proof_count} proofs` : '';
+        return `${call.name} (${status}${proofs})`;
+      }
+      if (call.result && typeof call.result === 'object' && typeof call.result.status === 'string') {
+        return `${call.name} (${call.result.status})`;
+      }
+      return call.name;
+    })
+    .filter((part): part is string => Boolean(part));
+
+  return parts.length > 0 ? `Functions: ${parts.join(' -> ')}` : '';
+};
+
 const parseMiningCommand = (text: string): { conjunctSize: number; minSupport: number } | null => {
   const lower = text.trim().toLowerCase();
   const hasMiningIntent = /\bmine\b|\b(?:run|start|perform|do)\s+(?:the\s+)?(?:miner|mining|pattern[-\s]?miner)\b/.test(lower)
@@ -66,6 +92,7 @@ export interface Message {
     support: string;
     summary?: string;
   };
+  functionCalls?: unknown;
   isTyping?: boolean;
 }
 
@@ -257,7 +284,9 @@ const ChatInterface = (props: ChatInterfaceProps) => {
         .filter(m => !m.isTyping && m.role !== 'system')
         .map(m => ({
           role: m.role,
-          content: m.content
+          content: m.functionCalls
+            ? `${m.content}\n\n[${summarizeFunctionCalls(m.functionCalls)}]`
+            : m.content
         }));
       const data = await sendChatMessage(text, history);
       applyFunctionCallEffects(data.functionCalls);
@@ -269,7 +298,8 @@ const ChatInterface = (props: ChatInterfaceProps) => {
         id: `msg-${Date.now()}-${Math.random()}`,
         role: 'assistant',
         content: data.response,
-        timestamp: new Date()
+        timestamp: new Date(),
+        functionCalls: data.functionCalls
       };
 
       setMessages(prev => [...prev, aiMsg]);
@@ -370,7 +400,7 @@ const ChatInterface = (props: ChatInterfaceProps) => {
         const patternObj = props.miningResults[patternIndex - 1];
         if (patternObj) {
           // Parse pattern string to extract property-value pairs
-          // Example pattern: (length $x "low") (tone $x "Analytical")
+          // Example pattern: (length-bucket $x "low") (tone $x "Analytical")
           // Updated regex to handle variables with special chars and properties with hyphens
           const regex = /\(([^\s()]+)\s+\$[^\s()]+\s+("|'|)([^"')]+)\2\)/g;
           const propertyFilters: { property: string; value: string }[] = [];
@@ -438,16 +468,22 @@ const ChatInterface = (props: ChatInterfaceProps) => {
                   <h4>No conversation yet</h4>
                   <div class="welcome-suggestions">
                     <button class="suggestion-btn" onClick={() => {
-                      setInputText('Summarize the mined rules');
+                      setInputText('Why does article A_14219 got low engagement?');
                       inputRef?.focus();
                     }}>
-                      Summarize mined rules
+                      Explain article A_14219
                     </button>
                     <button class="suggestion-btn" onClick={() => {
-                      setInputText('Compare the strongest patterns');
+                      setInputText('Mine rules with 5 conjuncts and support 3');
                       inputRef?.focus();
                     }}>
-                      Compare strongest patterns
+                      Mine stronger rules
+                    </button>
+                    <button class="suggestion-btn" onClick={() => {
+                      setInputText('Summarize the mined rules and tell me which are most actionable');
+                      inputRef?.focus();
+                    }}>
+                      Summarize actionable rules
                     </button>
                   </div>
                 </div>
@@ -480,6 +516,9 @@ const ChatInterface = (props: ChatInterfaceProps) => {
                       <div class="message-avatar"><AssistantGlyph /></div>
                       <div class="message-content">
                         <div class="message-text" innerHTML={formatMessage(message.content)} onClick={(e) => handlePatternClick(e, message)} />
+                        <Show when={summarizeFunctionCalls(message.functionCalls)}>
+                          {(trace) => <div class="function-trace">{trace()}</div>}
+                        </Show>
                         <div class="message-time">
                           {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </div>
@@ -500,7 +539,7 @@ const ChatInterface = (props: ChatInterfaceProps) => {
               <textarea
                 ref={inputRef}
                 class="chat-input"
-                placeholder="Ask me anything..."
+                placeholder="Ask for a proof, rule summary, or mining run..."
                 value={inputText()}
                 onInput={(e) => setInputText(e.target.value)}
                 onKeyPress={handleKeyPress}
@@ -527,11 +566,20 @@ const ChatInterface = (props: ChatInterfaceProps) => {
 
 // Helper function to format message content with markdown-like syntax and pattern references
 const formatMessage = (content: string): string => {
+  const codeBlocks: string[] = [];
   let formatted = content
+    .replace(/```(?:\w+)?\n?([\s\S]*?)```/g, (_match, code) => {
+      const token = `@@CODE_BLOCK_${codeBlocks.length}@@`;
+      codeBlocks.push(`<pre><code>${String(code).trim()}</code></pre>`);
+      return token;
+    })
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/```([^```]+)```/g, '<pre><code>$1</code></pre>');
+    .replace(/`([^`]+)`/g, '<code>$1</code>');
+
+  codeBlocks.forEach((block, index) => {
+    formatted = formatted.replace(`@@CODE_BLOCK_${index}@@`, block);
+  });
 
   // Convert [Pattern N] or [N] to clickable references
   formatted = formatted.replace(/\[(?:Rule )?(\d+)\]/g, '<span class="pattern-ref" data-pattern="$1" title="Click to visualize this pattern">[$1]</span>');

@@ -4,21 +4,40 @@
   align-items: center;
   height: 100vh;
   width: 100vw;
-  background-color: var(--bg-app);
+  position: relative;
+  overflow: hidden;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 20% 20%, var(--app-glow-a, rgba(0, 135, 90, 0.16)), transparent 34%),
+    radial-gradient(circle at 80% 12%, var(--app-glow-b, rgba(180, 83, 9, 0.12)), transparent 30%),
+    linear-gradient(135deg, var(--bg-app), var(--color-bg-inset));
   color: var(--text-primary);
 }
 
+.backgroundGrid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--color-border-soft) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-border-soft) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(circle at center, black, transparent 72%);
+  opacity: 0.65;
+}
+
 .card {
+  position: relative;
+  z-index: 1;
   background: var(--bg-glass-strong);
   backdrop-filter: blur(20px);
-  padding: 3rem 2.5rem;
-  border-radius: 8px;
+  padding: 34px;
+  border-radius: 24px;
   box-shadow: var(--shadow-glass);
   width: 100%;
-  max-width: 440px;
+  max-width: 560px;
   text-align: center;
   border: 1px solid var(--border-glass);
-  animation: floatUp 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: floatUp 0.5s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes floatUp {
@@ -35,21 +54,77 @@
 
 .title {
   font-family: var(--font-heading);
-  font-size: 1.75rem;
-  font-weight: 700;
-  margin-bottom: 0.75rem;
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  line-height: 0.98;
+  font-weight: 800;
+  margin: 0 0 0.9rem;
   color: var(--text-primary);
+  letter-spacing: -0.05em;
 }
 
 .subtitle {
-  font-size: 0.95rem;
+  max-width: 460px;
+  margin: 0 auto 1.5rem;
+  font-size: 1rem;
   color: var(--text-secondary);
-  margin-bottom: 2.5rem;
-  line-height: 1.5;
+  line-height: 1.55;
+}
+
+.brandMark {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 12px;
+  border-radius: 15px;
+  background: var(--color-accent);
+  color: var(--color-accent-foreground);
+  box-shadow: var(--shadow-accent);
+  font-family: var(--font-heading);
+  font-weight: 900;
+  font-size: 1.3rem;
+}
+
+.kicker {
+  margin-bottom: 10px;
+  color: var(--color-accent);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.featureGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 0 24px;
+}
+
+.featureGrid div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-bg-inset);
+}
+
+.featureGrid strong {
+  color: var(--color-accent);
+  font-family: var(--font-heading);
+  font-size: 1.05rem;
+}
+
+.featureGrid span {
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 800;
 }
 
 .formGroup {
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
   text-align: left;
 }
 
@@ -62,20 +137,36 @@
   margin-left: 4px;
 }
 
-.input {
+.inputShell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
-  padding: 12px 16px;
-  border-radius: 8px;
+  padding: 0 14px;
+  border-radius: 14px;
   border: 1px solid var(--border-subtle);
   background: var(--bg-surface);
   color: var(--text-primary);
-  font-size: 1rem;
   transition: all 0.2s;
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
 }
 
-.input:focus {
+.inputShell span {
+  color: var(--text-tertiary);
+  font-weight: 900;
+}
+
+.input {
+  width: 100%;
+  height: 48px;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 1rem;
   outline: none;
+}
+
+.inputShell:focus-within {
   border-color: var(--accent-cyan);
   box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.13);
   transform: translateY(-1px);
@@ -84,11 +175,11 @@
 .button {
   width: 100%;
   padding: 14px;
-  border-radius: 8px;
+  border-radius: 14px;
   border: none;
   background: var(--primary-600);
   color: white;
-  font-weight: 600;
+  font-weight: 800;
   font-size: 1rem;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -133,6 +224,23 @@
   display: flex;
   justify-content: center;
   gap: 8px;
+}
+
+.footerNote {
+  margin: 14px 0 0;
+  color: var(--text-tertiary);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+@media (max-width: 560px) {
+  .card {
+    padding: 24px;
+  }
+
+  .featureGrid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .spinner {

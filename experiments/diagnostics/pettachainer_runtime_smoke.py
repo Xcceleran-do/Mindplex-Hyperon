@@ -35,6 +35,7 @@ def main() -> int:
     query = first_queryable_fact(facts)
     proofs = backWardChainer(query, depth=2)
     assert proofs, {"query": query, "facts_result": facts_result}
+    assert not any("(partial " in proof for proof in proofs), proofs
 
     print(f"PeTTaChainer runtime smoke test passed with {len(facts)} facts.")
     print(f"Direct query: {query}")

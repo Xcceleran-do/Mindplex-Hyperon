@@ -325,7 +325,7 @@ def convert_mind_to_metta(
         engagement = _engagement_bucket(ctr)
         audience_sentiment = _sentiment_bucket(title, abstract)
 
-        _emit_fact(metta_lines, "length", article_id, length)
+        _emit_fact(metta_lines, "length-bucket", article_id, length)
         _emit_fact(metta_lines, "reading-time", article_id, reading_time)
         _emit_fact(metta_lines, "tone", article_id, tone)
         _emit_fact(metta_lines, "audience-expertise", article_id, audience_expertise)

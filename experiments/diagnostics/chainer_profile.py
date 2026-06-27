@@ -14,10 +14,10 @@ from contextlib import contextmanager
 
 from experiments.mining_api import (
     create_app,
-    get_petta_service,
+    getAllFactsAndRules,
+    get_chainer_service,
     insert_mined_rules_into_chainer,
     mine_pattern,
-    parse_facts_for_pettachainer,
 )
 
 
@@ -63,16 +63,14 @@ def main() -> int:
     with timed("create_app/bootstrap", timings):
         create_app()
 
-    service = get_petta_service()
+    service = get_chainer_service()
 
-    with timed("collapse &res1", timings):
-        lines = service.query_lines("!(collapse (get-atoms &res1))")
-
-    with timed("parse facts", timings):
-        facts = parse_facts_for_pettachainer(" ".join(lines))
-
-    with timed(f"compile facts ({len(facts)})", timings):
-        compiled = sum(1 for fact in facts if service.add_atom(fact) is not None)
+    with timed("ensure dataset facts in KB", timings):
+        facts_result = getAllFactsAndRules()
+    if facts_result.get("status") != "success":
+        raise RuntimeError(f"Failed to hydrate chainer facts: {facts_result}")
+    facts = facts_result.get("facts", [])
+    compiled = facts_result.get("compiled_new_count", 0)
 
     kb_after_compile = kb_atom_count(service)
     mined_result = None
@@ -113,7 +111,7 @@ def main() -> int:
 
     print()
     print("summary")
-    print(f"raw_lines={len(lines)} facts={len(facts)} compiled_new={compiled}")
+    print(f"facts={len(facts)} compiled_dataset_facts={compiled}")
     if mined_result is not None:
         print(
             "mining="
@@ -128,10 +126,10 @@ def main() -> int:
         print("engagement_proofs:")
         for proof in engagement_proofs:
             print(f"  {proof}")
-        indexed = getattr(service, "_rule_consequent_index", {})
-        print("indexed_rule_consequents:")
-        for consequent, rules in sorted(indexed.items()):
-            print(f"  {consequent}: {len(rules)}")
+        if mined_result is not None:
+            print("inserted_rules:")
+            for rule in mined_result.get("rule_insertion", {}).get("rules", []):
+                print(f"  {rule}")
     print(f"broad_engagement_proofs={len(broad_proofs)}")
     print(
         "kb_atom_counts="
