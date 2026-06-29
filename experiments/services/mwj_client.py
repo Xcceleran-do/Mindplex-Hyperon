@@ -20,7 +20,7 @@ class MWJClient:
         self._session = requests.Session()
         self._session.headers.update({"Content-Type": "text/plain; charset=utf-8"})
         self._strategy_cache: dict[str, str] = {}
-        self._clear_kb()
+        
 
     # ------------------------------------------------------------------
     # Low-level HTTP  (no printing)
@@ -91,15 +91,24 @@ class MWJClient:
     # KB lifecycle
     # ------------------------------------------------------------------
 
-    def _clear_kb(self):
-        """Remove all atoms from &kb so each run starts clean."""
+    def clear_kb(self, kb_id: str) -> None:
+        """
+        Remove only atoms belonging to kb_id from &kb.
+
+        Safe for multi-client use — only atoms whose first argument matches
+        kb_id are removed, so other clients' data on the shared server is
+        never touched.
+
+        Call this from PeTTaChainer.__init__ after generating self.kb:
+            if USE_MWJ:
+                self.handler.clear_kb(self.kb)
+        """
         try:
-            resp = self._session.post(
-                self.url,
-                data='!(match &kb $x $x)'.encode("utf-8"),
-                timeout=30,
+            # Fetch only atoms that belong to this kb_id
+            atoms = self._post(
+                f'!(match &kb (: {kb_id} $prf $type $tv) '
+                f'(: {kb_id} $prf $type $tv))'
             )
-            atoms = self._parse_response(resp.text)
             for atom in atoms:
                 self._session.post(
                     self.url,
