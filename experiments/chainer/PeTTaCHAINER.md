@@ -107,16 +107,10 @@ DEBUG: get_facts output: [
 
 ## Where the time goes
 
-MWJClient is ~16× slower than PeTTa. The overhead is entirely network/HTTP,
-split across three phases:
-
-| Phase | Triggered by | Approx. cost |
-|---|---|---|
-| **KB clear** | `MWJClient.__init__` | Fetch all atoms + remove each individually via HTTP — ~0.5 – 2 s |
-| **KB load** | `load_metta_file_to_chainer()` → `add_atom()` per line | One HTTP POST per fact — ~6 – 7 s (scales with KB size) |
-| **get_facts / query** | `get_all_facts()`, `query()` | Strategy probe (once) + match — ~0.1 – 0.2 s |
-
-PeTTa does all of this in-process (Prolog memory), so there is zero network overhead.
+MWJClient is ~16× slower than PeTTa. The overhead is entirely network/HTTP —
+each `add-atom`, `match`, and `remove-atom` call is a separate HTTP POST to
+the MWJ server, whereas PeTTa does all of this in-process (Prolog memory)
+with zero network overhead.
 
 ---
 
