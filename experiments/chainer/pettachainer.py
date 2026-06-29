@@ -4,11 +4,11 @@ import re
 import json  
 import threading  
 import uuid  
+import time
 from typing import List  
   
 from petta import PeTTa  
 from langchain_google_genai import ChatGoogleGenerativeAI  
-
 
 from dotenv import load_dotenv
 import pathlib
@@ -25,14 +25,23 @@ logger = logging.getLogger(__name__)
   
 LOADEDLIB = False  
 LOADED_LOCK = threading.Lock()  
-  
+
+USE_MWJ = False  # Set to True to use MWJClient instead of local PeTTa
   
 class PeTTaChainer:  
     def __init__(self):  
-        global LOADEDLIB  
-        self.handler = PeTTa()  
+        global LOADEDLIB 
+        self.kb = "kb" + uuid.uuid4().hex 
+        if USE_MWJ:
+            # Imported lazily so the default PeTTa path never depends on the
+            # MWJ client module (or the `experiments` package being importable).
+            from experiments.services.mwj_client import MWJClient
+            self.handler = MWJClient()
+            self.handler.clear_kb(self.kb)
+        else:
+            self.handler = PeTTa()  
           
-        self.kb = "kb" + uuid.uuid4().hex  
+         
         self._base_dir = os.path.dirname(__file__)  
         self.atomRe = re.compile(r'\([A-Za-z_][\w\-]*\s+\$[_\w\d]+\s+"[^"]*"\)')  
         self.stvRe = re.compile(r'\(STV\s+([0-9eE\.\-]+)\s+([0-9eE\.\-]+)\)')  
@@ -232,50 +241,23 @@ def get_facts(handler):
 
 def main():  
     """Main function to run the interactive why-question handler"""  
+    overall_start = time.time()
     handler = PeTTaChainer()  
     
     print("Loading knowledge base from data.metta ...")
-    load_metta_file_to_chainer(handler, "/home/henok/Desktop/Mindplex/Mindplex-Hyperon/experiments/atomspace_visualizer/public/data.metta")
+    PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    load_metta_file_to_chainer(handler, os.path.join(PROJECT_ROOT, "experiments", "atomspace_visualizer", "public", "data.metta"))
     print("Knowledge base loaded successfully!")
 
-    facts =get_facts(handler) 
+    facts = get_facts(handler) 
     print("DEBUG: get_facts output:", facts[:10])  
   
     mined_patterns={'patterns': [{'pattern': '(((author $_3514 "Hruy") (authored-by $_3514 "Hruy") (date-period $_3514 "Archived") (audience-expertise $_3514 "Beginner") (engagement $_3514 "Low")) (STV 1.7849705479859582e-9 0.07500000000000001))', 'support': '3'}, {'pattern': '(((author $_3734 "Hruy") (authored-by $_3734 "Hruy") (popularity $_3734 "Top_10") (audience-expertise $_3734 "Beginner") (engagement $_3734 "Low")) (STV 1.7849705479859582e-9 0.07500000000000001))', 'support': '3'}, {'pattern': '(((author $_3952 "Hruy") (date-period $_3952 "Archived") (popularity $_3952 "Top_10") (audience-expertise $_3952 "Beginner") (engagement $_3952 "Low")) (STV 1.7849705479859582e-9 0.07500000000000001))', 'support': '3'}, {'pattern': '(((authored-by $_4172 "Hruy") (date-period $_4172 "Archived") (popularity $_4172 "Top_10") (audience-expertise $_4172 "Beginner") (engagement $_4172 "Low")) (STV 1.7849705479859582e-9 0.07500000000000001))', 'support': '3'}]}
     # add mined patterns to database as rules
     handler.formatter(mined_patterns)
     # Interactive loop for user questions  
-    while True:  
-        print("\n" + "="*60)  
-        print("Enter your 'why' question (e.g., 'Why does articleA have low engagement?')")  
-        print("Type 'quit' or 'exit' to stop")  
-        user_question = input("Your question: ").strip()  
-          
-        if user_question.lower() in ['quit', 'exit']:  
-            break  
-              
-        if not user_question:  
-            print("Please enter a valid question.")  
-            continue  
-              
-        print(f"\nProcessing question: {user_question}")  
-        summary, canonical_query, chainer_result = handler.handle_why_question(user_question)
-          
-        print("\n" + "="*60)  
-        print("Analaysis:")  
-        print("="*60)  
-        print(f"\n CANONICAL QUERY:")  
-        print(canonical_query if canonical_query else "No query generated")  
-          
-        print(f"\n CHAINER RESULT:")  
-        if chainer_result:  
-            for i, result in enumerate(chainer_result, 1):  
-                print(f"{i}. {result}")  
-        else:  
-            print("No results from chainer")  
-          
-        print(f"\n ANALYSIS & SUMMARY:")  
-        print(summary)  
+    total_time = time.time() - overall_start
+    print(f"\nTOTAL EXECUTION TIME ({handler.handler.__class__.__name__}): {total_time:.4f} seconds")
   
 if __name__ == "__main__":  
     main()

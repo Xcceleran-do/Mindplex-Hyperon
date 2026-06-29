@@ -100,7 +100,6 @@ def dataset_module_path() -> str:
     if path.endswith(".metta"):
         path = path[:-6]
     return path.replace("\\", "/")
-
 MINING_METTA_SETUP = f"""
 !(import! &self {PROJECT_ROOT_METTA}/PeTTa/lib/lib_import.metta)
 !(import! &self {PROJECT_ROOT_METTA}/PeTTa/lib/lib_spaces)
