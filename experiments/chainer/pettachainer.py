@@ -236,8 +236,8 @@ def get_facts(handler):
     return query_result
 
 def main():  
-    overall_start = time.time()
     """Main function to run the interactive why-question handler"""  
+    overall_start = time.time()
     handler = PeTTaChainer()  
     
     print("Loading knowledge base from data.metta ...")
