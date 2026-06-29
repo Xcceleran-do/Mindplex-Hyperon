@@ -1,7 +1,10 @@
 import requests
 import json
+import logging
 import os
 import re
+
+logger = logging.getLogger(__name__)
 
 
 class MWJClient:
@@ -99,24 +102,41 @@ class MWJClient:
         kb_id are removed, so other clients' data on the shared server is
         never touched.
 
-        Call this from PeTTaChainer.__init__ after generating self.kb:
+        Failures are logged (never silently swallowed) but are not re-raised,
+        so a transient server issue during cleanup cannot abort PeTTaChainer
+        construction. Call this from PeTTaChainer.__init__ after generating
+        self.kb:
             if USE_MWJ:
                 self.handler.clear_kb(self.kb)
         """
         try:
-            # Fetch only atoms that belong to this kb_id
+            # Fetch only atoms that belong to this kb_id.
             atoms = self._post(
                 f'!(match &kb (: {kb_id} $prf $type $tv) '
                 f'(: {kb_id} $prf $type $tv))'
             )
-            for atom in atoms:
-                self._session.post(
+        except Exception as exc:
+            logger.warning("clear_kb(%s): failed to fetch atoms to clear: %s", kb_id, exc)
+            return
+
+        failures = 0
+        for atom in atoms:
+            try:
+                resp = self._session.post(
                     self.url,
                     data=f"!(remove-atom &kb {atom})".encode("utf-8"),
                     timeout=30,
                 )
-        except Exception:
-            pass
+                resp.raise_for_status()
+            except Exception as exc:
+                failures += 1
+                logger.warning("clear_kb(%s): failed to remove atom %r: %s", kb_id, atom, exc)
+
+        if failures:
+            logger.warning(
+                "clear_kb(%s): %d of %d atoms could not be removed",
+                kb_id, failures, len(atoms),
+            )
 
     # ------------------------------------------------------------------
     # Public API  (drop-in for PeTTa)

@@ -217,6 +217,27 @@ class TestClearKb:
         # Should not raise
         client.clear_kb("kb123")
 
+    def test_clear_kb_continues_after_individual_atom_failure(self):
+        client = make_client()
+        atoms = [
+            '(: kb123 fact1 (STV 0.9 0.9))',
+            '(: kb123 fact2 (STV 0.8 0.8))',
+            '(: kb123 fact3 (STV 0.7 0.7))',
+        ]
+        client._post = MagicMock(return_value=atoms)
+        client._session = MagicMock()
+        # Make the second remove-atom call raise via raise_for_status();
+        # the loop must still attempt the remaining atoms.
+        ok_first, bad_second, ok_third = MagicMock(), MagicMock(), MagicMock()
+        bad_second.raise_for_status.side_effect = Exception("boom")
+        client._session.post.side_effect = [ok_first, bad_second, ok_third]
+
+        # Should not raise despite the middle failure.
+        client.clear_kb("kb123")
+
+        # All three atoms were attempted.
+        assert client._session.post.call_count == 3
+
 
 # ------------------------------------------------------------------
 # _deduplicate
