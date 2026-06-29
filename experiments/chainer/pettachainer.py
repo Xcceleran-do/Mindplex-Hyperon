@@ -9,7 +9,6 @@ from typing import List
   
 from petta import PeTTa  
 from langchain_google_genai import ChatGoogleGenerativeAI  
-from experiments.services.mwj_client import MWJClient
 
 from dotenv import load_dotenv
 import pathlib
@@ -34,7 +33,10 @@ class PeTTaChainer:
         global LOADEDLIB 
         self.kb = "kb" + uuid.uuid4().hex 
         if USE_MWJ:
-            self.handler = MWJClient() 
+            # Imported lazily so the default PeTTa path never depends on the
+            # MWJ client module (or the `experiments` package being importable).
+            from experiments.services.mwj_client import MWJClient
+            self.handler = MWJClient()
             self.handler.clear_kb(self.kb)
         else:
             self.handler = PeTTa()  
