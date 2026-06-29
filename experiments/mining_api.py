@@ -100,12 +100,7 @@ def dataset_module_path() -> str:
     if path.endswith(".metta"):
         path = path[:-6]
     return path.replace("\\", "/")
-<<<<<<< HEAD
-METTA_SETUP = f"""
-=======
-
 MINING_METTA_SETUP = f"""
->>>>>>> upstream/demo-metta-wam-jam
 !(import! &self {PROJECT_ROOT_METTA}/PeTTa/lib/lib_import.metta)
 !(import! &self {PROJECT_ROOT_METTA}/PeTTa/lib/lib_spaces)
 !(import_prolog_functions_from_file "{PROJECT_ROOT_METTA}/experiments/frequent-pattern-miner/conj_exp.pl" (unique_combinations_star cut-first-char promote_engagement_conj))
@@ -113,15 +108,6 @@ MINING_METTA_SETUP = f"""
 !(import! &self {PROJECT_ROOT_METTA}/experiments/frequent-pattern-miner/etv-utils)
 !(import! &self {PROJECT_ROOT_METTA}/experiments/frequent-pattern-miner/frequent-pattern-miner)
 !(import! &self {PROJECT_ROOT_METTA}/experiments/pattern-miner/pattern-miner)
-<<<<<<< HEAD
-!(import! &self {PROJECT_ROOT_METTA}/experiments/chainer/main)
-!(import! &tempo {PROJECT_ROOT_METTA}/experiments/atomspace_visualizer/public/data.metta)
-!(import! &stv-formulas {PROJECT_ROOT_METTA}/experiments/PLN/Formulas)
-
-!(let $atom (match &tempo ($fact $stv) (: (fact:- $fact) $fact $stv)) (add-atom &res1 $atom))
-!(let $atom (match &tempo ($fact $stv) $fact) (add-atom &purifiedDbSpace $atom))
-=======
->>>>>>> upstream/demo-metta-wam-jam
 """
 
 CHAINER_METTA_SETUP = f"""
