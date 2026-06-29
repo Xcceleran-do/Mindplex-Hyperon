@@ -241,7 +241,8 @@ def main():
     handler = PeTTaChainer()  
     
     print("Loading knowledge base from data.metta ...")
-    load_metta_file_to_chainer(handler, "experiments/atomspace_visualizer/public/data.metta")
+    PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    load_metta_file_to_chainer(handler, os.path.join(PROJECT_ROOT, "experiments/atomspace_visualizer/public/data.metta"))
     print("Knowledge base loaded successfully!")
 
     facts = get_facts(handler) 
