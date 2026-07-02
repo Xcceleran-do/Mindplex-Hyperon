@@ -66,6 +66,10 @@ from experiments.mining_api_support import (
     parse_petta_output,
     select_facts_for_prompt,
 )
+from experiments.omegaclaw_bridge import (
+    is_omegaclaw_chat_enabled,
+    send_chat_to_omegaclaw,
+)
 load_dotenv()
 
 # Configure ASI API
@@ -1582,6 +1586,7 @@ register_chat_routes(
     summarize_patterns=summarize_patterns,
     analyze_pattern=analyze_pattern,
     make_json_safe=make_json_safe,
+    omegaclaw_chat_handler=send_chat_to_omegaclaw if is_omegaclaw_chat_enabled() else None,
 )
 
 def create_app():

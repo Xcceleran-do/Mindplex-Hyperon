@@ -11,14 +11,19 @@ class MindplexFetcher:
         if self.token:
             self.headers["Authorization"] = f"Bearer {self.token}"
 
-    def fetch_page(self, page=1):
+    def fetch_page(self, page=1, page_size=50):
         """Fetches a single page of articles for the user."""
         path = USER_ARTICLES_ENDPOINT_TEMPLATE.format(username=self.username, page=page)
-        url = f"{MINDPLEX_API_DOMAIN}{path}"
+        url = f"{MINDPLEX_API_DOMAIN.rstrip('/')}{path}"
+        params = {
+            "page": page,
+            "limit": max(1, min(int(page_size or 50), 100)),
+            "include": "author,stats",
+        }
         
         try:
             print(f"Fetching {url}...")
-            response = requests.get(url, headers=self.headers)
+            response = requests.get(url, headers=self.headers, params=params, timeout=30)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
@@ -29,29 +34,67 @@ class MindplexFetcher:
         """Fetches articles up to a limit."""
         articles = []
         page = 1
+        page_size = max(1, min(int(limit or 1), 20))
         
         while len(articles) < limit:
-            data = self.fetch_page(page)
+            data = self.fetch_page(page, page_size=page_size)
             if not data:
                 break
             
-            # The API returns { "published_posts": [...] }
-            batch = data.get('published_posts', [])
+            batch = extract_mindplex_records(data)
             
             if not batch:
                 print("No more posts found.")
                 break
                 
-            articles.extend(batch)
+            articles.extend(normalize_mindplex_record(record, self.username) for record in batch)
             
-            # Check if we've reached the end (if batch size is small, likely last page)
-            # Or we can check 'count' in response if available/reliable
-            if len(batch) < 10: # Assuming default page size is around 10-20
+            total = data.get("total") if isinstance(data, dict) else None
+            if isinstance(total, int) and len(articles) >= total:
+                break
+            if len(batch) < page_size:
                 break
                 
             page += 1
             
         return articles[:limit]
+
+
+def extract_mindplex_records(data):
+    if isinstance(data, list):
+        return data
+    if not isinstance(data, dict):
+        return []
+    for key in ("published_posts", "data", "items", "results", "records"):
+        records = data.get(key)
+        if isinstance(records, list):
+            return records
+    return []
+
+
+def normalize_mindplex_record(record, fallback_username=None):
+    if not isinstance(record, dict):
+        return record
+
+    normalized = dict(record)
+    stats = normalized.get("stats") if isinstance(normalized.get("stats"), dict) else {}
+    author = normalized.get("author") if isinstance(normalized.get("author"), dict) else {}
+
+    normalized.setdefault("post_title", normalized.get("title", "Untitled"))
+    normalized.setdefault("views", normalized.get("viewCount", 0))
+    normalized.setdefault("likes", stats.get("likeCount", 0))
+    normalized.setdefault("comments", stats.get("commentCount", 0))
+    normalized.setdefault("min_to_read", normalized.get("estimatedReadingMinutes", 0))
+    normalized.setdefault("published_timestamp", format_mindplex_timestamp(normalized.get("publishedAt")))
+    normalized.setdefault("author_username", author.get("username") or fallback_username or "unknown")
+    return normalized
+
+
+def format_mindplex_timestamp(value):
+    if not value:
+        return value
+    text = str(value).replace("T", " ").replace("Z", "")
+    return text[:19]
 
 
 class JsonApiFetcher:

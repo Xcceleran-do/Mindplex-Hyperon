@@ -10,20 +10,25 @@ services:
       PETTA_MINING_TIMEOUT_SECONDS: "90"
       PETTA_MINING_MAX_OUTPUT_BYTES: "8388608"
       PETTA_CHAIN_TIMEOUT_SECONDS: "30"
-    ports:
-      - "5000:5000"
+      MINDPLEX_CHAT_BACKEND: omegaclaw
+      OMEGACLAW_MINDPLEX_QUEUE_DIR: /tmp/omegaclaw-mindplex
+      OMEGACLAW_MINDPLEX_RESPONSE_TIMEOUT: "120"
+      MINDPLEX_API_BASE_URL: http://127.0.0.1:3000
+    volumes:
+      - ./.omegaclaw-mindplex:/tmp/omegaclaw-mindplex
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:5000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
+    network_mode: host
 
   frontend:
     build:
       context: ./experiments/atomspace_visualizer
       args:
-        VITE_API_BASE_URL: ""
+        VITE_API_BASE_URL: "http://localhost:5000"
         VITE_BYPASS_INGESTION: "false"
         VITE_MAX_VIS_ARTICLES: "1500"
         VITE_MAX_CONJUNCTION_COUNT: "10"
@@ -31,4 +36,4 @@ services:
       mining-api:
         condition: service_healthy
     ports:
-      - "3000:80"
+      - "3001:80"

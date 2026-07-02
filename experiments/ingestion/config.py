@@ -1,11 +1,19 @@
 # experiments/ingestion/config.py
 
 # API Configuration
-MINDPLEX_API_DOMAIN = "https://staging.mindplex.ai/wp-json"
-# Endpoint pattern: /mp_gl/v1/posts/social/{username}/{page}
-USER_ARTICLES_ENDPOINT_TEMPLATE = "/mp_gl/v1/posts/publisher/{username}/{page}"
+# API Configuration
+import os
 
-DEFAULT_USERNAME = "Ben_G"
+# Allow overriding the Mindplex API domain from environment for Docker/runtime
+# Prefer MINDPLEX_API_BASE_URL, then MINDPLEX_API_DOMAIN, then default
+MINDPLEX_API_DOMAIN = os.getenv(
+  "MINDPLEX_API_BASE_URL",
+  os.getenv("MINDPLEX_API_DOMAIN", "http://localhost:3000"),
+)
+# Endpoint pattern: v1/users/{username}/posts
+USER_ARTICLES_ENDPOINT_TEMPLATE = "/v1/users/{username}/posts"
+
+DEFAULT_USERNAME = "mod_alex"
 
 DEFAULT_HEADERS = {
     "User-Agent": "MindplexMiner/1.0",

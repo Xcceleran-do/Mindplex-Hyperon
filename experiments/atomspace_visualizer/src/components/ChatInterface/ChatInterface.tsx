@@ -23,9 +23,6 @@ const SendIcon = () => (
   </svg>
 );
 
-const DEFAULT_CHAT_CONJUNCT_SIZE = 2;
-const DEFAULT_CHAT_MIN_SUPPORT = 3;
-
 const summarizeFunctionCalls = (functionCalls: unknown): string => {
   if (!Array.isArray(functionCalls) || functionCalls.length === 0) {
     return '';
@@ -50,36 +47,6 @@ const summarizeFunctionCalls = (functionCalls: unknown): string => {
     .filter((part): part is string => Boolean(part));
 
   return parts.length > 0 ? `Functions: ${parts.join(' -> ')}` : '';
-};
-
-const parseMiningCommand = (text: string): { conjunctSize: number; minSupport: number } | null => {
-  const lower = text.trim().toLowerCase();
-  const hasMiningIntent = /\bmine\b|\b(?:run|start|perform|do)\s+(?:the\s+)?(?:miner|mining|pattern[-\s]?miner)\b/.test(lower)
-    || /\b(find|discover|extract|generate|run)\s+(?:frequent\s+)?(?:patterns?|rules?)\b/.test(lower);
-
-  if (!hasMiningIntent) {
-    return null;
-  }
-
-  const asksForExistingResults = /\b(what|show|list|latest)\b.*\b(patterns?|rules?|results)\b/.test(lower);
-  if (asksForExistingResults && !/\bmine\b|\b(?:run|start|perform|do)\b/.test(lower)) {
-    return null;
-  }
-
-  const countMatch =
-    lower.match(/(?:with|using|for|of|top)\s+(\d+)\s*(?:patterns?|rules?|conjunctions?|conjuncts?|conditions?)/)
-    || lower.match(/(\d+)\s*(?:patterns?|rules?|conjunctions?|conjuncts?|conditions?)/)
-    || lower.match(/(?:conjunction|conjunct|condition|pattern|rule)(?:\s+(?:count|size))?\s*(?:=|:|is|of|to)?\s*(\d+)/)
-    || lower.match(/(\d+)\s*-\s*(?:way|condition|conjunction|conjunct)/);
-
-  const supportMatch =
-    lower.match(/(?:min|minimum)\s*support\s*(?:=|:|of|to|is)?\s*(\d+)/)
-    || lower.match(/support\s*(?:>=|=>|=|:|of|at\s+least|to|is)?\s*(\d+)/);
-
-  return {
-    conjunctSize: Math.max(1, countMatch ? parseInt(countMatch[1], 10) : DEFAULT_CHAT_CONJUNCT_SIZE),
-    minSupport: Math.max(1, supportMatch ? parseInt(supportMatch[1], 10) : DEFAULT_CHAT_MIN_SUPPORT),
-  };
 };
 
 export interface Message {
@@ -333,36 +300,6 @@ const ChatInterface = (props: ChatInterfaceProps) => {
     };
     setMessages(prev => [...prev, userMsg]);
     setInputText('');
-
-    // Intercept explicit mining commands and delegate to parent unified miner.
-    const miningCommand = parseMiningCommand(text);
-    if (miningCommand) {
-      // If parent provides the unified mining handler, use it and avoid
-      // sending the message to the AI (which may also call the mining
-      // function and duplicate work).
-      if (props.onMiningStart) {
-        const sys: Message = {
-          id: `sys-start-${Date.now()}`,
-          role: 'system',
-          content: `Starting mining with conjunction count ${miningCommand.conjunctSize} and min support ${miningCommand.minSupport}...`,
-          timestamp: new Date()
-        };
-        setMessages(prev => [...prev, sys]);
-        try {
-          setIsLoading(true);
-          await props.onMiningStart(miningCommand.conjunctSize, miningCommand.minSupport);
-          if (props.miningResults && props.miningResults.length > 0) {
-            props.onShowRules?.();
-          }
-        } catch (err) {
-          console.error('Error delegating mining to parent from chat:', err);
-        } finally {
-          setIsLoading(false);
-        }
-        return;
-      }
-      // fallback: no parent handler -> ask AI to perform mining intent
-    }
 
     // Get AI response
     await sendAIMessage(text);

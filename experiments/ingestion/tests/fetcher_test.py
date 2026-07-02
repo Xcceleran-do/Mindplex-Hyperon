@@ -69,9 +69,12 @@ class TestMindplexFetcher(unittest.TestCase):
         
         # Verify URL was constructed correctly
         called_url = mock_get.call_args[0][0]
+        called_params = mock_get.call_args[1]["params"]
         self.assertIn("test_user", called_url)
-        self.assertIn("/2", called_url)
-        self.assertIn("https://staging.mindplex.ai", called_url)
+        self.assertIn("/v1/users/test_user/posts", called_url)
+        self.assertEqual(called_params["page"], 2)
+        self.assertEqual(called_params["limit"], 50)
+        self.assertEqual(called_params["include"], "author,stats")
 
     @patch('experiments.ingestion.fetcher.requests.get')
     def test_fetch_page_passes_headers(self, mock_get):
@@ -137,14 +140,14 @@ class TestMindplexFetcher(unittest.TestCase):
         page_2_response = MagicMock()
         page_2_response.json.return_value = {
             "published_posts": [
-                {"id": i, "post_title": f"Article {i}"} for i in range(21, 31)
+                {"id": i, "post_title": f"Article {i}"} for i in range(21, 41)
             ]
         }
         
         page_3_response = MagicMock()
         page_3_response.json.return_value = {
             "published_posts": [
-                {"id": i, "post_title": f"Article {i}"} for i in range(31, 36)
+                {"id": i, "post_title": f"Article {i}"} for i in range(41, 46)
             ]
         }
         
@@ -153,7 +156,7 @@ class TestMindplexFetcher(unittest.TestCase):
         result = self.fetcher.fetch_all(limit=100)
         
         # Should have articles from all pages but not exceed limit
-        self.assertEqual(len(result), 35)
+        self.assertEqual(len(result), 45)
 
     @patch('experiments.ingestion.fetcher.requests.get')
     def test_fetch_all_respects_limit(self, mock_get):
@@ -235,11 +238,31 @@ class TestMindplexFetcher(unittest.TestCase):
         self.assertEqual(len(result), 1)
 
     @patch('experiments.ingestion.fetcher.requests.get')
-    def test_fetch_all_handles_missing_published_posts_key(self, mock_get):
-        """Test fetch_all handles response without published_posts key"""
+    def test_fetch_all_accepts_paginated_data_key(self, mock_get):
+        """Test fetch_all handles the current Mindplex paginated response shape"""
         mock_response = MagicMock()
         mock_response.json.return_value = {
-            "data": []  # Wrong key name
+            "data": [
+                {"id": 1, "title": "Article 1", "viewCount": 7, "stats": {"likeCount": 2, "commentCount": 3}}
+            ],
+            "total": 1,
+        }
+        mock_get.return_value = mock_response
+        
+        result = self.fetcher.fetch_all(limit=10)
+        
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["post_title"], "Article 1")
+        self.assertEqual(result[0]["views"], 7)
+        self.assertEqual(result[0]["likes"], 2)
+        self.assertEqual(result[0]["comments"], 3)
+
+    @patch('experiments.ingestion.fetcher.requests.get')
+    def test_fetch_all_handles_missing_records_key(self, mock_get):
+        """Test fetch_all handles response without a recognized records key"""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "payload": []
         }
         mock_get.return_value = mock_response
         
@@ -284,10 +307,8 @@ class TestMindplexFetcher(unittest.TestCase):
         self.fetcher.fetch_page(page=3)
         
         # Verify correct URLs were called
-        urls = [call[0][0] for call in mock_get.call_args_list]
-        self.assertTrue(any("/1" in url for url in urls))
-        self.assertTrue(any("/2" in url for url in urls))
-        self.assertTrue(any("/3" in url for url in urls))
+        pages = [call[1]["params"]["page"] for call in mock_get.call_args_list]
+        self.assertEqual(pages, [1, 2, 3])
 
 
 if __name__ == "__main__":

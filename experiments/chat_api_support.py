@@ -385,6 +385,7 @@ def register_chat_routes(
     summarize_patterns: Callable[[list], str],
     analyze_pattern: Callable[[str, str], str],
     make_json_safe: Callable[[Any], Any],
+    omegaclaw_chat_handler: Optional[Callable[..., dict[str, Any]]] = None,
 ) -> None:
     @app.route('/api/chat/health', methods=['GET'])
     def chat_health_check():
@@ -400,9 +401,30 @@ def register_chat_routes(
             return response, 200
 
         try:
-            data = request.get_json()
+            data = request.get_json() or {}
             pattern = data.get('pattern', '')
             support = data.get('support', '0')
+            if omegaclaw_chat_handler is not None:
+                try:
+                    omega_result = omegaclaw_chat_handler(
+                        (
+                            "Analyze this mined Mindplex pattern for the UI. "
+                            "Be concise and explain what the rule suggests.\n"
+                            f"Pattern: {pattern}\n"
+                            f"Support: {support}"
+                        ),
+                        session_id=str(data.get('session_id', 'analyze')),
+                        history=[],
+                    )
+                except TimeoutError as exc:
+                    logger.warning("OmegaClaw analyze bridge timed out: %s", exc)
+                    return jsonify({'error': str(exc), 'backend': 'omegaclaw'}), 504
+
+                summary = str(omega_result.get("response", "")).strip()
+                if not summary:
+                    summary = "OmegaClaw returned an empty pattern analysis."
+                return jsonify({'summary': summary, 'pattern': pattern, 'support': support, 'backend': 'omegaclaw'})
+
             summary = analyze_pattern(pattern, support)
             return jsonify({'summary': summary, 'pattern': pattern, 'support': support})
         except Exception as exc:
@@ -421,6 +443,30 @@ def register_chat_routes(
         try:
             data = request.get_json() or {}
             patterns = data.get('patterns', [])
+            if omegaclaw_chat_handler is not None:
+                limited_patterns = patterns[:20] if isinstance(patterns, list) else patterns
+                omitted = len(patterns) - len(limited_patterns) if isinstance(patterns, list) else 0
+                pattern_payload = json.dumps(limited_patterns, ensure_ascii=True)
+                suffix = f"\nOmitted pattern count: {omitted}" if omitted > 0 else ""
+                try:
+                    omega_result = omegaclaw_chat_handler(
+                        (
+                            "Summarize these mined Mindplex patterns for the UI. "
+                            "Mention the count, strongest signals, and what the user should inspect next.\n"
+                            f"Patterns JSON: {pattern_payload}{suffix}"
+                        ),
+                        session_id=str(data.get('session_id', 'summary')),
+                        history=[],
+                    )
+                except TimeoutError as exc:
+                    logger.warning("OmegaClaw summarize bridge timed out: %s", exc)
+                    return jsonify({'error': str(exc), 'backend': 'omegaclaw'}), 504
+
+                summary = str(omega_result.get("response", "")).strip()
+                if not summary:
+                    summary = "OmegaClaw returned an empty pattern summary."
+                return jsonify({'summary': summary, 'backend': 'omegaclaw'})
+
             summary = summarize_patterns(patterns)
             return jsonify({'summary': summary})
         except Exception as exc:
@@ -449,6 +495,38 @@ def register_chat_routes(
                 return jsonify({'error': 'Message is required'}), 400
 
             logger.info("Chat request received: session=%s chars=%s", session_id, len(message))
+            if omegaclaw_chat_handler is not None:
+                try:
+                    omega_result = omegaclaw_chat_handler(
+                        message,
+                        session_id=session_id,
+                        history=history,
+                    )
+                except TimeoutError as exc:
+                    logger.warning("OmegaClaw bridge timed out: %s", exc)
+                    return jsonify({'error': str(exc), 'backend': 'omegaclaw'}), 504
+
+                response_text = str(omega_result.get("response", "")).strip()
+                if not response_text:
+                    response_text = "OmegaClaw returned an empty response."
+                conversations[session_id].append({'role': 'user', 'content': message})
+                conversations[session_id].append({'role': 'assistant', 'content': response_text})
+                function_calls = [{
+                    "name": "omegaclaw_chat",
+                    "args": {"session_id": session_id},
+                    "result": {
+                        "id": omega_result.get("id"),
+                        "backend": omega_result.get("backend", "omegaclaw"),
+                    },
+                }]
+                logger.info("Chat routed to OmegaClaw: session=%s response_chars=%s", session_id, len(response_text))
+                return jsonify({
+                    'response': response_text,
+                    'functionCalls': function_calls,
+                    'session_id': session_id,
+                    'backend': 'omegaclaw',
+                })
+
             mining_text, mining_calls = handle_mining_for_message(message)
             if mining_text is not None:
                 conversations[session_id].append({'role': 'user', 'content': message})

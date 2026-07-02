@@ -83,6 +83,46 @@ cd experiments
 
 3. Use the Mining panel to set conjunct count (2 or 3 recommended) and click "Mine Neural Gold".
 
+## Route Chat Through OmegaClaw
+
+For trials where the UI chat should be handled by OmegaClaw, run the Mindplex API and OmegaClaw with the same queue directory:
+
+```bash
+export OMEGACLAW_MINDPLEX_QUEUE_DIR=/tmp/omegaclaw-mindplex
+export MINDPLEX_CHAT_BACKEND=omegaclaw
+
+# terminal 1: Mindplex backend/frontend as usual
+cd experiments
+./start_all.sh
+
+# terminal 2: OmegaClaw reading Mindplex chat
+cd PeTTa
+metta run.metta commchannel=mindplex MP_QUEUE_DIR=/tmp/omegaclaw-mindplex MP_RESPONSE_TIMEOUT=110 maxNewInputLoops=1
+```
+
+Then use the existing UI chat. Messages are delivered to OmegaClaw, and OmegaClaw's `send` response is returned to the chat panel.
+
+Typed chat requests are not intercepted by the frontend mining shortcut in this mode. For example, asking the chat to mine with a conjunction count and minimum support goes through `/api/chat` to OmegaClaw, then OmegaClaw calls `mindplex-mine`. Pattern summary and single-pattern analysis requests from the chat UI are also routed to OmegaClaw. The direct Mine button still uses the local `/api/mine` workflow.
+
+By default, the bridge sends only the current chat message to OmegaClaw. Mindplex UI history stays out of the queue because OmegaClaw keeps its own history. To forward UI history for debugging, set `OMEGACLAW_MINDPLEX_FORWARD_HISTORY=1`.
+
+When using `docker compose`, the `mining-api` service enables this redirect and mounts the project-local `.omegaclaw-mindplex` directory into the container at `/tmp/omegaclaw-mindplex`. Start OmegaClaw with the host-side path:
+
+```bash
+cd PeTTa
+export OMEGACLAW_MINDPLEX_QUEUE_DIR="$(cd .. && pwd)/.omegaclaw-mindplex"
+export MINDPLEX_API_BASE_URL=http://127.0.0.1:5000
+metta run.metta commchannel=mindplex MP_QUEUE_DIR="$OMEGACLAW_MINDPLEX_QUEUE_DIR" MP_RESPONSE_TIMEOUT=110 maxNewInputLoops=1
+```
+
+OmegaClaw also has a trial miner skill:
+
+```metta
+(mindplex-mine "2" "3")
+```
+
+It calls the running Mindplex `/api/mine` pipeline, so data ingestion remains the same UI flow. When this skill is invoked from the Mindplex chat channel, the mining completion summary is sent back to the chat response automatically.
+
 
 ## What the Chat + Mining flow does (short)
 
