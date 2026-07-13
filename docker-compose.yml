@@ -2,22 +2,23 @@ services:
   mining-api:
     build:
       context: .
+      args:
+        DEBIAN_MIRROR: ${DEBIAN_MIRROR:-http://ftp.us.debian.org/debian}
+        DEBIAN_SECURITY_MIRROR: ${DEBIAN_SECURITY_MIRROR:-http://security.debian.org/debian-security}
     env_file: .env
     environment:
       FLASK_DEBUG: "0"
       PETTA_DEBUG: "0"
-      PETTA_MAX_CONJUNCTION_COUNT: "10"
-      PETTA_MINING_TIMEOUT_SECONDS: "90"
-      PETTA_MINING_MAX_OUTPUT_BYTES: "8388608"
-      PETTA_CHAIN_TIMEOUT_SECONDS: "30"
-      MINDPLEX_CHAT_BACKEND: omegaclaw
-      OMEGACLAW_MINDPLEX_QUEUE_DIR: /tmp/omegaclaw-mindplex
-      OMEGACLAW_MINDPLEX_RESPONSE_TIMEOUT: "120"
-      MINDPLEX_API_BASE_URL: http://127.0.0.1:3000
+      PETTA_CHAIN_DEPTH: "${PETTA_CHAIN_DEPTH:-3}"
+      PETTA_MINING_TIMEOUT_SECONDS: "${PETTA_MINING_TIMEOUT_SECONDS:-90}"
+      PETTA_MINING_MAX_OUTPUT_BYTES: "${PETTA_MINING_MAX_OUTPUT_BYTES:-8388608}"
+      PETTA_CHAIN_TIMEOUT_SECONDS: "${PETTA_CHAIN_TIMEOUT_SECONDS:-90}"
+      MINDPLEX_API_DOMAIN: https://api-dev.mindplex.ai
+      MINDPLEX_TOKEN_CACHE_PATH: /app/.mindplex-auth/tokens.json
     volumes:
-      - ./.omegaclaw-mindplex:/tmp/omegaclaw-mindplex
+      - ./.mindplex-auth:/app/.mindplex-auth
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:5000/api/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health', timeout=10).read()"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -30,8 +31,8 @@ services:
       args:
         VITE_API_BASE_URL: "http://localhost:5000"
         VITE_BYPASS_INGESTION: "false"
-        VITE_MAX_VIS_ARTICLES: "1500"
-        VITE_MAX_CONJUNCTION_COUNT: "10"
+        VITE_MAX_VIS_ARTICLES: "${VITE_MAX_VIS_ARTICLES:-1500}"
+        VITE_DEFAULT_CHAIN_DEPTH: "${PETTA_CHAIN_DEPTH:-3}"
     depends_on:
       mining-api:
         condition: service_healthy
