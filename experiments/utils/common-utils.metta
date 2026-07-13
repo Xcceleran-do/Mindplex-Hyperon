@@ -373,7 +373,7 @@
     if (is-expression $list) (
     let* ((($head $tail) (decons-atom $list))) (
         if (== $atom $head) True  (or (is-present $atom $head) (is-present $atom $tail))
-    )) (if (== $atom $list) True False)))
+    )) (== $atom $list)))
 
 ;; =============================================================================
 ;; Function: is-pattern
@@ -717,10 +717,7 @@
  ;Check if expression is truth value or not
 ; (: cog-tv? (-> Atom Bool))
 (= (cog-tv? $EXP)
-    (if (== (match &self (stv $value $mean $conf) True) True)
-        True
-        False
-    )
+    (== (match &self (stv $value $mean $conf) True) True)
 )
 
 
@@ -889,22 +886,19 @@
  ; THIS WILL REMOVE REDUNDANT CLAUSES ALONG WITH THE ABSTRACTS
 (= (is_more_abstract ($link1 $x1 $y1) ($link2 $x2 $y2))
     (if (== $link1 $link2)
-        (if
-            (and
-                (or
-                     ; Check if x1 and x2 are equal, or x1 is more abstract (a variable)
-                    (== $x1 $x2)
-                    (and
-                        (== (get-metatype $x1) Variable)
-                        (== (get-metatype $x2) Symbol)))
-                (or
-                     ; Check if y1 and y2 are equal, or y1 is more abstract (a variable)
-                    (== $y1 $y2)
-                    (and
-                        (== (get-metatype $y1) Variable)
-                        (== (get-metatype $y2) Symbol))))
-            True
-            False )
+        (and
+            (or
+                    ; Check if x1 and x2 are equal, or x1 is more abstract (a variable)
+                (== $x1 $x2)
+                (and
+                    (== (get-metatype $x1) Variable)
+                    (== (get-metatype $x2) Symbol)))
+            (or
+                    ; Check if y1 and y2 are equal, or y1 is more abstract (a variable)
+                (== $y1 $y2)
+                (and
+                    (== (get-metatype $y1) Variable)
+                    (== (get-metatype $y2) Symbol))))
         False
     )
 )

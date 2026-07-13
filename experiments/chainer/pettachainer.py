@@ -235,13 +235,13 @@ def main():
     handler = PeTTaChainer()  
     
     print("Loading knowledge base from data.metta ...")
-    load_metta_file_to_chainer(handler, "/home/henok/Desktop/Mindplex/Mindplex-Hyperon/experiments/atomspace_visualizer/public/data.metta")
+    load_metta_file_to_chainer(handler, "../atomspace_visualizer/public/data.metta")
     print("Knowledge base loaded successfully!")
 
-    facts =get_facts(handler) 
+    facts = get_facts(handler)
     print("DEBUG: get_facts output:", facts[:10])  
   
-    mined_patterns={'patterns': [{'pattern': '(((author $_3514 "Hruy") (authored-by $_3514 "Hruy") (date-period $_3514 "Archived") (audience-expertise $_3514 "Beginner") (engagement $_3514 "Low")) (STV 1.7849705479859582e-9 0.07500000000000001))', 'support': '3'}, {'pattern': '(((author $_3734 "Hruy") (authored-by $_3734 "Hruy") (popularity $_3734 "Top_10") (audience-expertise $_3734 "Beginner") (engagement $_3734 "Low")) (STV 1.7849705479859582e-9 0.07500000000000001))', 'support': '3'}, {'pattern': '(((author $_3952 "Hruy") (date-period $_3952 "Archived") (popularity $_3952 "Top_10") (audience-expertise $_3952 "Beginner") (engagement $_3952 "Low")) (STV 1.7849705479859582e-9 0.07500000000000001))', 'support': '3'}, {'pattern': '(((authored-by $_4172 "Hruy") (date-period $_4172 "Archived") (popularity $_4172 "Top_10") (audience-expertise $_4172 "Beginner") (engagement $_4172 "Low")) (STV 1.7849705479859582e-9 0.07500000000000001))', 'support': '3'}]}
+    mined_patterns = {'patterns': [{'pattern': '(((author $_3514 "Hruy") (authored-by $_3514 "Hruy") (date-period $_3514 "Archived") (audience-expertise $_3514 "Beginner") (engagement $_3514 "Low")) (STV 1.7849705479859582e-9 0.07500000000000001))', 'support': '3'}, {'pattern': '(((author $_3734 "Hruy") (authored-by $_3734 "Hruy") (popularity $_3734 "Top_10") (audience-expertise $_3734 "Beginner") (engagement $_3734 "Low")) (STV 1.7849705479859582e-9 0.07500000000000001))', 'support': '3'}, {'pattern': '(((author $_3952 "Hruy") (date-period $_3952 "Archived") (popularity $_3952 "Top_10") (audience-expertise $_3952 "Beginner") (engagement $_3952 "Low")) (STV 1.7849705479859582e-9 0.07500000000000001))', 'support': '3'}, {'pattern': '(((authored-by $_4172 "Hruy") (date-period $_4172 "Archived") (popularity $_4172 "Top_10") (audience-expertise $_4172 "Beginner") (engagement $_4172 "Low")) (STV 1.7849705479859582e-9 0.07500000000000001))', 'support': '3'}]}
     # add mined patterns to database as rules
     handler.formatter(mined_patterns)
     # Interactive loop for user questions  

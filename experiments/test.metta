@@ -1,11 +1,11 @@
-!(import! &self /mnt/c/Users/HP/iCog/Mindplex-Hyperon/PeTTa/lib/lib_import.metta)
-!(import_prolog_functions_from_file "/mnt/c/Users/HP/iCog/Mindplex-Hyperon/experiments/frequent-pattern-miner/conj_exp.pl" (unique_combinations_star cut-first-char sort_conj))
+!(import! &self ../PeTTa/lib/lib_import.metta)
+!(import_prolog_functions_from_file "../experiments/frequent-pattern-miner/conj_exp.pl" (unique_combinations_star cut-first-char sort_conj))
 
-!(import! &self /mnt/c/Users/HP/iCog/Mindplex-Hyperon/experiments/frequent-pattern-miner/frequent-pattern-miner)
-!(import! &self /mnt/c/Users/HP/iCog/Mindplex-Hyperon/experiments/pattern-miner/pattern-miner)
-!(import! &self /mnt/c/Users/HP/iCog/Mindplex-Hyperon/experiments/utils/common-utils)
-!(import! &tempo /mnt/c/Users/HP/iCog/Mindplex-Hyperon/experiments/atomspace_visualizer/public/data)
-!(import! &self /mnt/c/Users/HP/iCog/Mindplex-Hyperon/experiments/chainer/main)
+!(import! &self ../experiments/frequent-pattern-miner/frequent-pattern-miner)
+!(import! &self ../experiments/pattern-miner/pattern-miner)
+!(import! &self ../experiments/utils/common-utils)
+!(import! &tempo ../experiments/atomspace_visualizer/public/data)
+!(import! &self ../experiments/chainer/main)
 
 !(let $atom (let $fact (get-atoms &tempo) (: (fact:- $fact) $fact)) (add-atom &res1 $atom))
 
