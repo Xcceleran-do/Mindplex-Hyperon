@@ -7,22 +7,15 @@
   position: relative;
   overflow: hidden;
   padding: 24px;
-  background:
-    radial-gradient(circle at 20% 20%, var(--app-glow-a, rgba(0, 135, 90, 0.16)), transparent 34%),
-    radial-gradient(circle at 80% 12%, var(--app-glow-b, rgba(180, 83, 9, 0.12)), transparent 30%),
-    linear-gradient(135deg, var(--bg-app), var(--color-bg-inset));
+  background: var(--bg-app);
   color: var(--text-primary);
 }
 
 .backgroundGrid {
   position: absolute;
   inset: 0;
-  background-image:
-    linear-gradient(var(--color-border-soft) 1px, transparent 1px),
-    linear-gradient(90deg, var(--color-border-soft) 1px, transparent 1px);
-  background-size: 48px 48px;
-  mask-image: radial-gradient(circle at center, black, transparent 72%);
-  opacity: 0.65;
+  background: var(--color-bg-inset);
+  opacity: 0.16;
 }
 
 .card {

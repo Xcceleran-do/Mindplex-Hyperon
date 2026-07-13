@@ -35,11 +35,7 @@ const IngestionForm: Component<IngestionFormProps> = (props) => {
       
       const result = await ingestUserData(username());
       setStatusMessage(result.message || 'Ingestion complete!');
-      
-      // Short delay to show success message
-      setTimeout(() => {
-        props.onComplete();
-      }, 1000);
+      props.onComplete();
 
     } catch (err: any) {
       setError(err.message);
@@ -79,7 +75,7 @@ const IngestionForm: Component<IngestionFormProps> = (props) => {
                   handleIngest();
                 }
               }}
-              placeholder="ben_g"
+              placeholder="author_handle"
               disabled={isLoading()}
             />
           </div>
