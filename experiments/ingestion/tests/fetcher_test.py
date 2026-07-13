@@ -1,6 +1,9 @@
 import unittest
 from unittest.mock import patch, MagicMock
 import os
+import requests
+import json
+import tempfile
 from experiments.ingestion.fetcher import MindplexFetcher
 from experiments.ingestion.config import DEFAULT_USERNAME
 
@@ -28,6 +31,22 @@ class TestMindplexFetcher(unittest.TestCase):
             self.assertIsNone(fetcher.token)
             self.assertNotIn("Authorization", fetcher.headers)
 
+    def test_init_accepts_service_account_credentials(self):
+        """Test dedicated service-account env names for backend sessions."""
+        with patch.dict(
+            os.environ,
+            {
+                "MINDPLEX_SERVICE_EMAIL": "service@example.com",
+                "MINDPLEX_SERVICE_PASSWORD": "service-secret",
+            },
+            clear=True,
+        ):
+            fetcher = MindplexFetcher(username="test_user")
+
+        self.assertEqual(fetcher.login_email, "service@example.com")
+        self.assertEqual(fetcher.login_password, "service-secret")
+        self.assertTrue(fetcher.auth_status()["service_login_configured"])
+
     def test_init_default_username(self):
         """Test fetcher initialization with default username"""
         fetcher = MindplexFetcher()
@@ -39,6 +58,30 @@ class TestMindplexFetcher(unittest.TestCase):
         self.assertIn("Accept", self.fetcher.headers)
         self.assertEqual(self.fetcher.headers["User-Agent"], "MindplexMiner/1.0")
         self.assertEqual(self.fetcher.headers["Accept"], "application/json")
+
+    def test_init_prefers_cached_tokens_over_env_tokens(self):
+        """Test that rotated cached tokens survive stale .env values."""
+        with tempfile.NamedTemporaryFile("w", delete=False, encoding="utf-8") as handle:
+            json.dump({"access_token": "cached-access", "refresh_token": "cached-refresh"}, handle)
+            cache_path = handle.name
+
+        try:
+            with patch.dict(
+                os.environ,
+                {
+                    "MINDPLEX_API_TOKEN": "env-access",
+                    "MINDPLEX_API_REFRESH_TOKEN": "env-refresh",
+                    "MINDPLEX_TOKEN_CACHE_PATH": cache_path,
+                },
+                clear=True,
+            ):
+                fetcher = MindplexFetcher(username="test_user")
+        finally:
+            os.remove(cache_path)
+
+        self.assertEqual(fetcher.token, "cached-access")
+        self.assertEqual(fetcher.refresh_token, "cached-refresh")
+        self.assertEqual(fetcher.headers["Authorization"], "Bearer cached-access")
 
     @patch('experiments.ingestion.fetcher.requests.get')
     def test_fetch_page_success(self, mock_get):
@@ -87,6 +130,246 @@ class TestMindplexFetcher(unittest.TestCase):
         
         # Verify headers were passed
         self.assertEqual(mock_get.call_args[1]["headers"], self.fetcher.headers)
+
+    @patch.object(MindplexFetcher, '_refresh_url', return_value='http://auth.local/refresh')
+    @patch('experiments.ingestion.fetcher.requests.post')
+    @patch('experiments.ingestion.fetcher.requests.get')
+    def test_fetch_page_refreshes_access_token_after_401(self, mock_get, mock_post, _mock_refresh_url):
+        """Test that a 401 page request refreshes the token and retries once."""
+        expired_response = MagicMock()
+        expired_response.status_code = 401
+
+        success_response = MagicMock()
+        success_response.status_code = 200
+        success_response.json.return_value = {"published_posts": [{"id": 1, "post_title": "Article 1"}]}
+
+        refresh_response = MagicMock()
+        refresh_response.json.return_value = {
+            "access_token": "new-access-token",
+            "refresh_token": "new-refresh-token",
+        }
+
+        mock_get.side_effect = [expired_response, success_response]
+        mock_post.return_value = refresh_response
+
+        with patch.dict(
+            os.environ,
+            {
+                "MINDPLEX_API_TOKEN": "expired-access-token",
+                "MINDPLEX_API_REFRESH_TOKEN": "persistent-refresh-token",
+            },
+        ):
+            fetcher = MindplexFetcher(username="test_user")
+            result = fetcher.fetch_page(page=1)
+
+        self.assertEqual(result["published_posts"][0]["id"], 1)
+        self.assertEqual(fetcher.token, "new-access-token")
+        self.assertEqual(fetcher.refresh_token, "new-refresh-token")
+        self.assertEqual(mock_get.call_count, 2)
+        self.assertEqual(mock_post.call_args[0][0], "http://auth.local/refresh")
+        self.assertEqual(mock_post.call_args[1]["json"], {"refreshToken": "persistent-refresh-token"})
+        self.assertEqual(mock_get.call_args_list[1][1]["headers"]["Authorization"], "Bearer new-access-token")
+
+    @patch.object(MindplexFetcher, '_refresh_url', return_value='http://auth.local/refresh')
+    @patch('experiments.ingestion.fetcher.requests.post')
+    @patch('experiments.ingestion.fetcher.requests.get')
+    def test_fetch_page_persists_rotated_tokens_after_refresh(self, mock_get, mock_post, _mock_refresh_url):
+        """Test that rotated refresh tokens are written to the configured cache."""
+        expired_response = MagicMock()
+        expired_response.status_code = 401
+
+        success_response = MagicMock()
+        success_response.status_code = 200
+        success_response.json.return_value = {"published_posts": [{"id": 1, "post_title": "Article 1"}]}
+
+        refresh_response = MagicMock()
+        refresh_response.json.return_value = {
+            "data": {
+                "access_token": "new-access-token",
+                "refresh_token": "new-refresh-token",
+            },
+        }
+
+        mock_get.side_effect = [expired_response, success_response]
+        mock_post.return_value = refresh_response
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cache_path = os.path.join(tmpdir, "tokens.json")
+            with patch.dict(
+                os.environ,
+                {
+                    "MINDPLEX_API_TOKEN": "expired-access-token",
+                    "MINDPLEX_API_REFRESH_TOKEN": "persistent-refresh-token",
+                    "MINDPLEX_TOKEN_CACHE_PATH": cache_path,
+                },
+                clear=True,
+            ):
+                fetcher = MindplexFetcher(username="test_user")
+                result = fetcher.fetch_page(page=1)
+
+            with open(cache_path, "r", encoding="utf-8") as handle:
+                cached = json.load(handle)
+
+        self.assertEqual(result["published_posts"][0]["id"], 1)
+        self.assertEqual(cached["access_token"], "new-access-token")
+        self.assertEqual(cached["refresh_token"], "new-refresh-token")
+
+    @patch.object(MindplexFetcher, '_refresh_url', return_value='http://auth.local/refresh')
+    @patch('experiments.ingestion.fetcher.requests.post')
+    @patch('experiments.ingestion.fetcher.requests.get')
+    def test_fetch_page_returns_none_when_refresh_fails(self, mock_get, mock_post, _mock_refresh_url):
+        """Test that a failed refresh keeps fetch_page graceful for ingestion."""
+        expired_response = MagicMock()
+        expired_response.status_code = 401
+        expired_response.raise_for_status.side_effect = requests.exceptions.HTTPError("401 Unauthorized")
+
+        refresh_response = MagicMock()
+        refresh_response.raise_for_status.side_effect = requests.exceptions.HTTPError("refresh failed")
+
+        mock_get.return_value = expired_response
+        mock_post.return_value = refresh_response
+
+        with patch.dict(
+            os.environ,
+            {
+                "MINDPLEX_API_TOKEN": "expired-access-token",
+                "MINDPLEX_API_REFRESH_TOKEN": "persistent-refresh-token",
+            },
+        ):
+            fetcher = MindplexFetcher(username="test_user")
+            result = fetcher.fetch_page(page=1)
+
+        self.assertIsNone(result)
+        self.assertEqual(mock_get.call_count, 1)
+        self.assertEqual(mock_post.call_count, 1)
+
+    @patch.object(MindplexFetcher, '_login_url', return_value='http://auth.local/login')
+    @patch('experiments.ingestion.fetcher.requests.post')
+    @patch('experiments.ingestion.fetcher.requests.get')
+    def test_fetch_page_logs_in_after_401_when_refresh_token_missing(self, mock_get, mock_post, _mock_login_url):
+        """Test that credentials can mint tokens when no refresh token is configured."""
+        expired_response = MagicMock()
+        expired_response.status_code = 401
+
+        success_response = MagicMock()
+        success_response.status_code = 200
+        success_response.json.return_value = {"published_posts": [{"id": 1, "post_title": "Article 1"}]}
+
+        login_response = MagicMock()
+        login_response.json.return_value = {
+            "data": {
+                "access_token": "login-access-token",
+                "refresh_token": "login-refresh-token",
+            },
+        }
+
+        mock_get.side_effect = [expired_response, success_response]
+        mock_post.return_value = login_response
+
+        with patch.dict(
+            os.environ,
+            {
+                "MINDPLEX_API_TOKEN": "expired-access-token",
+                "MINDPLEX_SERVICE_EMAIL": "user@example.com",
+                "MINDPLEX_SERVICE_PASSWORD": "secret-password",
+            },
+            clear=True,
+        ):
+            fetcher = MindplexFetcher(username="test_user")
+            result = fetcher.fetch_page(page=1)
+
+        self.assertEqual(result["published_posts"][0]["id"], 1)
+        self.assertEqual(fetcher.token, "login-access-token")
+        self.assertEqual(fetcher.refresh_token, "login-refresh-token")
+        self.assertEqual(mock_post.call_args[0][0], "http://auth.local/login")
+        self.assertEqual(
+            mock_post.call_args[1]["json"],
+            {"email": "user@example.com", "password": "secret-password"},
+        )
+        self.assertEqual(mock_get.call_args_list[1][1]["headers"]["Authorization"], "Bearer login-access-token")
+
+    @patch.object(MindplexFetcher, '_login_url', return_value='http://auth.local/login')
+    @patch('experiments.ingestion.fetcher.requests.post')
+    @patch('experiments.ingestion.fetcher.requests.get')
+    def test_fetch_page_logs_in_before_first_request_when_token_missing(self, mock_get, mock_post, _mock_login_url):
+        """Test that service credentials mint a token before the first API request."""
+        success_response = MagicMock()
+        success_response.status_code = 200
+        success_response.json.return_value = {"published_posts": [{"id": 1, "post_title": "Article 1"}]}
+
+        login_response = MagicMock()
+        login_response.json.return_value = {
+            "accessToken": "login-access-token",
+            "refreshToken": "login-refresh-token",
+        }
+
+        mock_get.return_value = success_response
+        mock_post.return_value = login_response
+
+        with patch.dict(
+            os.environ,
+            {
+                "MINDPLEX_SERVICE_EMAIL": "service@example.com",
+                "MINDPLEX_SERVICE_PASSWORD": "service-secret",
+            },
+            clear=True,
+        ):
+            fetcher = MindplexFetcher(username="test_user")
+            result = fetcher.fetch_page(page=1)
+
+        self.assertEqual(result["published_posts"][0]["id"], 1)
+        self.assertEqual(mock_get.call_count, 1)
+        self.assertEqual(mock_post.call_args[0][0], "http://auth.local/login")
+        self.assertEqual(
+            mock_post.call_args[1]["json"],
+            {"email": "service@example.com", "password": "service-secret"},
+        )
+        self.assertEqual(mock_get.call_args[1]["headers"]["Authorization"], "Bearer login-access-token")
+
+    @patch.object(MindplexFetcher, '_refresh_url', return_value='http://auth.local/refresh')
+    @patch.object(MindplexFetcher, '_login_url', return_value='http://auth.local/login')
+    @patch('experiments.ingestion.fetcher.requests.post')
+    @patch('experiments.ingestion.fetcher.requests.get')
+    def test_fetch_page_logs_in_after_refresh_forbidden(self, mock_get, mock_post, _mock_login_url, _mock_refresh_url):
+        """Test that credentials recover from a revoked/forbidden refresh token."""
+        expired_response = MagicMock()
+        expired_response.status_code = 401
+
+        success_response = MagicMock()
+        success_response.status_code = 200
+        success_response.json.return_value = {"published_posts": [{"id": 1, "post_title": "Article 1"}]}
+
+        forbidden_refresh = MagicMock()
+        forbidden_refresh.raise_for_status.side_effect = requests.exceptions.HTTPError("403 Forbidden")
+
+        login_response = MagicMock()
+        login_response.json.return_value = {
+            "data": {
+                "access_token": "login-access-token",
+                "refresh_token": "login-refresh-token",
+            },
+        }
+
+        mock_get.side_effect = [expired_response, success_response]
+        mock_post.side_effect = [forbidden_refresh, login_response]
+
+        with patch.dict(
+            os.environ,
+            {
+                "MINDPLEX_API_TOKEN": "expired-access-token",
+                "MINDPLEX_API_REFRESH_TOKEN": "revoked-refresh-token",
+                "MINDPLEX_SERVICE_EMAIL": "user@example.com",
+                "MINDPLEX_SERVICE_PASSWORD": "secret-password",
+            },
+            clear=True,
+        ):
+            fetcher = MindplexFetcher(username="test_user")
+            result = fetcher.fetch_page(page=1)
+
+        self.assertEqual(result["published_posts"][0]["id"], 1)
+        self.assertEqual([call[0][0] for call in mock_post.call_args_list], ["http://auth.local/refresh", "http://auth.local/login"])
+        self.assertEqual(fetcher.token, "login-access-token")
+        self.assertEqual(fetcher.refresh_token, "login-refresh-token")
 
     @patch('experiments.ingestion.fetcher.requests.get')
     def test_fetch_page_handles_http_error(self, mock_get):

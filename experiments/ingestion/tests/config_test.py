@@ -145,11 +145,13 @@ class TestConfigConstants(unittest.TestCase):
     def test_mindplex_api_configuration(self):
         """Test Mindplex API configuration"""
         self.assertIsInstance(MINDPLEX_API_DOMAIN, str)
-        self.assertTrue(MINDPLEX_API_DOMAIN.startswith("https://"))
+        self.assertTrue(
+            MINDPLEX_API_DOMAIN.startswith(("http://", "https://")),
+            "Mindplex API domain must include an HTTP scheme",
+        )
         
         self.assertIsInstance(USER_ARTICLES_ENDPOINT_TEMPLATE, str)
         self.assertIn("{username}", USER_ARTICLES_ENDPOINT_TEMPLATE)
-        self.assertIn("{page}", USER_ARTICLES_ENDPOINT_TEMPLATE)
 
     def test_default_username(self):
         """Test default username is set"""

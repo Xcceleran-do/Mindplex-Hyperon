@@ -1,15 +1,10 @@
 # experiments/ingestion/config.py
 
-# API Configuration
-# API Configuration
 import os
 
-# Allow overriding the Mindplex API domain from environment for Docker/runtime
-# Prefer MINDPLEX_API_BASE_URL, then MINDPLEX_API_DOMAIN, then default
-MINDPLEX_API_DOMAIN = os.getenv(
-  "MINDPLEX_API_BASE_URL",
-  os.getenv("MINDPLEX_API_DOMAIN", "http://localhost:3000"),
-)
+MINDPLEX_API_DOMAIN = os.getenv("MINDPLEX_API_DOMAIN", "https://api-dev.mindplex.ai")
+MINDPLEX_TOKEN_REFRESH_ENDPOINT = "/v1/auth/refresh"
+MINDPLEX_AUTH_LOGIN_ENDPOINT = "/v1/auth/login"
 # Endpoint pattern: v1/users/{username}/posts
 USER_ARTICLES_ENDPOINT_TEMPLATE = "/v1/users/{username}/posts"
 
