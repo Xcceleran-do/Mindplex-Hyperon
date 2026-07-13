@@ -93,7 +93,7 @@
   cursor: pointer;
   overflow: hidden;
   transition: all 0.22s ease;
-  background: linear-gradient(135deg, var(--color-text), var(--slate-700));
+  background: var(--color-text);
   color: var(--color-text-inverse);
   font-family: var(--font-heading);
   font-size: 0.9rem;
@@ -103,8 +103,7 @@
 }
 
 .mine-button svg,
-.show-rules-btn svg,
-.close-button svg {
+.show-rules-btn svg {
   width: 18px;
   height: 18px;
   fill: none;
@@ -132,7 +131,7 @@
 
 .mine-button.mining {
   min-width: 190px;
-  background: linear-gradient(135deg, var(--color-warning), #7c3f00);
+  background: var(--color-warning);
   color: var(--color-text-inverse);
   box-shadow: var(--shadow-control);
 }
@@ -163,8 +162,19 @@
 
 .progress-bar-fill {
   height: 100%;
+  width: 42%;
   background: var(--color-accent-muted);
-  transition: width 0.4s ease;
+  animation: miningProgress 1.35s ease-in-out infinite;
+}
+
+@keyframes miningProgress {
+  from {
+    transform: translateX(-120%);
+  }
+
+  to {
+    transform: translateX(340%);
+  }
 }
 
 .mining-status-content {
@@ -218,121 +228,64 @@
   color: var(--primary-600);
 }
 
-.result-overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--color-overlay);
-  backdrop-filter: blur(7px);
-  z-index: 2000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.result-card {
-  width: 90%;
-  max-width: 540px;
-  border-radius: 8px;
-  background: var(--bg-glass-strong);
-  backdrop-filter: blur(20px);
-  border: 1px solid var(--border-glass);
-  box-shadow: var(--shadow-popover);
-  overflow: hidden;
-  animation: popIn 0.24s ease-out;
-}
-
-@keyframes popIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px) scale(0.98);
+@media (max-width: 760px) {
+  .mining-interface,
+  .mining-controls {
+    width: 100%;
   }
 
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
+  .mining-controls {
+    flex-wrap: nowrap;
+    gap: 6px;
   }
-}
 
-.result-header {
-  padding: 22px 24px;
-  color: white;
-}
+  .parameter-panel {
+    flex: 1;
+    min-width: 0;
+    gap: 4px;
+    padding: 4px;
+    border-radius: 12px;
+  }
 
-.result-header.gold {
-  background: var(--color-accent);
-}
+  .parameter-field {
+    grid-template-columns: minmax(56px, 1fr) 42px;
+    grid-template-rows: auto;
+    min-width: 0;
+    padding: 2px 0 2px 4px;
+  }
 
-.result-header.error {
-  background: var(--color-danger);
-}
+  .parameter-label {
+    font-size: 0.64rem;
+  }
 
-.result-header h2 {
-  margin: 0;
-  font-family: var(--font-heading);
-  font-size: 1.35rem;
-  font-weight: 800;
-  letter-spacing: 0;
-}
+  .parameter-hint {
+    display: none;
+  }
 
-.subtitle {
-  margin: 5px 0 0;
-  opacity: 0.86;
-  font-size: 0.86rem;
-}
+  .separate-conj-input {
+    grid-row: 1;
+    width: 42px;
+    height: 34px;
+    padding: 5px;
+    border-radius: 9px;
+  }
 
-.result-content {
-  padding: 20px;
-}
+  .mine-button,
+  .show-rules-btn {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+    padding: 0;
+    border-radius: 12px;
+  }
 
-.patterns-display {
-  background: var(--color-bg-inset);
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  padding: 14px;
-  max-height: 240px;
-  overflow-y: auto;
-  margin-bottom: 14px;
-}
+  .mine-button.mining {
+    width: 112px;
+    min-width: 112px;
+  }
 
-.patterns-text {
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: 0.82rem;
-  color: var(--text-primary);
-  white-space: pre-wrap;
-}
-
-.mining-stats {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border-subtle);
-  font-size: 0.84rem;
-  color: var(--text-secondary);
-}
-
-.close-button {
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
-  background: var(--color-surface-muted);
-  border: 1px solid var(--color-border);
-  color: white;
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.close-button:hover {
-  background: var(--color-bg-inset);
-  transform: translateY(-1px);
-}
-
-.drag-indicator {
-  display: none;
+  .button-text {
+    display: none;
+  }
 }

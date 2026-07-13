@@ -6,6 +6,7 @@ import {
   SimulationResponse,
   SimulationUnmatchedRule,
 } from '../../features/simulation/api';
+import { env } from '../../shared/config/env';
 import { GraphData } from '../../types';
 import styles from './SimulatorPanel.module.css';
 
@@ -71,8 +72,8 @@ const SimulatorPanel: Component<SimulatorPanelProps> = (props) => {
     { id: 1, predicate: 'tone', value: '', strength: 1, confidence: 1 },
     { id: 2, predicate: 'reading-time', value: '', strength: 1, confidence: 1 },
   ]);
-  const [articleId, setArticleId] = createSignal('demo_article');
-  const [depth, setDepth] = createSignal(3);
+  const [articleId, setArticleId] = createSignal('');
+  const [depth, setDepth] = createSignal(env.defaultChainDepth);
   const [isRunning, setIsRunning] = createSignal(false);
   const [result, setResult] = createSignal<SimulationResponse | null>(null);
   const [error, setError] = createSignal<string | null>(null);
@@ -178,7 +179,7 @@ const SimulatorPanel: Component<SimulatorPanelProps> = (props) => {
 
     try {
       const response = await simulateEngagement({
-        article_id: articleId() || 'demo_article',
+        article_id: articleId() || undefined,
         attributes: selectedAttributes(),
         depth: depth(),
       });
@@ -243,7 +244,7 @@ const SimulatorPanel: Component<SimulatorPanelProps> = (props) => {
           <input
             value={articleId()}
             onInput={(event) => setArticleId(event.currentTarget.value)}
-            placeholder="demo_article"
+            placeholder="Auto-generated"
           />
         </label>
         <label class={styles.field}>
@@ -251,7 +252,6 @@ const SimulatorPanel: Component<SimulatorPanelProps> = (props) => {
           <input
             type="number"
             min="1"
-            max="8"
             value={depth()}
             onInput={(event) => setDepth(Math.max(1, Number(event.currentTarget.value) || 1))}
           />

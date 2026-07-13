@@ -30,9 +30,6 @@ interface MiningStatusResponse {
     rules?: string[];
     rule_insertion?: unknown;
   };
-  patterns?: PatternResult[];
-  inserted_rules?: string[];
-  rule_insertion?: unknown;
   error?: string;
 }
 
@@ -54,15 +51,15 @@ const normalizeMiningStatus = (payload: MiningStatusResponse): MineResponse => {
       ...payload,
       status: innerStatus === 'success' ? 'finished' : payload.status,
       message: payload.message || payload.result?.message,
-      result: payload.patterns || payload.result?.patterns || [],
-      inserted_rules: payload.inserted_rules || payload.result?.rules || [],
-      rule_insertion: payload.rule_insertion || payload.result?.rule_insertion,
+      result: payload.result?.patterns || [],
+      inserted_rules: payload.result?.rules || [],
+      rule_insertion: payload.result?.rule_insertion,
     };
   }
 
   return {
     ...payload,
-    result: payload.patterns || [],
+    result: [],
   };
 };
 

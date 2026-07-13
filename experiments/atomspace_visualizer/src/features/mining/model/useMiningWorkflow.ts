@@ -1,11 +1,21 @@
 import { createSignal } from 'solid-js';
 import type { FilterState, GraphData } from '../../../types';
 import { minePatterns, type PatternResult } from '../api';
+import { DEFAULT_MIN_SUPPORT } from '../defaults';
 
 export type MiningNotice = {
-  type: 'info' | 'success' | 'error';
+  type: 'info' | 'error';
   text: string;
 };
+
+const supportValue = (pattern: PatternResult) => {
+  const value = Number.parseFloat(pattern.support);
+  return Number.isFinite(value) ? value : Number.NEGATIVE_INFINITY;
+};
+
+export const sortPatternsBySupport = (patterns: PatternResult[]) => [...patterns].sort(
+  (left, right) => supportValue(right) - supportValue(left) || left.pattern.localeCompare(right.pattern),
+);
 
 export const useMiningWorkflow = (
   graphData: () => GraphData,
@@ -56,7 +66,7 @@ export const useMiningWorkflow = (
     });
   };
 
-  const startMining = async (conjunctSize: number, minSupport = 3) => {
+  const startMining = async (conjunctSize: number, minSupport = DEFAULT_MIN_SUPPORT) => {
     try {
       startMiningAnimation();
       setMiningNotice(null);
@@ -74,12 +84,9 @@ export const useMiningWorkflow = (
         return;
       }
 
-      const patterns = Array.isArray(job.result) ? job.result : [];
+      const patterns = sortPatternsBySupport(Array.isArray(job.result) ? job.result : []);
       setMiningResults(patterns);
-      setMiningNotice({
-        type: 'success',
-        text: `Mining completed with ${patterns.length} pattern${patterns.length === 1 ? '' : 's'}.`,
-      });
+      setMiningNotice(null);
     } catch (error) {
       console.error('Mining error:', error);
       stopMiningAnimation();
@@ -93,7 +100,7 @@ export const useMiningWorkflow = (
 
   const setPatternsFound = (patterns: PatternResult[], conjunctSize?: number) => {
     stopMiningAnimation();
-    setMiningResults(patterns);
+    setMiningResults(sortPatternsBySupport(patterns));
     if (conjunctSize) {
       setCurrentConjunctSize(conjunctSize);
     }

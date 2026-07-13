@@ -1,5 +1,6 @@
 import { createSignal, For, Show, createEffect } from 'solid-js';
 import { analyzePattern, sendChatMessage, summarizePatterns, type ChatHistoryMessage } from '../../features/chat/api';
+import { DEFAULT_CONJUNCTION_COUNT, DEFAULT_MIN_SUPPORT } from '../../features/mining/defaults';
 import './ChatInterface.css';
 
 const AssistantGlyph = () => (
@@ -70,6 +71,7 @@ export interface ChatInterfaceProps {
   onMiningStart?: (conjunctSize: number, minSupport?: number) => void | Promise<void>;
   onPatternsFound?: (patterns: Array<{ pattern: string; support: string }>, conjunctSize?: number) => void;
   onShowRules?: () => void;
+  suggestedArticleId?: string;
   isOpen?: boolean;
   onClose?: () => void;
 }
@@ -114,16 +116,6 @@ const ChatInterface = (props: ChatInterfaceProps) => {
         // If onClose/onOpen handlers exist on parent, prefer that
         // We open by calling onMiningStart? Instead expose onOpen via adding message
       }
-      // Add system message about mining completion
-      const systemMsg: Message = {
-        id: `sys-${Date.now()}`,
-        role: 'system',
-        content: `Mining completed! Found ${results.length} pattern(s). Analyzing results...`,
-        timestamp: new Date()
-      };
-
-      setMessages(prev => [...prev, systemMsg]);
-
       // Request a single summary for all patterns and display it
       (async () => {
         try {
@@ -404,14 +396,18 @@ const ChatInterface = (props: ChatInterfaceProps) => {
                   <div class="welcome-icon"><AssistantGlyph /></div>
                   <h4>No conversation yet</h4>
                   <div class="welcome-suggestions">
+                    <Show when={props.suggestedArticleId}>
+                      {(articleId) => (
+                        <button class="suggestion-btn" onClick={() => {
+                          setInputText(`Why did article ${articleId()} get low engagement?`);
+                          inputRef?.focus();
+                        }}>
+                          Explain {articleId()}
+                        </button>
+                      )}
+                    </Show>
                     <button class="suggestion-btn" onClick={() => {
-                      setInputText('Why does article A_14219 got low engagement?');
-                      inputRef?.focus();
-                    }}>
-                      Explain article A_14219
-                    </button>
-                    <button class="suggestion-btn" onClick={() => {
-                      setInputText('Mine rules with 5 conjuncts and support 3');
+                      setInputText(`Mine rules with ${DEFAULT_CONJUNCTION_COUNT} conjuncts and support ${DEFAULT_MIN_SUPPORT}`);
                       inputRef?.focus();
                     }}>
                       Mine stronger rules

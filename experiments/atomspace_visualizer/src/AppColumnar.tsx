@@ -62,6 +62,8 @@ const CloseIcon = () => (
   </svg>
 );
 
+type SidebarTool = 'ask' | 'simulate' | 'explore';
+
 const App: Component = () => {
   const [showVisualizer, setShowVisualizer] = createSignal(!env.ingestionEnabled);
 
@@ -87,6 +89,10 @@ const App: Component = () => {
   });
 
   const graphData = useVisualizationData(mettaText);
+  const suggestedArticleId = createMemo(() => {
+    const article = graphData().nodes.find((node) => node.metadata.columnType === 'article');
+    return article?.metadata.originalExpression || article?.label;
+  });
 
   const [filterState, setFilterState] = createSignal<FilterState>({
     active: false,
@@ -108,9 +114,7 @@ const App: Component = () => {
     console.log('Selected node:', node.label);
   };
 
-  // Chat visibility & theme
-  const [isChatOpen, setIsChatOpen] = createSignal(true); // Default to open since it's in sidebar
-  const [isSimulatorOpen, setIsSimulatorOpen] = createSignal(true);
+  const [activeSidebarTool, setActiveSidebarTool] = createSignal<SidebarTool>('ask');
   const { theme, applyTheme } = useTheme();
   const { sidebarWidth, isSidebarCollapsed, setIsSidebarCollapsed, startResizing } = useResizableSidebar();
   const {
@@ -143,7 +147,7 @@ const App: Component = () => {
   createEffect(() => {
     const results = miningResults();
     if (results && results.length > 0) {
-      setIsChatOpen(true);
+      setActiveSidebarTool('ask');
       const signature = `${currentConjunctSize() ?? 'unknown'}:${results
         .map((result) => `${result.pattern}:${result.support}`)
         .join('|')}`;
@@ -250,7 +254,6 @@ const App: Component = () => {
             <div class={styles.miningWrapper}>
               <MiningInterface
                 onMiningStart={startMining}
-                onPatternsFound={handlePatternsFound}
                 onShowRules={miningResults().length > 0 ? () => setIsRulesModalOpen(true) : undefined}
               />
               <Show when={miningNotice()}>
@@ -259,9 +262,7 @@ const App: Component = () => {
                     class={`${styles.miningStatus} ${
                       notice().type === 'error'
                         ? styles.miningStatusError
-                        : notice().type === 'success'
-                          ? styles.miningStatusSuccess
-                          : styles.miningStatusInfo
+                        : styles.miningStatusInfo
                     }`}
                   >
                     {notice().text}
@@ -272,7 +273,7 @@ const App: Component = () => {
           </div>
         </header>
 
-        {/* Toggle Button for Sidebar (Visible when collapsed or expanded) */}
+        {/* External toggle is only interactive while the sidebar is collapsed. */}
         <button
           class={`${styles.sidebarToggle} ${isSidebarCollapsed() ? styles.collapsed : ''}`}
           onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed())}
@@ -287,36 +288,62 @@ const App: Component = () => {
           <div class={styles.sidebarContent}>
             <div class={styles.sidebarHeader}>
               <div>
-                <div class={styles.sidebarTitle}>Reasoning Cockpit</div>
-                <div class={styles.sidebarSubtitle}>Simulate, explain, then inspect the graph.</div>
+                <div class={styles.sidebarTitle}>Workspace</div>
+                <div class={styles.sidebarSubtitle}>Reason over your article portfolio.</div>
               </div>
               <button class={styles.minimizeBtn} onClick={() => setIsSidebarCollapsed(true)} aria-label="Collapse tools">
                 <ChevronIcon direction="left" />
               </button>
             </div>
 
-            <div class={styles.sidebarSection}>
-              <div class={styles.sectionHeader} onClick={() => setIsSimulatorOpen(!isSimulatorOpen())}>
-                <div>
-                  <div class={styles.sectionTitle}>What-if Simulator</div>
-                  <div class={styles.sectionHint}>Test hypothetical article attributes.</div>
-                </div>
-                <span class={styles.collapseIcon}><ChevronIcon direction={isSimulatorOpen() ? 'up' : 'down'} /></span>
-              </div>
-              <Show when={isSimulatorOpen()}>
-                <SimulatorPanel graphData={graphData()} minedRuleCount={miningResults().length} />
-              </Show>
+            <div class={styles.sidebarTabs} role="tablist" aria-label="Reasoning tools">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeSidebarTool() === 'ask'}
+                class={`${styles.sidebarTab} ${activeSidebarTool() === 'ask' ? styles.sidebarTabActive : ''}`}
+                onClick={() => setActiveSidebarTool('ask')}
+              >
+                Ask
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeSidebarTool() === 'simulate'}
+                class={`${styles.sidebarTab} ${activeSidebarTool() === 'simulate' ? styles.sidebarTabActive : ''}`}
+                onClick={() => setActiveSidebarTool('simulate')}
+              >
+                Simulate
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeSidebarTool() === 'explore'}
+                class={`${styles.sidebarTab} ${activeSidebarTool() === 'explore' ? styles.sidebarTabActive : ''}`}
+                onClick={() => setActiveSidebarTool('explore')}
+              >
+                Explore
+              </button>
             </div>
 
-            <div class={styles.sidebarSection}>
-              <div class={styles.sectionHeader} onClick={() => setIsChatOpen(!isChatOpen())}>
-                <div>
-                  <div class={styles.sectionTitle}>AI Assistant</div>
-                  <div class={styles.sectionHint}>Ask for proofs, mined rules, or visual filters.</div>
+            <div class={styles.sidebarBody}>
+              <div
+                role="tabpanel"
+                class={styles.sidebarToolPanel}
+                classList={{ [styles.sidebarToolPanelHidden]: activeSidebarTool() !== 'simulate' }}
+              >
+                <div class={styles.toolIntro}>
+                  <div class={styles.sectionTitle}>What-if simulator</div>
+                  <div class={styles.sectionHint}>Test a hypothetical article against mined rules.</div>
                 </div>
-                <span class={styles.collapseIcon}><ChevronIcon direction={isChatOpen() ? 'up' : 'down'} /></span>
+                <SimulatorPanel graphData={graphData()} minedRuleCount={miningResults().length} />
               </div>
-              <Show when={isChatOpen()}>
+
+              <div
+                role="tabpanel"
+                class={styles.sidebarToolPanel}
+                classList={{ [styles.sidebarToolPanelHidden]: activeSidebarTool() !== 'ask' }}
+              >
                 <div class={styles.chatContainer}>
                   <ChatInterface
                     isOpen={true}
@@ -327,21 +354,26 @@ const App: Component = () => {
                     onMiningStart={startMining}
                     onPatternsFound={handlePatternsFound}
                     onShowRules={() => setIsRulesModalOpen(true)}
+                    suggestedArticleId={suggestedArticleId()}
                   />
                 </div>
-              </Show>
-            </div>
-
-            <div class={styles.sidebarSection}>
-              <div>
-                <div class={styles.sectionTitle}>Legend</div>
-                <div class={styles.sectionHint}>Click values to filter the atlas.</div>
               </div>
-              <EnhancedLegend
-                graphData={graphData()}
-                onFilterChange={handleFilterChange}
-                filterState={filterState()}
-              />
+
+              <div
+                role="tabpanel"
+                class={styles.sidebarToolPanel}
+                classList={{ [styles.sidebarToolPanelHidden]: activeSidebarTool() !== 'explore' }}
+              >
+                <div class={styles.toolIntro}>
+                  <div class={styles.sectionTitle}>Atlas filters</div>
+                  <div class={styles.sectionHint}>Select values to narrow and compare the graph.</div>
+                </div>
+                <EnhancedLegend
+                  graphData={graphData()}
+                  onFilterChange={handleFilterChange}
+                  filterState={filterState()}
+                />
+              </div>
             </div>
 
             <div
@@ -366,6 +398,7 @@ const App: Component = () => {
               filterState={filterState()}
               onFilterChange={handleFilterChange}
               zoomTrigger={zoomTrigger()}
+              showOverview={!isRulesModalOpen()}
             />
           </div>
 

@@ -1,0 +1,2 @@
+export const DEFAULT_CONJUNCTION_COUNT = 2;
+export const DEFAULT_MIN_SUPPORT = 3;
