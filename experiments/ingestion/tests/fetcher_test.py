@@ -157,6 +157,9 @@ class TestMindplexFetcher(unittest.TestCase):
             {
                 "MINDPLEX_API_TOKEN": "expired-access-token",
                 "MINDPLEX_API_REFRESH_TOKEN": "persistent-refresh-token",
+                "MINDPLEX_SERVICE_EMAIL": "",
+                "MINDPLEX_SERVICE_PASSWORD": "",
+                "MINDPLEX_TOKEN_CACHE_PATH": "",
             },
         ):
             fetcher = MindplexFetcher(username="test_user")
