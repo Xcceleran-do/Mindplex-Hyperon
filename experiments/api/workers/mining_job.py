@@ -15,9 +15,11 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
-        from experiments import mining_api
+        from experiments.api.mining import run_mining_task_inprocess
+        from experiments.api.runtime import bootstrap_runtime
 
-        result = mining_api.run_mining_task_inprocess(
+        bootstrap_runtime()
+        result = run_mining_task_inprocess(
             args.conjunction_count,
             args.min_support,
         )

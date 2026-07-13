@@ -5,9 +5,11 @@ from unittest.mock import patch
 
 try:
     from experiments import mining_api
+    from experiments.api import runtime as petta_runtime
     MINING_API_IMPORT_ERROR = None
 except Exception as exc:  # pragma: no cover - environment-specific optional deps
     mining_api = None
+    petta_runtime = None
     MINING_API_IMPORT_ERROR = exc
 
 
@@ -15,7 +17,6 @@ class FakeChainerService:
     def __init__(self, kb: str) -> None:
         self.kb = kb
         self.added_atoms: list[str] = []
-        self.dataset_module_path = None
         self.dataset_file_path = None
         self.dataset_mtime = None
 
@@ -23,8 +24,7 @@ class FakeChainerService:
         self.added_atoms.append(atom)
         return ["true"]
 
-    def set_dataset_metadata(self, *, dataset_module_path=None, dataset_file_path=None, dataset_mtime=None):
-        self.dataset_module_path = dataset_module_path
+    def set_dataset_metadata(self, *, dataset_file_path=None, dataset_mtime=None):
         self.dataset_file_path = dataset_file_path
         self.dataset_mtime = dataset_mtime
 
@@ -42,27 +42,27 @@ class FakeChainerService:
 class TestMiningApiDatasetRuntime(unittest.TestCase):
     def setUp(self) -> None:
         self._saved_state = {
-            "chainer_service": mining_api.chainer_service,
-            "chainer_dataset_path": mining_api.chainer_dataset_path,
-            "chainer_dataset_mtime": mining_api.chainer_dataset_mtime,
-            "chainer_dataset_facts": list(mining_api.chainer_dataset_facts),
-            "chainer_dataset_compile_errors": list(mining_api.chainer_dataset_compile_errors),
-            "chainer_dataset_compiled_count": mining_api.chainer_dataset_compiled_count,
+            "chainer_service": petta_runtime.chainer_service,
+            "chainer_dataset_path": petta_runtime.chainer_dataset_path,
+            "chainer_dataset_mtime": petta_runtime.chainer_dataset_mtime,
+            "chainer_dataset_facts": list(petta_runtime.chainer_dataset_facts),
+            "chainer_dataset_compile_errors": list(petta_runtime.chainer_dataset_compile_errors),
+            "chainer_dataset_compiled_count": petta_runtime.chainer_dataset_compiled_count,
         }
-        mining_api.chainer_service = None
-        mining_api.chainer_dataset_path = None
-        mining_api.chainer_dataset_mtime = None
-        mining_api.chainer_dataset_facts = []
-        mining_api.chainer_dataset_compile_errors = []
-        mining_api.chainer_dataset_compiled_count = 0
+        petta_runtime.chainer_service = None
+        petta_runtime.chainer_dataset_path = None
+        petta_runtime.chainer_dataset_mtime = None
+        petta_runtime.chainer_dataset_facts = []
+        petta_runtime.chainer_dataset_compile_errors = []
+        petta_runtime.chainer_dataset_compiled_count = 0
 
     def tearDown(self) -> None:
-        mining_api.chainer_service = self._saved_state["chainer_service"]
-        mining_api.chainer_dataset_path = self._saved_state["chainer_dataset_path"]
-        mining_api.chainer_dataset_mtime = self._saved_state["chainer_dataset_mtime"]
-        mining_api.chainer_dataset_facts = self._saved_state["chainer_dataset_facts"]
-        mining_api.chainer_dataset_compile_errors = self._saved_state["chainer_dataset_compile_errors"]
-        mining_api.chainer_dataset_compiled_count = self._saved_state["chainer_dataset_compiled_count"]
+        petta_runtime.chainer_service = self._saved_state["chainer_service"]
+        petta_runtime.chainer_dataset_path = self._saved_state["chainer_dataset_path"]
+        petta_runtime.chainer_dataset_mtime = self._saved_state["chainer_dataset_mtime"]
+        petta_runtime.chainer_dataset_facts = self._saved_state["chainer_dataset_facts"]
+        petta_runtime.chainer_dataset_compile_errors = self._saved_state["chainer_dataset_compile_errors"]
+        petta_runtime.chainer_dataset_compiled_count = self._saved_state["chainer_dataset_compiled_count"]
 
     def test_load_dataset_facts_for_chainer_normalizes_lines(self) -> None:
         dataset_text = """
@@ -88,6 +88,20 @@ not a fact line
             ],
         )
 
+    def test_default_dataset_path_resolves_from_project_root(self) -> None:
+        from experiments.api import config as api_config
+
+        expected = os.path.join(
+            api_config.PROJECT_ROOT,
+            "experiments",
+            "atomspace_visualizer",
+            "public",
+            "data.metta",
+        )
+
+        self.assertEqual(api_config.dataset_file_path(), os.path.abspath(expected))
+        self.assertNotIn("/experiments/experiments/", api_config.dataset_file_path())
+
     def test_reload_petta_dataset_if_ready_compiles_once_per_dataset_version(self) -> None:
         dataset_path = "/tmp/test-data.metta"
         facts = [
@@ -97,13 +111,13 @@ not a fact line
         service_a = FakeChainerService("kb_a")
         service_b = FakeChainerService("kb_b")
 
-        with patch.object(mining_api, "dataset_file_path", return_value=dataset_path), \
-             patch("experiments.mining_api.os.path.getmtime", side_effect=[123.0, 123.0, 123.0, 124.0, 124.0]), \
-             patch.object(mining_api, "load_dataset_facts_for_chainer", return_value=facts), \
-             patch.object(mining_api, "_create_chainer_service", side_effect=[service_a, service_b]):
-            first = mining_api.reload_petta_dataset_if_ready(force=False)
-            second = mining_api.reload_petta_dataset_if_ready(force=False)
-            third = mining_api.reload_petta_dataset_if_ready(force=False)
+        with patch.object(petta_runtime, "dataset_file_path", return_value=dataset_path), \
+             patch("experiments.api.runtime.os.path.getmtime", side_effect=[123.0, 123.0, 123.0, 124.0, 124.0]), \
+             patch.object(petta_runtime, "load_dataset_facts_for_chainer", return_value=facts), \
+             patch.object(petta_runtime.PeTTaService, "create_required", side_effect=[service_a, service_b]):
+            first = petta_runtime.reload_petta_dataset_if_ready(force=False)
+            second = petta_runtime.reload_petta_dataset_if_ready(force=False)
+            third = petta_runtime.reload_petta_dataset_if_ready(force=False)
 
         self.assertEqual(first["status"], "initialized")
         self.assertEqual(second["status"], "unchanged")
@@ -113,7 +127,7 @@ not a fact line
         self.assertEqual(third["compiled_fact_count"], 2)
         self.assertEqual(service_a.added_atoms, facts)
         self.assertEqual(service_b.added_atoms, facts)
-        self.assertEqual(mining_api.chainer_dataset_facts, facts)
+        self.assertEqual(petta_runtime.chainer_dataset_facts, facts)
 
 
 if __name__ == "__main__":

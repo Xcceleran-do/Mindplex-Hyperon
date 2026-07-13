@@ -116,11 +116,7 @@ def parse_facts_for_pettachainer(facts_output: Any) -> list[str]:
         return []
 
     nested_facts = "\n".join(str(item) for item in facts_output) if isinstance(facts_output, list) else str(facts_output)
-    matches = [
-        expr
-        for expr in extract_prefixed_expressions(nested_facts, "(:")
-        if is_pettachainer_fact_atom(expr)
-    ]
+    matches = [expr for expr in extract_prefixed_expressions(nested_facts, "(:") if is_pettachainer_fact_atom(expr)]
     return unique_preserve_order(matches)
 
 
@@ -139,10 +135,7 @@ def load_dataset_facts_for_chainer(file_path: str) -> list[str]:
     return unique_preserve_order(facts)
 
 
-def compile_facts_into_chainer(
-    service: PeTTaService,
-    facts: list[str],
-) -> tuple[int, list[dict[str, str]]]:
+def compile_facts_into_chainer(service: PeTTaService, facts: list[str],) -> tuple[int, list[dict[str, str]]]:
     compiled_count = 0
     compile_errors: list[dict[str, str]] = []
     for fact in facts:

@@ -6,6 +6,8 @@ from typing import Any, Callable, Optional
 
 from flask import jsonify, request
 
+from experiments.api.errors import public_error, unexpected_error
+
 
 def parse_chat_mining_intent(
     message: str,
@@ -164,6 +166,11 @@ ARTICLE_ID_RE = re.compile(r"\b[AH]_[A-Za-z0-9_]+\b")
 ENGAGEMENT_LEVEL_RE = re.compile(r"\b(high|medium|low)\b", re.IGNORECASE)
 
 
+def article_exists_in_facts(article_id: str, facts: list[str]) -> bool:
+    article_token = f" {article_id} "
+    return any(article_token in fact for fact in facts)
+
+
 def clean_metta_query(candidate_query: Optional[str]) -> Optional[str]:
     if not candidate_query:
         return None
@@ -195,7 +202,7 @@ def safe_chainer_error_message(query: str, depth: int | None = None) -> str:
     return (
         "The backward chainer could not safely complete this proof"
         f"{depth_text}. This usually means the query expanded too broadly or hit a recursive/resource limit. "
-        f"I tried the concrete query `{query}`; narrow the query or lower the depth if this repeats."
+        f"I tried the concrete query `{query}`; verify the query and matching rule set if this repeats."
     )
 
 
@@ -216,6 +223,20 @@ def handle_backward_chain_for_message(
         return None, None
 
     facts = facts_res.get("facts", []) or []
+    article_match = ARTICLE_ID_RE.search(message or "")
+    if article_match and not article_exists_in_facts(article_match.group(0), facts):
+        article_id = article_match.group(0)
+        function_calls.append({
+            'name': 'check_article_in_knowledge_base',
+            'args': {'article_id': article_id},
+            'result': {'status': 'not_found'},
+        })
+        return (
+            f"Article `{article_id}` is not in the active knowledge base. "
+            "Ingest the dataset containing that article before requesting a proof.",
+            function_calls,
+        )
+
     candidate_query = deterministic_engagement_query(message, facts)
     if candidate_query:
         function_calls.append({'name': 'rewrite_query_deterministic', 'args': {'message': message}, 'result': candidate_query})
@@ -256,9 +277,9 @@ def handle_backward_chain_for_message(
 
     try:
         chainer_result = get_chainer_result(candidate_query)
-    except Exception as exc:
+    except Exception:
         logger.exception("Backward chainer call failed")
-        chainer_result = {'status': 'error', 'justification': safe_chainer_error_message(candidate_query), 'technical_error': str(exc)}
+        chainer_result = {'status': 'error', 'justification': safe_chainer_error_message(candidate_query)}
 
     function_calls.append({'name': 'getChainerResult', 'args': {'whatToCheck': candidate_query}, 'result': chainer_result})
 
@@ -327,10 +348,9 @@ Strict requirements:
         if text and "[Rule" in text:
             return text
         return build_rule_grounded_summary(patterns)
-    except Exception as exc:
+    except Exception:
         logger.exception("summarize_patterns failed")
-        fallback = build_rule_grounded_summary(patterns)
-        return f"{fallback}\n\nSummary generation note: {exc}"
+        return build_rule_grounded_summary(patterns)
 
 
 def parse_pattern(pattern: str) -> dict:
@@ -385,7 +405,6 @@ def register_chat_routes(
     summarize_patterns: Callable[[list], str],
     analyze_pattern: Callable[[str, str], str],
     make_json_safe: Callable[[Any], Any],
-    omegaclaw_chat_handler: Optional[Callable[..., dict[str, Any]]] = None,
 ) -> None:
     @app.route('/api/chat/health', methods=['GET'])
     def chat_health_check():
@@ -401,35 +420,18 @@ def register_chat_routes(
             return response, 200
 
         try:
-            data = request.get_json() or {}
+            data = request.get_json(silent=True) or {}
             pattern = data.get('pattern', '')
             support = data.get('support', '0')
-            if omegaclaw_chat_handler is not None:
-                try:
-                    omega_result = omegaclaw_chat_handler(
-                        (
-                            "Analyze this mined Mindplex pattern for the UI. "
-                            "Be concise and explain what the rule suggests.\n"
-                            f"Pattern: {pattern}\n"
-                            f"Support: {support}"
-                        ),
-                        session_id=str(data.get('session_id', 'analyze')),
-                        history=[],
-                    )
-                except TimeoutError as exc:
-                    logger.warning("OmegaClaw analyze bridge timed out: %s", exc)
-                    return jsonify({'error': str(exc), 'backend': 'omegaclaw'}), 504
-
-                summary = str(omega_result.get("response", "")).strip()
-                if not summary:
-                    summary = "OmegaClaw returned an empty pattern analysis."
-                return jsonify({'summary': summary, 'pattern': pattern, 'support': support, 'backend': 'omegaclaw'})
-
             summary = analyze_pattern(pattern, support)
             return jsonify({'summary': summary, 'pattern': pattern, 'support': support})
-        except Exception as exc:
-            logger.exception("analyze_conjunct failed")
-            return jsonify({'error': str(exc)}), 500
+        except Exception:
+            return unexpected_error(
+                logger,
+                "Pattern analysis failed",
+                "The pattern could not be analyzed.",
+                code="pattern_analysis_failed",
+            )
 
     @app.route('/api/chat/summarize', methods=['POST', 'OPTIONS'])
     def summarize_patterns_endpoint():
@@ -441,37 +443,17 @@ def register_chat_routes(
             return response, 200
 
         try:
-            data = request.get_json() or {}
+            data = request.get_json(silent=True) or {}
             patterns = data.get('patterns', [])
-            if omegaclaw_chat_handler is not None:
-                limited_patterns = patterns[:20] if isinstance(patterns, list) else patterns
-                omitted = len(patterns) - len(limited_patterns) if isinstance(patterns, list) else 0
-                pattern_payload = json.dumps(limited_patterns, ensure_ascii=True)
-                suffix = f"\nOmitted pattern count: {omitted}" if omitted > 0 else ""
-                try:
-                    omega_result = omegaclaw_chat_handler(
-                        (
-                            "Summarize these mined Mindplex patterns for the UI. "
-                            "Mention the count, strongest signals, and what the user should inspect next.\n"
-                            f"Patterns JSON: {pattern_payload}{suffix}"
-                        ),
-                        session_id=str(data.get('session_id', 'summary')),
-                        history=[],
-                    )
-                except TimeoutError as exc:
-                    logger.warning("OmegaClaw summarize bridge timed out: %s", exc)
-                    return jsonify({'error': str(exc), 'backend': 'omegaclaw'}), 504
-
-                summary = str(omega_result.get("response", "")).strip()
-                if not summary:
-                    summary = "OmegaClaw returned an empty pattern summary."
-                return jsonify({'summary': summary, 'backend': 'omegaclaw'})
-
             summary = summarize_patterns(patterns)
             return jsonify({'summary': summary})
-        except Exception as exc:
-            logger.exception("summarize_patterns_endpoint failed")
-            return jsonify({'error': str(exc)}), 500
+        except Exception:
+            return unexpected_error(
+                logger,
+                "Pattern summary failed",
+                "The patterns could not be summarized.",
+                code="pattern_summary_failed",
+            )
 
     @app.route('/api/chat', methods=['POST', 'OPTIONS'])
     def chat():
@@ -483,7 +465,7 @@ def register_chat_routes(
             return response, 200
 
         try:
-            data = request.get_json() or {}
+            data = request.get_json(silent=True) or {}
             message = data.get('message', '')
             history = data.get('history', [])
             session_id = data.get('session_id', 'default')
@@ -492,41 +474,9 @@ def register_chat_routes(
                 conversations[session_id] = []
 
             if not message:
-                return jsonify({'error': 'Message is required'}), 400
+                return public_error("message_required", "Enter a message.", 400)
 
             logger.info("Chat request received: session=%s chars=%s", session_id, len(message))
-            if omegaclaw_chat_handler is not None:
-                try:
-                    omega_result = omegaclaw_chat_handler(
-                        message,
-                        session_id=session_id,
-                        history=history,
-                    )
-                except TimeoutError as exc:
-                    logger.warning("OmegaClaw bridge timed out: %s", exc)
-                    return jsonify({'error': str(exc), 'backend': 'omegaclaw'}), 504
-
-                response_text = str(omega_result.get("response", "")).strip()
-                if not response_text:
-                    response_text = "OmegaClaw returned an empty response."
-                conversations[session_id].append({'role': 'user', 'content': message})
-                conversations[session_id].append({'role': 'assistant', 'content': response_text})
-                function_calls = [{
-                    "name": "omegaclaw_chat",
-                    "args": {"session_id": session_id},
-                    "result": {
-                        "id": omega_result.get("id"),
-                        "backend": omega_result.get("backend", "omegaclaw"),
-                    },
-                }]
-                logger.info("Chat routed to OmegaClaw: session=%s response_chars=%s", session_id, len(response_text))
-                return jsonify({
-                    'response': response_text,
-                    'functionCalls': function_calls,
-                    'session_id': session_id,
-                    'backend': 'omegaclaw',
-                })
-
             mining_text, mining_calls = handle_mining_for_message(message)
             if mining_text is not None:
                 conversations[session_id].append({'role': 'user', 'content': message})
@@ -534,7 +484,8 @@ def register_chat_routes(
                 try:
                     safe_calls = make_json_safe(mining_calls)
                 except Exception:
-                    safe_calls = str(mining_calls)
+                    logger.exception("Failed to sanitize mining function calls")
+                    safe_calls = []
                 logger.info(
                     "Chat shortcut used: session=%s shortcut=mining calls=%s",
                     session_id,
@@ -551,7 +502,8 @@ def register_chat_routes(
                         try:
                             safe_calls = make_json_safe(bc_calls)
                         except Exception:
-                            safe_calls = str(bc_calls)
+                            logger.exception("Failed to sanitize backward-chain function calls")
+                            safe_calls = []
                         chainer_status = None
                         proof_count = None
                         if isinstance(safe_calls, list):
@@ -642,7 +594,10 @@ def register_chat_routes(
                             )
                         except Exception as func_error:
                             logger.exception("Function call failed: %s", function_name)
-                            function_result = {'error': str(func_error)}
+                            function_result = {
+                                'status': 'error',
+                                'message': 'The requested reasoning operation failed.',
+                            }
 
                     asi_messages.append({
                         "role": "tool",
@@ -691,13 +646,17 @@ def register_chat_routes(
                 safe_function_results = make_json_safe(function_results)
             except Exception:
                 logger.exception("Failed to sanitize function_results")
-                safe_function_results = str(function_results)
+                safe_function_results = []
 
             return jsonify({'response': response_text, 'functionCalls': safe_function_results, 'session_id': session_id})
 
-        except Exception as exc:
-            logger.exception("chat endpoint failed")
-            return jsonify({'error': str(exc)}), 500
+        except Exception:
+            return unexpected_error(
+                logger,
+                "Chat endpoint failed",
+                "The assistant could not complete the request.",
+                code="assistant_failed",
+            )
 
     @app.route('/api/chat/clear', methods=['POST', 'OPTIONS'])
     def clear_chat():
@@ -709,10 +668,15 @@ def register_chat_routes(
             return response, 200
 
         try:
-            data = request.get_json()
+            data = request.get_json(silent=True) or {}
             session_id = data.get('session_id', 'default')
             if session_id in conversations:
                 del conversations[session_id]
             return jsonify({'status': 'cleared'})
-        except Exception as exc:
-            return jsonify({'error': str(exc)}), 500
+        except Exception:
+            return unexpected_error(
+                logger,
+                "Chat session clear failed",
+                "The chat session could not be cleared.",
+                code="chat_clear_failed",
+            )
