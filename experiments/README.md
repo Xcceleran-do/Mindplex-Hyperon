@@ -81,54 +81,13 @@ cd experiments
 
 2. Open the app: http://localhost:3000
 
-3. Use the Mining panel to set conjunct count (2 or 3 recommended) and click "Mine Neural Gold".
-
-## Route Chat Through OmegaClaw
-
-For trials where the UI chat should be handled by OmegaClaw, run the Mindplex API and OmegaClaw with the same queue directory:
-
-```bash
-export OMEGACLAW_MINDPLEX_QUEUE_DIR=/tmp/omegaclaw-mindplex
-export MINDPLEX_CHAT_BACKEND=omegaclaw
-
-# terminal 1: Mindplex backend/frontend as usual
-cd experiments
-./start_all.sh
-
-# terminal 2: OmegaClaw reading Mindplex chat
-cd PeTTa
-metta run.metta commchannel=mindplex MP_QUEUE_DIR=/tmp/omegaclaw-mindplex MP_RESPONSE_TIMEOUT=110 maxNewInputLoops=1
-```
-
-Then use the existing UI chat. Messages are delivered to OmegaClaw, and OmegaClaw's `send` response is returned to the chat panel.
-
-Typed chat requests are not intercepted by the frontend mining shortcut in this mode. For example, asking the chat to mine with a conjunction count and minimum support goes through `/api/chat` to OmegaClaw, then OmegaClaw calls `mindplex-mine`. Pattern summary and single-pattern analysis requests from the chat UI are also routed to OmegaClaw. The direct Mine button still uses the local `/api/mine` workflow.
-
-By default, the bridge sends only the current chat message to OmegaClaw. Mindplex UI history stays out of the queue because OmegaClaw keeps its own history. To forward UI history for debugging, set `OMEGACLAW_MINDPLEX_FORWARD_HISTORY=1`.
-
-When using `docker compose`, the `mining-api` service enables this redirect and mounts the project-local `.omegaclaw-mindplex` directory into the container at `/tmp/omegaclaw-mindplex`. Start OmegaClaw with the host-side path:
-
-```bash
-cd PeTTa
-export OMEGACLAW_MINDPLEX_QUEUE_DIR="$(cd .. && pwd)/.omegaclaw-mindplex"
-export MINDPLEX_API_BASE_URL=http://127.0.0.1:5000
-metta run.metta commchannel=mindplex MP_QUEUE_DIR="$OMEGACLAW_MINDPLEX_QUEUE_DIR" MP_RESPONSE_TIMEOUT=110 maxNewInputLoops=1
-```
-
-OmegaClaw also has a trial miner skill:
-
-```metta
-(mindplex-mine "2" "3")
-```
-
-It calls the running Mindplex `/api/mine` pipeline, so data ingestion remains the same UI flow. When this skill is invoked from the Mindplex chat channel, the mining completion summary is sent back to the chat response automatically.
-
+3. Use the mining controls to set the conjunction count and minimum support, then click "Mine Rules".
 
 ## What the Chat + Mining flow does (short)
 
 - When you click Mine, the frontend starts a mining job on the backend (port 5000).
 - As patterns return, the UI displays pattern cards with support counts and a Visualize button.
-- The Chat automatically opens and a system/user auto-message like "Mine rules with N patterns" is sent; the AI responds with summaries and insights.
+- The chat calls the configured LLM API directly for summaries, explanations, and tool selection.
 - You can continue the conversation and ask the AI about patterns; the AI can return analysis and suggestions.
 
 
@@ -136,7 +95,7 @@ It calls the running Mindplex `/api/mine` pipeline, so data ingestion remains th
 
 - Health: `GET http://localhost:5000/api/health`
 - Start mining: `POST http://localhost:5000/api/mine` (body: `{ "conjunction_count": <n> }`)
-- Analyze patterns: `POST http://localhost:5000/api/chat/analyze` (body: `{ "result": [{ pattern, support }, ...] }`)
+- Analyze a pattern: `POST http://localhost:5000/api/chat/analyze` (body: `{ "pattern": "...", "support": "..." }`)
 - Chat: `POST http://localhost:5000/api/chat` (body: `{ message, history?, session_id? }`)
 
 
