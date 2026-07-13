@@ -23,7 +23,6 @@ def resolve_output_path(output_path=None):
 def run_ingestion(username=None, source_name="mindplex", limit=DEFAULT_LIMIT, output_path=None, source_config=None):
     load_dotenv()
     output_path = resolve_output_path(output_path)
-    
     if source_name == "mindplex" and not username:
         username = os.getenv("MINDPLEX_USERNAME", DEFAULT_USERNAME)
         
@@ -36,7 +35,7 @@ def run_ingestion(username=None, source_name="mindplex", limit=DEFAULT_LIMIT, ou
         fetcher = build_fetcher(source_name=source_name, source_config=source_config)
     records = fetcher.fetch_all(limit=limit)
     print(f"   Fetched {len(records)} records.")
-    
+
     if not records:
         print("No articles found. Exiting.")
         return {"status": "error", "message": "No articles found"}
@@ -57,23 +56,16 @@ def run_ingestion(username=None, source_name="mindplex", limit=DEFAULT_LIMIT, ou
     }
 
     print("3. Planning extraction and enriching records...")
-    # Use ASI_API_KEY as per new requirement
     api_key = os.getenv("ASI_API_KEY")
     analyzer = ArticleAnalyzer(api_key=api_key)
-    if hasattr(analyzer, "prepare_corpus"):
-        analyzer.prepare_corpus(records, source_name=source_name)
-    
+    analyzer.prepare_corpus(records, source_name=source_name)
+
     enriched_articles = []
     for i, art in enumerate(records):
         title = art.get('post_title') or art.get('title') or art.get('name') or 'Untitled'
         print(f"   Processing [{i+1}/{len(records)}]: {str(title)[:30]}...")
         enriched = analyzer.process(art, rank_stats=rank_map)
         enriched_articles.append(enriched)
-        
-        # Sleep to avoid hitting ASI API rate limits if necessary
-        # if i < len(articles) - 1:
-        #     print("   Sleeping for rate limit...")
-        #     time.sleep(1)
 
     print("4. Converting to MeTTa...")
     converter = JsonToMetta(include_author_alias=False, excluded=excluded_predicates())
@@ -81,15 +73,14 @@ def run_ingestion(username=None, source_name="mindplex", limit=DEFAULT_LIMIT, ou
     fact_count = len([line for line in metta_output.splitlines() if line.strip()])
 
     print(f"5. Saving to {output_path}...")
-    
-    # Ensure directory exists when the output path includes one.
+
     output_dir = os.path.dirname(output_path)
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
-    
+
     with open(output_path, "w") as f:
         f.write(metta_output)
-    
+
     print("Done!")
     plan = getattr(analyzer, "plan", None)
     return {
