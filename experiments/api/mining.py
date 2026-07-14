@@ -24,11 +24,11 @@ from experiments.api.config import (
 )
 from experiments.api.support import (
     extract_support_of_expressions,
+    patterns_to_chainer_rules,
     parse_pattern_string,
     parse_petta_output,
 )
 from experiments.api.runtime import (
-    get_chainer_service,
     record_chainer_rules,
     reload_petta_dataset_if_ready,
 )
@@ -64,6 +64,7 @@ service = PeTTaService.create_required(
     project_root={PROJECT_ROOT!r},
     setup_metta={MINING_METTA_SETUP!r},
     verbose=False,
+    load_chainer=False,
 )
 service.reload_dataset({dataset_file_path()!r})
 result = service.process_metta_string({metta_code!r})
@@ -223,7 +224,12 @@ def insert_mined_rules_into_chainer(mining_result: dict) -> dict:
         mining_result["inserted_rule_count"] = 0
         return mining_result
 
-    insertion_result = get_chainer_service().formatter({"patterns": patterns})
+    rules = patterns_to_chainer_rules(patterns)
+    insertion_result = {
+        "status": "success",
+        "insertedRuleCount": len(rules),
+        "rules": rules,
+    }
     mining_result["rule_insertion"] = insertion_result
     mining_result["rules"] = insertion_result.get("rules", []) if isinstance(insertion_result, dict) else []
     mining_result["inserted_rule_count"] = (
@@ -388,7 +394,10 @@ def start_mining_job(conjunction_count: int = DEFAULT_CONJUNCTION_COUNT, min_sup
 
 
 def formatter(mined_patterns):
-    return get_chainer_service().formatter(mined_patterns)
+    patterns = mined_patterns.get("patterns", []) if isinstance(mined_patterns, dict) else []
+    rules = patterns_to_chainer_rules(patterns)
+    record_chainer_rules(rules)
+    return {"status": "success", "insertedRuleCount": len(rules), "rules": rules}
 
 
 def get_mining_results() -> dict:

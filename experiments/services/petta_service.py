@@ -1,4 +1,4 @@
-"""Production PeTTa integration boundary.
+"""Local PeTTa integration boundary for mining and the legacy simulator.
 
 This module owns all direct interaction with Janus, SWI-Prolog, and PeTTa.
 The Flask layer should call this service instead of issuing raw MeTTa helper
@@ -7,8 +7,6 @@ commands directly.
 
 from __future__ import annotations
 
-import ast
-import json
 import os
 import re
 import tempfile
@@ -70,12 +68,6 @@ def parse_petta_output(output: Any) -> list[str]:
     return result_lines
 
 
-def format_proofs_for_prompt(proofs: list[str]) -> str:
-    if not proofs:
-        return "No proofs found."
-    return "\n".join(f"{idx}. {proof}" for idx, proof in enumerate(proofs, start=1))
-
-
 @dataclass(frozen=True)
 class PeTTaHealth:
     status: str
@@ -107,11 +99,12 @@ class PeTTaService:
 
     MIN_SWI_VERSION = (9, 3, 0)
 
-    def __init__(self, project_root: str, setup_metta: str, *, verbose: bool = False, min_swi_version: tuple[int, int, int] = MIN_SWI_VERSION,) -> None:
+    def __init__(self, project_root: str, setup_metta: str, *, verbose: bool = False, load_chainer: bool = True, min_swi_version: tuple[int, int, int] = MIN_SWI_VERSION,) -> None:
         self.project_root = os.path.abspath(project_root)
         self.setup_metta = setup_metta
         self.verbose = verbose
         self.min_swi_version = min_swi_version
+        self._requires_chainer = load_chainer
         self.kb = "kb" + uuid.uuid4().hex
         self._engine = None
         self._lock = threading.RLock()
@@ -122,12 +115,15 @@ class PeTTaService:
         self._swi_version = "unknown"
         self._dataset_file_path: Optional[str] = None
         self._dataset_mtime: Optional[float] = None
-        self.atom_re = re.compile(r'\([A-Za-z_][\w\-]*\s+\$[_\w\d]+\s+"[^"]*"\)')
-        self.stv_re = re.compile(r"\(STV\s+([0-9eE\.\-]+)\s+([0-9eE\.\-]+)\)")
 
     @classmethod
-    def create_required(cls, project_root: str, setup_metta: str, *, verbose: bool = False,) -> "PeTTaService":
-        service = cls(project_root=project_root, setup_metta=setup_metta, verbose=verbose)
+    def create_required(cls, project_root: str, setup_metta: str, *, verbose: bool = False, load_chainer: bool = True,) -> "PeTTaService":
+        service = cls(
+            project_root=project_root,
+            setup_metta=setup_metta,
+            verbose=verbose,
+            load_chainer=load_chainer,
+        )
         service.start()
         return service
 
@@ -135,12 +131,19 @@ class PeTTaService:
         """Initialize Janus/SWI, create PeTTa, and load all required libraries."""
         self._engine = PeTTa(verbose=self.verbose)
         self._load_setup()
-        self._load_chainer()
+        if self._requires_chainer:
+            self._load_chainer()
         self._smoke_test()
 
     def health(self) -> dict[str, Any]:
         return PeTTaHealth(
-            status="ok" if self._engine is not None and self._setup_loaded and self._chainer_loaded else "error",
+            status=(
+                "ok"
+                if self._engine is not None
+                and self._setup_loaded
+                and (self._chainer_loaded or not self._requires_chainer)
+                else "error"
+            ),
             swi_prolog_version=self._swi_version,
             petta_path=os.path.join(self.project_root, "PeTTa"),
             setup_loaded=self._setup_loaded,
@@ -242,65 +245,6 @@ class PeTTaService:
             atom = f"(: $prf {atom} $tv)"
         result = self.process_metta_string(f"!(query (fromNumber {depth}) {self.kb} {atom})")
         return chainer_result_lines(result)
-
-    def formatter(self, mined_patterns: Any) -> dict[str, Any]:
-        """Insert mined patterns into the chainer KB as PeTTa rules."""
-        try:
-            if isinstance(mined_patterns, str):
-                try:
-                    payload = json.loads(mined_patterns)
-                except json.JSONDecodeError:
-                    payload = ast.literal_eval(mined_patterns)
-            else:
-                payload = mined_patterns
-            if not isinstance(payload, dict):
-                return {
-                    "status": "error",
-                    "message": "Mined patterns payload must be a dictionary.",
-                    "insertedRuleCount": 0,
-                }
-
-            patterns = payload.get("patterns", [])
-            inserted_rules = []
-            for idx, pattern in enumerate(patterns, start=1):
-                pattern_text = str(pattern.get("pattern", "")) if isinstance(pattern, dict) else str(pattern)
-                rule_atom = self.pattern_to_rule(pattern_text, idx)
-                if rule_atom:
-                    self.add_forward_only_rule(rule_atom)
-                    inserted_rules.append(rule_atom)
-
-            return {
-                "status": "success",
-                "insertedRuleCount": len(inserted_rules),
-                "rules": inserted_rules,
-            }
-        except Exception as exc:
-            return {
-                "status": "error",
-                "message": str(exc),
-                "insertedRuleCount": 0,
-            }
-
-    def pattern_to_rule(self, pattern_text: str, idx: int) -> Optional[str]:
-        atoms = [self._normalize_var(atom) for atom in self.atom_re.findall(pattern_text or "")]
-        if not atoms:
-            return None
-
-        stv_match = self.stv_re.search(pattern_text or "")
-        strength, confidence = (stv_match.group(1), stv_match.group(2)) if stv_match else ("1.0", "1.0")
-        strength_value = min(max(float(strength), 0.0), 1.0)
-        confidence_value = min(max(float(confidence), 0.0), 1.0)
-
-        consequent = next((atom for atom in atoms if atom.startswith("(engagement ")), atoms[-1])
-        antecedents = [atom for atom in atoms if atom != consequent]
-        lhs = antecedents[0] if len(antecedents) == 1 else f"(And {' '.join(antecedents)})"
-
-        return f'(: rule_{idx} (-> {lhs} {consequent}) (STV {strength_value} {confidence_value}))'
-
-    @staticmethod
-    def _normalize_var(atom: str) -> str:
-        return re.sub(r"\$_\d+", "$x", atom)
-
 
     def _load_setup(self) -> None:
         try:

@@ -66,6 +66,21 @@ Reinstall `janus-swi` after installing or upgrading SWI-Prolog. Janus builds/lin
 
 The mining API uses the Janus-backed PeTTa engine directly. It does not fall back to Hyperon or the PeTTa shell script when the engine is unavailable.
 
+Backward chaining is provided by an independently deployed PeTTaChainer API;
+Mindplex does not initialize an in-process chainer. Configure the client with:
+
+```dotenv
+PETTACHAINER_BASE_URL=http://127.0.0.1:8000
+PETTACHAINER_API_KEY=THE_CLIENT_SECRET_FROM_THE_SERVER_ALLOWLIST
+PETTACHAINER_KB_PREFIX=mindplex
+```
+
+Ingestion only writes the dataset and invalidates local chainer metadata. The
+first subsequent chainer query creates or reuses a content-addressed remote
+knowledge base and uploads the dataset in atomic batches. PeTTa and SWI-Prolog
+remain Mindplex dependencies for local pattern mining and the legacy simulator,
+not for normal backward chaining.
+
 ## Usage Examples
 
 Refer to the individual feature files for usage examples and implementation details. Each feature is designed to be modular and can be integrated into larger systems as needed.

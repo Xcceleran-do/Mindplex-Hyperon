@@ -21,10 +21,9 @@ def register_core_routes(
     *,
     logger: Any,
     run_ingestion: Callable[..., dict],
-    reload_petta_dataset_if_ready: Callable[..., dict],
+    invalidate_chainer_dataset: Callable[[], None],
     dataset_file_path: Callable[[], str],
     get_chainer_service: Callable[[], Any],
-    petta_startup_error_type: type[Exception],
     default_conjunction_count: int,
     default_min_support: int,
     default_chain_depth: int,
@@ -65,16 +64,7 @@ def register_core_routes(
                     502,
                 )
 
-            try:
-                result["runtime_dataset_reload"] = reload_petta_dataset_if_ready(force=True)
-            except Exception:
-                return unexpected_error(
-                    logger,
-                    "Dataset reload failed after ingestion",
-                    "Articles were loaded, but the reasoning engine could not reload the dataset.",
-                    code="dataset_reload_failed",
-                )
-
+            invalidate_chainer_dataset()
             return jsonify(result)
 
         except Exception:
@@ -122,7 +112,7 @@ def register_core_routes(
                     },
                 },
             })
-        except petta_startup_error_type:
+        except RuntimeError:
             logger.exception("PeTTa health check failed")
             return jsonify({
                 'status': 'unhealthy',
@@ -302,7 +292,7 @@ def register_core_routes(
         query = query.strip()
         try:
             proofs = run_chainer_query(query, depth)
-        except subprocess.TimeoutExpired:
+        except (subprocess.TimeoutExpired, TimeoutError):
             logger.warning("Chainer endpoint timed out: depth=%s query=%s", depth, query)
             return public_error(
                 "chainer_timeout",

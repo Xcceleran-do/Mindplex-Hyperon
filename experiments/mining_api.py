@@ -40,7 +40,6 @@ from experiments.api.config import (
 )
 from experiments.api.routes import register_core_routes
 from experiments.api.support import (
-    compile_facts_into_chainer,
     extract_parenthesized_expressions,
     extract_support_of_expressions,
     load_dataset_facts_for_chainer,
@@ -64,11 +63,10 @@ from experiments.api.mining import (
     start_mining_job,
 )
 from experiments.api.runtime import (
-    bootstrap_runtime,
     get_chainer_service,
+    invalidate_chainer_dataset,
     reload_petta_dataset_if_ready,
 )
-from experiments.services.petta_service import PeTTaService, PeTTaStartupError
 from experiments.api.simulation import (
     build_simulation_explanation,
     build_simulation_fact_atoms,
@@ -197,10 +195,9 @@ register_core_routes(
     app,
     logger=logger,
     run_ingestion=run_ingestion,
-    reload_petta_dataset_if_ready=reload_petta_dataset_if_ready,
+    invalidate_chainer_dataset=invalidate_chainer_dataset,
     dataset_file_path=dataset_file_path,
     get_chainer_service=get_chainer_service,
-    petta_startup_error_type=PeTTaStartupError,
     default_conjunction_count=DEFAULT_CONJUNCTION_COUNT,
     default_min_support=DEFAULT_MIN_SUPPORT,
     default_chain_depth=DEFAULT_CHAIN_DEPTH,
@@ -231,7 +228,6 @@ register_chat_routes(
 
 def create_app():
     """Application factory used by production WSGI servers."""
-    bootstrap_runtime()
     return app
 
 

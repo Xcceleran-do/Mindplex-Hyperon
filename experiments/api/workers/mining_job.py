@@ -16,9 +16,6 @@ def main() -> int:
 
     try:
         from experiments.api.mining import run_mining_task_inprocess
-        from experiments.api.runtime import bootstrap_runtime
-
-        bootstrap_runtime()
         result = run_mining_task_inprocess(
             args.conjunction_count,
             args.min_support,

@@ -14,7 +14,7 @@ from experiments.api.runtime import (
     ordered_chainer_rules,
     reload_petta_dataset_if_ready,
 )
-from experiments.services.petta_service import unique_preserve_order
+from experiments.api.support import unique_preserve_order
 
 ENGAGEMENT_FACT_RE = re.compile(
     r'^\(:\s+\(fact:-\s+\(engagement\s+[^\s()]+\s+"([^"]+)"\)\)'

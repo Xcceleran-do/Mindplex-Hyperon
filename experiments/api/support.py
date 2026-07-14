@@ -1,15 +1,26 @@
 from __future__ import annotations
 
+import hashlib
 import re
 from collections.abc import Mapping
 from typing import Any, Optional
 
-from experiments.services.petta_service import PeTTaService, unique_preserve_order
-
-
 DATASET_FACT_LINE_RE = re.compile(
     r'^\s*\(\s*(\(.+\))\s+(\(STV\s+[0-9eE\.\-]+\s+[0-9eE\.\-]+\))\s*\)\s*$'
 )
+MINED_PATTERN_ATOM_RE = re.compile(r'\([A-Za-z_][\w\-]*\s+\$[_\w\d]+\s+"[^"]*"\)')
+MINED_PATTERN_STV_RE = re.compile(r"\(STV\s+([0-9eE\.\-]+)\s+([0-9eE\.\-]+)\)")
+
+
+def unique_preserve_order(items: list[str]) -> list[str]:
+    seen = set()
+    result = []
+    for item in items:
+        item = (item or "").strip()
+        if item and item not in seen:
+            seen.add(item)
+            result.append(item)
+    return result
 
 
 def parse_petta_output(output: str) -> list[str]:
@@ -47,6 +58,31 @@ def parse_pattern_string(pattern_text: str) -> Optional[dict[str, str]]:
         "pattern": pattern_body,
         "support": support,
     }
+
+
+def patterns_to_chainer_rules(patterns: list[Any]) -> list[str]:
+    rules: list[str] = []
+    for index, pattern in enumerate(patterns, start=1):
+        pattern_text = str(pattern.get("pattern", "")) if isinstance(pattern, dict) else str(pattern)
+        atoms = [
+            re.sub(r"\$_\d+", "$x", atom)
+            for atom in MINED_PATTERN_ATOM_RE.findall(pattern_text)
+        ]
+        if not atoms:
+            continue
+        stv_match = MINED_PATTERN_STV_RE.search(pattern_text)
+        strength, confidence = stv_match.groups() if stv_match else ("1.0", "1.0")
+        strength_value = min(max(float(strength), 0.0), 1.0)
+        confidence_value = min(max(float(confidence), 0.0), 1.0)
+        consequent = next((atom for atom in atoms if atom.startswith("(engagement ")), atoms[-1])
+        premises = [atom for atom in atoms if atom != consequent]
+        if not premises:
+            continue
+        rules.append(
+            f"(: rule_{index} (Implication (Premises {' '.join(premises)}) "
+            f"(Conclusions {consequent})) (STV {strength_value} {confidence_value}))"
+        )
+    return rules
 
 
 def _balanced_expression_at(text: str, idx: int) -> Optional[str]:
@@ -131,20 +167,9 @@ def load_dataset_facts_for_chainer(file_path: str) -> list[str]:
             if not match:
                 continue
             fact, stv = match.groups()
-            facts.append(f'(: (fact:- {fact}) {fact} {stv})')
+            proof_id = hashlib.sha256(fact.encode("utf-8")).hexdigest()[:24]
+            facts.append(f'(: fact_{proof_id} {fact} {stv})')
     return unique_preserve_order(facts)
-
-
-def compile_facts_into_chainer(service: PeTTaService, facts: list[str],) -> tuple[int, list[dict[str, str]]]:
-    compiled_count = 0
-    compile_errors: list[dict[str, str]] = []
-    for fact in facts:
-        try:
-            service.add_atom(fact)
-            compiled_count += 1
-        except Exception as exc:  # pragma: no cover - engine/runtime dependent
-            compile_errors.append({"fact": fact, "error": str(exc)})
-    return compiled_count, compile_errors
 
 
 def select_facts_for_prompt(facts: list[str], query: str, limit: int = 80) -> list[str]:

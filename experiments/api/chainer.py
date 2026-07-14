@@ -1,19 +1,13 @@
 from __future__ import annotations
 
-import json
 import logging
-import os
-import subprocess
-import sys
+import re
 import time
 from typing import Any
 
 from experiments.api.chat.prompts import SYSTEM_INSTRUCTION, build_chainer_analysis_prompt
 from experiments.api.config import (
-    CHAINER_METTA_SETUP,
     DEFAULT_CHAIN_DEPTH,
-    PETTA_CHAIN_TIMEOUT_SECONDS,
-    PROJECT_ROOT,
 )
 from experiments.api.support import select_facts_for_prompt
 from experiments.api.runtime import (
@@ -21,10 +15,15 @@ from experiments.api.runtime import (
     dataset_facts,
     ordered_chainer_rules,
     reload_petta_dataset_if_ready,
+    ensure_remote_chainer,
 )
-from experiments.services.petta_service import format_proofs_for_prompt
-
 logger = logging.getLogger(__name__)
+
+
+def format_proofs_for_prompt(proofs: list[str]) -> str:
+    if not proofs:
+        return "No proofs found."
+    return "\n".join(f"{index}. {proof}" for index, proof in enumerate(proofs, start=1))
 
 
 def select_facts_for_query(facts: list[str], query: str) -> list[str]:
@@ -38,11 +37,21 @@ def select_facts_for_query(facts: list[str], query: str) -> list[str]:
     if not entity_ids:
         return list(facts)
 
-    return [
+    selected = [
         fact
         for fact in facts
         if any(f" {entity_id} " in fact for entity_id in entity_ids)
     ]
+    if re.search(r"\(\s*engagement\s+", query):
+        selected = [
+            fact
+            for fact in selected
+            if not any(
+                re.search(rf"\(\s*engagement\s+{re.escape(entity_id)}(?:\s|\))", fact)
+                for entity_id in entity_ids
+            )
+        ]
+    return selected
 
 
 def getAllFactsAndRules():
@@ -80,52 +89,17 @@ def run_chainer_query_worker(what_to_check: str, depth: int = DEFAULT_CHAIN_DEPT
     query_facts = select_facts_for_query(all_facts, what_to_check)
     rules = ordered_chainer_rules()
     logger.info(
-        "Starting backward chainer worker: depth=%s facts=%s/%s rules=%s",
+        "Starting remote backward chainer query: depth=%s facts=%s/%s rules=%s",
         depth,
         len(query_facts),
         len(all_facts),
         len(rules),
     )
-    payload = {
-        "project_root": PROJECT_ROOT,
-        "setup_metta": CHAINER_METTA_SETUP,
-        "facts": query_facts,
-        "rules": rules,
-        "query": what_to_check,
-        "depth": int(depth),
-    }
     started_at = time.monotonic()
-    process = subprocess.run(
-        [sys.executable, "-m", "experiments.api.workers.chainer_query"],
-        input=json.dumps(payload),
-        text=True,
-        capture_output=True,
-        cwd=PROJECT_ROOT,
-        timeout=PETTA_CHAIN_TIMEOUT_SECONDS,
-        env={
-            **os.environ,
-            "PYTHONPATH": PROJECT_ROOT
-            + (os.pathsep + os.environ["PYTHONPATH"] if os.environ.get("PYTHONPATH") else ""),
-        },
-    )
-    stdout = (process.stdout or "").strip()
-    stderr = (process.stderr or "").strip()
-    if not stdout:
-        raise RuntimeError(stderr or "Backward chainer worker produced no output.")
-
-    try:
-        worker_result = json.loads(stdout)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError(f"Backward chainer worker returned invalid JSON: {stdout[:500]}") from exc
-
-    if process.returncode != 0 or worker_result.get("status") != "success":
-        message = worker_result.get("message") if isinstance(worker_result, dict) else None
-        raise RuntimeError(message or stderr or f"Backward chainer worker exited with code {process.returncode}.")
-
-    proofs = worker_result.get("proofs", [])
-    normalized_proofs = proofs if isinstance(proofs, list) else [str(proofs)]
+    client, kb_id = ensure_remote_chainer(query_facts)
+    normalized_proofs = client.backward(kb_id, what_to_check, int(depth))
     logger.info(
-        "Backward chainer worker completed: depth=%s proofs=%s seconds=%.3f",
+        "Remote backward chainer query completed: depth=%s proofs=%s seconds=%.3f",
         depth,
         len(normalized_proofs),
         time.monotonic() - started_at,
@@ -158,7 +132,7 @@ def getChainerResult(whatToCheck, *, call_asi_api, depth=DEFAULT_CHAIN_DEPTH):
     facts_res = getAllFactsAndRules()
     try:
         chainAnswer = backWardChainer(whatToCheck, depth)
-    except subprocess.TimeoutExpired:
+    except TimeoutError:
         return safe_chainer_failure(whatToCheck, depth, timed_out=True)
     except Exception:
         return safe_chainer_failure(whatToCheck, depth)
