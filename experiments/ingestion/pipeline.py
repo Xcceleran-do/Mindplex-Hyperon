@@ -67,6 +67,24 @@ def run_ingestion(username=None, source_name="mindplex", limit=DEFAULT_LIMIT, ou
         enriched = analyzer.process(art, rank_stats=rank_map)
         enriched_articles.append(enriched)
 
+    missing_engagement = [
+        index
+        for index, article in enumerate(enriched_articles)
+        if not has_engagement_value(article)
+    ]
+    if missing_engagement:
+        print(
+            "Engagement extraction failed for "
+            f"{len(missing_engagement)} of {len(enriched_articles)} records; preserving the existing dataset."
+        )
+        return {
+            "status": "error",
+            "code": "engagement_required",
+            "message": "Every ingested record must have an engagement value for pattern mining.",
+            "records": len(records),
+            "missing_engagement_records": len(missing_engagement),
+        }
+
     print("4. Converting to MeTTa...")
     converter = JsonToMetta(include_author_alias=False, excluded=excluded_predicates())
     metta_output = converter.convert(enriched_articles)
@@ -94,6 +112,15 @@ def run_ingestion(username=None, source_name="mindplex", limit=DEFAULT_LIMIT, ou
         "property_count": len(getattr(plan, "properties", [])) if plan else 0,
         "properties": [spec.name for spec in getattr(plan, "properties", [])] if plan else [],
     }
+
+
+def has_engagement_value(article):
+    if not isinstance(article, dict):
+        return False
+    engagement = article.get("enriched_metadata", {}).get("engagement")
+    if isinstance(engagement, dict):
+        engagement = engagement.get("value")
+    return engagement not in (None, "", "Unknown")
 
 def main():
     run_ingestion()

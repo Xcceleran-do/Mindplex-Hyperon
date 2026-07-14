@@ -7,6 +7,32 @@ from experiments.ingestion.planner import ExtractionPlanner
 
 
 class TestSourceAgnosticIngestion(unittest.TestCase):
+    def test_llm_cannot_disable_or_misconfigure_engagement(self):
+        class BadPlannerLLM:
+            available = True
+
+            def complete_json(self, _messages):
+                return {
+                    "id_fields": ["id"],
+                    "text_fields": ["content"],
+                    "properties": [
+                        {
+                            "name": "engagement",
+                            "agent": "text_llm",
+                            "include_in_metta": False,
+                        }
+                    ],
+                }
+
+        records = [{"id": 1, "content": "hello", "views": 3, "likes": 2}]
+        plan = ExtractionPlanner(llm_client=BadPlannerLLM()).build_plan(records)
+        engagement = next(spec for spec in plan.properties if spec.name == "engagement")
+
+        self.assertEqual(engagement.agent, "calculated_metric")
+        self.assertTrue(engagement.include_in_metta)
+        self.assertEqual(engagement.parameters, {"metric": "engagement"})
+        self.assertEqual(set(engagement.field_paths), {"views", "likes"})
+
     def test_heuristic_plan_and_agents_handle_arbitrary_json(self):
         records = [
             {

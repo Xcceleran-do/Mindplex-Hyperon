@@ -4,6 +4,15 @@ import os
 from experiments.ingestion.pipeline import run_ingestion
 
 
+def enriched_with_engagement(article, **_kwargs):
+    return {
+        **article,
+        "enriched_metadata": {
+            "engagement": {"value": "Low", "stv": (0.2, 0.9)}
+        },
+    }
+
+
 class TestIngestionPipeline(unittest.TestCase):
     """Test suite for ingestion pipeline orchestration"""
 
@@ -48,7 +57,7 @@ class TestIngestionPipeline(unittest.TestCase):
         mock_fetcher_class.return_value = mock_fetcher
         
         mock_analyzer = MagicMock()
-        mock_analyzer.process.side_effect = lambda art, **kw: {**art, "enriched_metadata": {}}
+        mock_analyzer.process.side_effect = enriched_with_engagement
         mock_analyzer_class.return_value = mock_analyzer
         
         mock_converter = MagicMock()
@@ -143,7 +152,7 @@ class TestIngestionPipeline(unittest.TestCase):
         mock_fetcher_class.return_value = mock_fetcher
         
         mock_analyzer = MagicMock()
-        mock_analyzer.process.side_effect = lambda art, **kw: {**art, "enriched_metadata": {}}
+        mock_analyzer.process.side_effect = enriched_with_engagement
         mock_analyzer_class.return_value = mock_analyzer
         
         with patch('experiments.ingestion.pipeline.JsonToMetta'):
@@ -200,7 +209,7 @@ class TestIngestionPipeline(unittest.TestCase):
         mock_fetcher_class.return_value = mock_fetcher
         
         mock_analyzer = MagicMock()
-        mock_analyzer.process.side_effect = lambda art, **kw: {**art, "enriched_metadata": {}}
+        mock_analyzer.process.side_effect = enriched_with_engagement
         mock_analyzer_class.return_value = mock_analyzer
         
         mock_converter = MagicMock()
@@ -240,7 +249,8 @@ class TestIngestionPipeline(unittest.TestCase):
         ]
         mock_fetcher_class.return_value = mock_fetcher
         
-        with patch('experiments.ingestion.pipeline.ArticleAnalyzer'):
+        with patch('experiments.ingestion.pipeline.ArticleAnalyzer') as mock_analyzer_class:
+            mock_analyzer_class.return_value.process.side_effect = enriched_with_engagement
             with patch('experiments.ingestion.pipeline.JsonToMetta'):
                 with patch('builtins.open', new_callable=mock_open):
                     with patch('os.makedirs') as mock_makedirs:
@@ -277,7 +287,7 @@ class TestIngestionPipeline(unittest.TestCase):
         mock_fetcher_class.return_value = mock_fetcher
         
         mock_analyzer = MagicMock()
-        mock_analyzer.process.side_effect = lambda art, **kw: {**art, "enriched_metadata": {}}
+        mock_analyzer.process.side_effect = enriched_with_engagement
         mock_analyzer_class.return_value = mock_analyzer
         
         mock_converter = MagicMock()
@@ -316,6 +326,7 @@ class TestIngestionPipeline(unittest.TestCase):
         mock_fetcher_class.return_value = mock_fetcher
         
         mock_analyzer = MagicMock()
+        mock_analyzer.process.side_effect = enriched_with_engagement
         mock_analyzer_class.return_value = mock_analyzer
         
         mock_converter = MagicMock()
@@ -354,7 +365,7 @@ class TestIngestionPipeline(unittest.TestCase):
         mock_fetcher_class.return_value = mock_fetcher
         
         mock_analyzer = MagicMock()
-        mock_analyzer.process.side_effect = lambda art, **kw: {**art, "enriched_metadata": {}}
+        mock_analyzer.process.side_effect = enriched_with_engagement
         mock_analyzer_class.return_value = mock_analyzer
         
         mock_converter = MagicMock()
@@ -370,6 +381,35 @@ class TestIngestionPipeline(unittest.TestCase):
         
         # Verify file was opened for writing
         mock_open_call.assert_called()
+
+    @patch('experiments.ingestion.pipeline.MindplexFetcher')
+    @patch('experiments.ingestion.pipeline.ArticleAnalyzer')
+    @patch('experiments.ingestion.pipeline.JsonToMetta')
+    @patch('experiments.ingestion.pipeline.load_dotenv')
+    @patch('builtins.open', new_callable=mock_open)
+    def test_missing_engagement_preserves_existing_dataset(
+        self,
+        mock_file,
+        mock_load_env,
+        mock_converter_class,
+        mock_analyzer_class,
+        mock_fetcher_class,
+    ):
+        mock_fetcher_class.return_value.fetch_all.return_value = [
+            {"id": 1, "post_title": "No target", "views": 1}
+        ]
+        mock_analyzer_class.return_value.process.return_value = {
+            "id": 1,
+            "enriched_metadata": {},
+        }
+
+        result = run_ingestion(username="test_user")
+
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["code"], "engagement_required")
+        self.assertEqual(result["missing_engagement_records"], 1)
+        mock_converter_class.return_value.convert.assert_not_called()
+        mock_file.assert_not_called()
 
 
 if __name__ == "__main__":

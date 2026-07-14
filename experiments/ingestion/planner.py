@@ -20,6 +20,7 @@ TITLE_FIELD_HINTS = ("title", "name", "headline")
 ID_FIELD_HINTS = ("id", "uuid", "slug")
 DATE_FIELD_HINTS = ("date", "time", "timestamp", "published", "created", "updated")
 READING_TIME_HINTS = ("min_to_read", "read_time", "reading_time", "minutes_to_read")
+ENGAGEMENT_FIELD_HINTS = ("view", "like", "comment", "reaction", "share", "clap")
 CONTENT_ANALYSIS_TEXT_SPECS = (
     PropertySpec(
         "audience-expertise",
@@ -62,7 +63,11 @@ class ExtractionPlanner:
         elif self.require_llm:
             raise RuntimeError("ASI_API_KEY is required because INGESTION_REQUIRE_LLM=true.")
 
-        return self._build_heuristic_plan(records, source_name)
+        return self._sanitize_plan(
+            self._build_heuristic_plan(records, source_name),
+            records,
+            planner="heuristic",
+        )
 
     def _build_llm_plan(self, records: List[Mapping[str, Any]], source_name: str) -> ExtractionPlan:
         sample_records = [compact_record(record) for record in records[:5]]
@@ -81,7 +86,7 @@ class ExtractionPlanner:
                 "Do not assume a fixed article schema.",
                 "Do not include identity/display predicates such as title, author, authored-by, username, id, uuid, or slug.",
                 "audience-expertise is mandatory and must be extracted from text.",
-                "engagement is mandatory when views, likes, comments, reactions, shares, or similar fields exist. It is calculated by aggregating those counts.",
+                "engagement is mandatory. Always include it as a calculated_metric; aggregate views, likes, comments, reactions, shares, or similar counters.",
                 "Use calculated_metric for length, reading-time, and engagement. These use legacy proportional STV buckets from the production code.",
                 "Use structured_field for direct categorical fields, numeric_bucket for other numeric metrics, date_bucket for timestamps, and text_llm for semantic text attributes.",
                 "Return JSON only.",
@@ -187,10 +192,7 @@ class ExtractionPlanner:
             ),
         ]
 
-        engagement_paths = [
-            path for path in schema_paths
-            if any(token in path.lower() for token in ("view", "like", "comment", "reaction", "share", "clap"))
-        ]
+        engagement_paths = engagement_field_paths(schema_paths)
         if engagement_paths:
             specs.append(
                 PropertySpec(
@@ -268,6 +270,8 @@ class ExtractionPlanner:
         for spec in plan.properties:
             name = normalize_property_name(spec.name)
             if not name or is_excluded_predicate(name, include_display=True):
+                continue
+            if name == "engagement":
                 continue
             properties.append(
                 PropertySpec(
@@ -377,19 +381,22 @@ def missing_required_specs(specs: Iterable[PropertySpec], records: List[Mapping[
     if "audience-expertise" not in existing and has_text:
         additions.append(CONTENT_ANALYSIS_TEXT_SPECS[0])
     if "engagement" not in existing:
-        engagement_paths = [
-            path for path in schema_paths
-            if any(token in path.lower() for token in ("view", "like", "comment", "reaction", "share", "clap"))
-        ]
-        if engagement_paths:
-            additions.append(
-                PropertySpec(
-                    "engagement",
-                    "Required predicate: legacy aggregate engagement bucket from views, likes, comments, reactions, shares, and similar counters.",
-                    "calculated_metric",
-                    field_paths=tuple(engagement_paths),
-                    allowed_values=("Low", "Medium", "High", "Very_High"),
-                    parameters={"metric": "engagement"},
-                )
+        additions.append(
+            PropertySpec(
+                "engagement",
+                "Required predicate: legacy aggregate engagement bucket from views, likes, comments, reactions, shares, and similar counters.",
+                "calculated_metric",
+                field_paths=tuple(engagement_field_paths(schema_paths)),
+                allowed_values=("Low", "Medium", "High", "Very_High"),
+                parameters={"metric": "engagement"},
             )
+        )
     return additions
+
+
+def engagement_field_paths(schema_paths: Iterable[str]) -> List[str]:
+    return [
+        path
+        for path in schema_paths
+        if any(token in path.lower() for token in ENGAGEMENT_FIELD_HINTS)
+    ]
