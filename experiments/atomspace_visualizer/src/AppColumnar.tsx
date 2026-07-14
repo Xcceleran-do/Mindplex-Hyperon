@@ -67,8 +67,8 @@ type SidebarTool = 'ask' | 'simulate' | 'explore';
 const App: Component = () => {
   const [showVisualizer, setShowVisualizer] = createSignal(!env.ingestionEnabled);
 
-  // Load data.metta only after ingestion completes, unless the build is
-  // intentionally configured to bypass ingestion.
+  // Load data.metta only after ingestion completes, unless ingestion is
+  // disabled and the existing dataset should be opened directly.
   const [initialTextResource] = createResource(showVisualizer, (enabled) =>
     enabled ? loadMettaDataset() : Promise.resolve('')
   );

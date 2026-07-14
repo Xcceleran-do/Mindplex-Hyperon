@@ -10,6 +10,7 @@ from typing import Any, Callable
 from flask import jsonify, request
 
 from experiments.api.errors import error_payload, public_error, unexpected_error
+from experiments.ingestion.cache import run_ingestion_request
 from experiments.ingestion.config import DEFAULT_USERNAME
 from experiments.ingestion.fetcher import MindplexFetcher
 
@@ -43,28 +44,40 @@ def register_core_routes(
             limit = data.get('limit') if data else None
             source_config = data.get('source_config') if data else None
             output_path = data.get('output_path') if data else None
+            force = data.get('force', False) if data else False
 
             if source_name == "mindplex" and not username:
                 return public_error("username_required", "Enter a Mindplex username.", 400)
+            if not isinstance(force, bool):
+                return public_error("invalid_force", "force must be a boolean.", 400)
 
-            logger.info("Received ingestion request for source=%s", source_name)
-            result = run_ingestion(
+            logger.info("Received ingestion request for source=%s force=%s", source_name, force)
+            result = run_ingestion_request(
+                run_ingestion,
                 username=username,
                 source_name=source_name,
                 limit=int(limit or 50),
                 output_path=output_path,
                 source_config=source_config,
+                force=force,
             )
 
             if result.get("status") == "error":
                 logger.error("Ingestion pipeline failed: %r", result)
+                if result.get("code") == "ingestion_disabled":
+                    return public_error(
+                        "ingestion_disabled",
+                        "Ingestion is disabled by the server configuration.",
+                        403,
+                    )
                 return public_error(
                     "ingestion_failed",
                     "Articles could not be loaded. Check the username and Mindplex session, then try again.",
                     502,
                 )
 
-            invalidate_chainer_dataset()
+            if not result.get("cached"):
+                invalidate_chainer_dataset()
             return jsonify(result)
 
         except Exception:

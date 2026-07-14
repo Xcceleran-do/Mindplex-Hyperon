@@ -16,7 +16,7 @@ const IngestionForm: Component<IngestionFormProps> = (props) => {
 
   const handleIngest = async () => {
     if (!ingestionEnabled) {
-      setError('Ingestion is currently bypassed. Set VITE_BYPASS_INGESTION=false or unset it to enable ingestion.');
+      setError('Ingestion is disabled. Set INGESTION_ENABLED=true and rebuild the frontend to enable it.');
       return;
     }
 
@@ -90,7 +90,7 @@ const IngestionForm: Component<IngestionFormProps> = (props) => {
         </Show>
 
         <Show when={!ingestionEnabled}>
-          <div class={styles.status}>Ingestion is bypassed in this build to preserve the current data.metta.</div>
+          <div class={styles.status}>Ingestion is disabled in this build; the existing data.metta will be used.</div>
         </Show>
 
         <button

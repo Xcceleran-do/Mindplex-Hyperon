@@ -8,6 +8,8 @@ services:
     env_file: .env
     environment:
       FLASK_DEBUG: "0"
+      INGESTION_ENABLED: "${INGESTION_ENABLED:-true}"
+      INGESTION_CACHE_TTL_DAYS: "${INGESTION_CACHE_TTL_DAYS:-3}"
       PETTA_DEBUG: "0"
       PETTA_CHAIN_DEPTH: "${PETTA_CHAIN_DEPTH:-3}"
       PETTA_MINING_TIMEOUT_SECONDS: "${PETTA_MINING_TIMEOUT_SECONDS:-90}"
@@ -20,6 +22,7 @@ services:
       MINDPLEX_TOKEN_CACHE_PATH: /app/.mindplex-auth/tokens.json
     volumes:
       - ./.mindplex-auth:/app/.mindplex-auth
+      - ingestion-data:/app/experiments/atomspace_visualizer/public
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health', timeout=10).read()"]
       interval: 30s
@@ -33,7 +36,7 @@ services:
       context: ./experiments/atomspace_visualizer
       args:
         VITE_API_BASE_URL: "http://localhost:5000"
-        VITE_BYPASS_INGESTION: "false"
+        VITE_INGESTION_ENABLED: "${INGESTION_ENABLED:-true}"
         VITE_MAX_VIS_ARTICLES: "${VITE_MAX_VIS_ARTICLES:-1500}"
         VITE_DEFAULT_CHAIN_DEPTH: "${PETTA_CHAIN_DEPTH:-3}"
     depends_on:
@@ -41,3 +44,6 @@ services:
         condition: service_healthy
     ports:
       - "3001:80"
+
+volumes:
+  ingestion-data:
