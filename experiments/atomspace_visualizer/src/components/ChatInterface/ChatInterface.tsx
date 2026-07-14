@@ -24,31 +24,6 @@ const SendIcon = () => (
   </svg>
 );
 
-const summarizeFunctionCalls = (functionCalls: unknown): string => {
-  if (!Array.isArray(functionCalls) || functionCalls.length === 0) {
-    return '';
-  }
-
-  const parts = functionCalls
-    .map((item) => {
-      const call = item as { name?: unknown; result?: any };
-      if (typeof call.name !== 'string') {
-        return null;
-      }
-      if (call.name === 'getChainerResult' && call.result && typeof call.result === 'object') {
-        const status = call.result.status ? String(call.result.status) : 'unknown';
-        const proofs = typeof call.result.proof_count === 'number' ? `, ${call.result.proof_count} proofs` : '';
-        return `${call.name} (${status}${proofs})`;
-      }
-      if (call.result && typeof call.result === 'object' && typeof call.result.status === 'string') {
-        return `${call.name} (${call.result.status})`;
-      }
-      return call.name;
-    })
-    .filter((part): part is string => Boolean(part));
-
-  return parts.length > 0 ? `Functions: ${parts.join(' -> ')}` : '';
-};
 
 export interface Message {
   id: string;
@@ -244,7 +219,7 @@ const ChatInterface = (props: ChatInterfaceProps) => {
         .map(m => ({
           role: m.role,
           content: m.functionCalls
-            ? `${m.content}\n\n[${summarizeFunctionCalls(m.functionCalls)}]`
+            ? `${m.content}`
             : m.content
         }));
       const data = await sendChatMessage(text, history);
@@ -449,9 +424,6 @@ const ChatInterface = (props: ChatInterfaceProps) => {
                       <div class="message-avatar"><AssistantGlyph /></div>
                       <div class="message-content">
                         <div class="message-text" innerHTML={formatMessage(message.content)} onClick={(e) => handlePatternClick(e, message)} />
-                        <Show when={summarizeFunctionCalls(message.functionCalls)}>
-                          {(trace) => <div class="function-trace">{trace()}</div>}
-                        </Show>
                         <div class="message-time">
                           {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </div>
