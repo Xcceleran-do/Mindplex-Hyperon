@@ -2,16 +2,18 @@
 
 Mindplex Hyperon turns Mindplex articles into a symbolic knowledge graph for visual exploration, pattern mining, and explainable reasoning.
 
-This branch uses three services:
+This branch uses these components:
 
-- **Mindplex Hyperon** fetches articles, serves the UI, and runs the local PeTTa pattern miner.
-- **metadata-extractor2PLN** converts article metadata and text into PeTTa-formatted facts.
-- **PeTTaChainer** persists knowledge bases and provides backward and forward reasoning.
+- **Mindplex Hyperon** fetches articles, serves the UI, and coordinates the workflow.
+- [**metadata-extractor2PLN**](https://github.com/yotors/metadata-extracter2PLN) converts article metadata and text into PeTTa-formatted facts.
+- [**NL2PLN**](https://github.com/yotors/NL2PLN) translates natural-language statements and questions into validated PeTTaChainer input.
+- [**PeTTaChainer**](https://github.com/yotors/PeTTaChainer) persists knowledge bases and provides backward and forward reasoning.
+- [**PeTTa**](https://github.com/yotors/PeTTa) runs the pattern miner locally as a Git submodule.
 
 ## Requirements
 
 - Docker with Docker Compose
-- Running metadata-extractor2PLN and PeTTaChainer servers
+- Running metadata-extractor2PLN, NL2PLN, and PeTTaChainer servers
 - Mindplex credentials or a valid Mindplex API token
 
 ## Setup
