@@ -1,129 +1,102 @@
-# experiments/ingestion/pipeline.py
+from __future__ import annotations
+
 import os
-import sys
+import tempfile
+
 from dotenv import load_dotenv
 
-# Add workspace root to path to allow imports
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
-
-from experiments.ingestion.fetcher import MindplexFetcher, build_fetcher
-from experiments.ingestion.analyzer import ArticleAnalyzer
-from experiments.ingestion.converter import JsonToMetta
 from experiments.ingestion.config import DEFAULT_USERNAME
-from experiments.ingestion.utils import excluded_predicates
+from experiments.ingestion.fetcher import MindplexFetcher
+from experiments.ingestion.remote_client import (
+    MetadataExtractorClient,
+    MetadataExtractorError,
+)
+
 
 DEFAULT_OUTPUT_PATH = "experiments/atomspace_visualizer/public/data.metta"
 DEFAULT_LIMIT = 50
 
 
-def resolve_output_path(output_path=None):
+def resolve_output_path(output_path: str | None = None) -> str:
     return output_path or os.getenv("METTA_OUTPUT_PATH", DEFAULT_OUTPUT_PATH)
 
 
-def run_ingestion(username=None, source_name="mindplex", limit=DEFAULT_LIMIT, output_path=None, source_config=None):
+def run_ingestion(
+    username: str | None = None,
+    source_name: str = "mindplex",
+    limit: int = DEFAULT_LIMIT,
+    output_path: str | None = None,
+    source_config: dict | None = None,
+) -> dict:
+    """Fetch Mindplex records and delegate all enrichment to metadata-extractor2PLN."""
     load_dotenv()
-    output_path = resolve_output_path(output_path)
-    if source_name == "mindplex" and not username:
-        username = os.getenv("MINDPLEX_USERNAME", DEFAULT_USERNAME)
-        
-    print(f"Starting ingestion pipeline for source: {source_name}")
-
-    print("1. Fetching source records...")
-    if source_name == "mindplex":
-        fetcher = MindplexFetcher(username=username)
-    else:
-        fetcher = build_fetcher(source_name=source_name, source_config=source_config)
-    records = fetcher.fetch_all(limit=limit)
-    print(f"   Fetched {len(records)} records.")
-
-    if not records:
-        print("No articles found. Exiting.")
-        return {"status": "error", "message": "No articles found"}
-
-    print("2. Normalizing source metrics...")
-    has_views_metric = any("views" in record for record in records)
-    if has_views_metric:
-        for record in records:
-            try:
-                record["views"] = int(record.get("views", 0))
-            except (TypeError, ValueError):
-                record["views"] = 0
-        records.sort(key=lambda item: item.get("views", 0), reverse=True)
-
-    rank_map = {
-        record.get("id", record.get("uuid", index)): index + 1
-        for index, record in enumerate(records)
-    }
-
-    print("3. Planning extraction and enriching records...")
-    api_key = os.getenv("ASI_API_KEY")
-    analyzer = ArticleAnalyzer(api_key=api_key)
-    analyzer.prepare_corpus(records, source_name=source_name)
-
-    enriched_articles = []
-    for i, art in enumerate(records):
-        title = art.get('post_title') or art.get('title') or art.get('name') or 'Untitled'
-        print(f"   Processing [{i+1}/{len(records)}]: {str(title)[:30]}...")
-        enriched = analyzer.process(art, rank_stats=rank_map)
-        enriched_articles.append(enriched)
-
-    missing_engagement = [
-        index
-        for index, article in enumerate(enriched_articles)
-        if not has_engagement_value(article)
-    ]
-    if missing_engagement:
-        print(
-            "Engagement extraction failed for "
-            f"{len(missing_engagement)} of {len(enriched_articles)} records; preserving the existing dataset."
-        )
+    if source_name != "mindplex" or source_config:
         return {
             "status": "error",
-            "code": "engagement_required",
-            "message": "Every ingested record must have an engagement value for pattern mining.",
-            "records": len(records),
-            "missing_engagement_records": len(missing_engagement),
+            "code": "unsupported_source",
+            "message": "Mindplex-Hyperon only fetches the Mindplex source.",
+        }
+    username = username or os.getenv("MINDPLEX_USERNAME") or DEFAULT_USERNAME
+    output_path = resolve_output_path(output_path)
+    try:
+        records = MindplexFetcher(username=username).fetch_all(limit=limit)
+        if not records:
+            return {
+                "status": "error",
+                "code": "no_articles",
+                "message": "No Mindplex articles were found.",
+            }
+        remote = MetadataExtractorClient.from_env().ingest(
+            records, source_name="mindplex"
+        )
+        _write_dataset_atomically(output_path, remote.dataset_lines)
+    except (MetadataExtractorError, OSError, ValueError) as exc:
+        return {
+            "status": "error",
+            "code": "remote_ingestion_failed",
+            "message": str(exc),
         }
 
-    print("4. Converting to MeTTa...")
-    converter = JsonToMetta(include_author_alias=False, excluded=excluded_predicates())
-    metta_output = converter.convert(enriched_articles)
-    fact_count = len([line for line in metta_output.splitlines() if line.strip()])
-
-    print(f"5. Saving to {output_path}...")
-
-    output_dir = os.path.dirname(output_path)
-    if output_dir:
-        os.makedirs(output_dir, exist_ok=True)
-
-    with open(output_path, "w") as f:
-        f.write(metta_output)
-
-    print("Done!")
-    plan = getattr(analyzer, "plan", None)
     return {
         "status": "success",
-        "message": f"Ingested {len(records)} records from source {source_name}",
-        "source": source_name,
-        "records": len(records),
-        "facts": fact_count,
+        "message": f"Ingested {remote.record_count} Mindplex articles",
+        "source": "mindplex",
+        "username": username,
+        "records": remote.record_count,
+        "facts": remote.fact_count,
         "output_path": output_path,
-        "planner": getattr(plan, "planner", None) if plan else None,
-        "property_count": len(getattr(plan, "properties", [])) if plan else 0,
-        "properties": [spec.name for spec in getattr(plan, "properties", [])] if plan else [],
+        "planner": remote.planner,
+        "model": remote.model,
+        "plan_fingerprint": remote.plan_fingerprint,
+        "property_count": len(remote.properties),
+        "properties": remote.properties,
+        "usage": remote.usage,
     }
 
 
-def has_engagement_value(article):
-    if not isinstance(article, dict):
-        return False
-    engagement = article.get("enriched_metadata", {}).get("engagement")
-    if isinstance(engagement, dict):
-        engagement = engagement.get("value")
-    return engagement not in (None, "", "Unknown")
+def _write_dataset_atomically(output_path: str, lines: list[str]) -> None:
+    if not lines:
+        raise ValueError("metadata extractor returned no facts")
+    output_dir = os.path.dirname(output_path) or "."
+    os.makedirs(output_dir, exist_ok=True)
+    temporary_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            dir=output_dir,
+            prefix=".data-",
+            suffix=".metta.tmp",
+            delete=False,
+        ) as handle:
+            temporary_path = handle.name
+            handle.write("\n".join(lines))
+            handle.write("\n")
+        os.replace(temporary_path, output_path)
+    finally:
+        if temporary_path and os.path.exists(temporary_path):
+            os.unlink(temporary_path)
 
-def main():
-    run_ingestion()
 
 if __name__ == "__main__":
-    main()
+    print(run_ingestion())

@@ -17,7 +17,7 @@ RUN sh build.sh
 
 # Install Python dependencies
 RUN pip3 install . --break-system-packages
-RUN pip3 install hyperon regex flask flask-cors google-generativeai python-dotenv --break-system-packages
+RUN pip3 install hyperon regex flask flask-cors python-dotenv --break-system-packages
 
 # Modify run.sh:
 # 1. Add shebang

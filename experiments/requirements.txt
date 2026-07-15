@@ -1,7 +1,6 @@
 flask
 flask-cors
 gunicorn
-google-generativeai
 hyperon
 # Install the local PeTTa Python wrapper as an editable package so
 # `from petta import PeTTa` works without relying on sys.path edits.

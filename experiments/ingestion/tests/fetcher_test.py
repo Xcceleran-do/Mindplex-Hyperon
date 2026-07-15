@@ -532,7 +532,7 @@ class TestMindplexFetcher(unittest.TestCase):
         mock_response = MagicMock()
         mock_response.json.return_value = {
             "data": [
-                {"id": 1, "title": "Article 1", "viewCount": 7, "stats": {"likeCount": 2, "commentCount": 3}}
+                {"id": 1, "title": "Article 1", "viewCount": 7, "stats": {"likeCount": 2, "commentCount": 3, "shareCount": 4}}
             ],
             "total": 1,
         }
@@ -545,6 +545,9 @@ class TestMindplexFetcher(unittest.TestCase):
         self.assertEqual(result[0]["views"], 7)
         self.assertEqual(result[0]["likes"], 2)
         self.assertEqual(result[0]["comments"], 3)
+        self.assertEqual(result[0]["shares"], 4)
+        self.assertNotIn("stats", result[0])
+        self.assertNotIn("viewCount", result[0])
 
     @patch('experiments.ingestion.fetcher.requests.get')
     def test_fetch_all_handles_missing_records_key(self, mock_get):

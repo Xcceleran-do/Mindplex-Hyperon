@@ -6,7 +6,6 @@ dependencies = [
     "flask",
     "flask-cors",
     "gunicorn",
-    "google-generativeai",
     "hyperon",
     "janus-swi==1.5.2",
     "petta",
