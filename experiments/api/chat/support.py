@@ -163,7 +163,10 @@ def is_backward_chain_intent(message: str) -> bool:
 
 
 ARTICLE_ID_RE = re.compile(r"\b[AH]_[A-Za-z0-9_]+\b")
-ENGAGEMENT_LEVEL_RE = re.compile(r"\b(high|medium|low)\b", re.IGNORECASE)
+ENGAGEMENT_LEVEL_RE = re.compile(
+    r"(?<![A-Za-z0-9])(very[\s_-]+high|high|medium|low)(?![A-Za-z0-9])",
+    re.IGNORECASE,
+)
 
 
 def article_exists_in_facts(article_id: str, facts: list[str]) -> bool:
@@ -189,7 +192,8 @@ def deterministic_engagement_query(message: str, facts: list[str]) -> Optional[s
         return None
 
     article_id = article_match.group(0)
-    level = level_match.group(1).capitalize()
+    normalized_level = re.sub(r"[\s-]+", "_", level_match.group(1)).lower()
+    level = "Very_High" if normalized_level == "very_high" else normalized_level.capitalize()
     target_atom = f'(engagement {article_id} "{level}")'
 
     # Prefer an exact query even if the fact is absent; broad variable queries

@@ -2,10 +2,27 @@ from __future__ import annotations
 
 import unittest
 
-from experiments.api.chat.support import article_exists_in_facts, handle_backward_chain_for_message
+from experiments.api.chat.support import (
+    article_exists_in_facts,
+    deterministic_engagement_query,
+    handle_backward_chain_for_message,
+)
 
 
 class TestChatBackwardChainGuard(unittest.TestCase):
+    def test_very_high_engagement_keeps_canonical_bucket_name(self) -> None:
+        for level in ("very high", "very-high", "very_high"):
+            with self.subTest(level=level):
+                query = deterministic_engagement_query(
+                    f"Why does A_24867 have {level} engagement?",
+                    [],
+                )
+
+                self.assertEqual(
+                    query,
+                    '(: $prf (engagement A_24867 "Very_High") $tv)',
+                )
+
     def test_article_presence_uses_exact_atom_token(self) -> None:
         facts = ['(: fact_1 (tone A_142190 "informative") (STV 1 1))']
 
