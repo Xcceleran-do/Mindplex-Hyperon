@@ -12,8 +12,6 @@ experiments/atomspace_visualizer/node_modules
 experiments/atomspace_visualizer/dist
 experiments/atomspace_visualizer/.env
 datasets
-PathMap
-MORK
 Utilities
 __pycache__
 *.pyc

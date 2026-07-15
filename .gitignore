@@ -4,11 +4,11 @@ __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
+.pytest_cache/
+.ruff_cache/
 *.env
 *.venv
 env/
-MORK/
-PathMap/
 venv/
 ENV/
 env.bak/
