@@ -8,7 +8,7 @@ This branch uses these components:
 - [**metadata-extractor2PLN**](https://github.com/yotors/metadata-extracter2PLN) converts article metadata and text into PeTTa-formatted facts.
 - [**NL2PLN**](https://github.com/yotors/NL2PLN) translates natural-language statements and questions into validated PeTTaChainer input.
 - [**PeTTaChainer**](https://github.com/yotors/PeTTaChainer) persists knowledge bases and provides backward and forward reasoning.
-- [**PeTTa**](https://github.com/yotors/PeTTa) runs the pattern miner locally as a Git submodule.
+- [**PeTTa**](https://github.com/trueagi-io/PeTTa) runs the pattern miner locally as a Git submodule.
 
 ## Requirements
 
