@@ -8,13 +8,13 @@ This branch uses these components:
 - [**metadata-extractor2PLN**](https://github.com/yotors/metadata-extracter2PLN) converts article metadata and text into PeTTa-formatted facts.
 - [**NL2PLN**](https://github.com/yotors/NL2PLN) translates natural-language statements and questions into validated PeTTaChainer input.
 - [**PeTTaChainer**](https://github.com/yotors/PeTTaChainer) persists knowledge bases and provides backward and forward reasoning.
-- [**PeTTa**](https://github.com/trueagi-io/PeTTa) runs the pattern miner locally as a Git submodule.
+- [**PeTTa**](https://github.com/yotors/PeTTa) runs the pattern miner locally as a Git submodule.
 
 ## Requirements
 
 - Docker with Docker Compose
-- Running metadata-extractor2PLN, NL2PLN, and PeTTaChainer servers
 - Mindplex credentials or a valid Mindplex API token
+- A Gemini key for NL2PLN and an ASI:One or Gemini key for metadata extraction
 
 ## Setup
 
@@ -25,25 +25,23 @@ git submodule update --init --recursive PeTTa
 cp .env.example .env
 ```
 
-Configure these values in `.env`:
+Set the generated service secrets, provider credentials, and Mindplex credentials in `.env`:
 
 ```dotenv
-# Mindplex authentication: use a service account or existing tokens
+POSTGRES_PASSWORD=replace-with-a-random-password
+METADATA_EXTRACTOR_API_KEY=mindplex:replace-with-at-least-32-random-characters
+NL2PLN_API_KEY=replace-with-at-least-32-random-characters
+PETTACHAINER_API_KEY=replace-with-at-least-32-random-characters
+
+GEMINI_API_KEY=
+ASI_ONE_API_KEY=
+ASI_API_KEY=
+
+# Use a Mindplex service account or existing tokens
 MINDPLEX_SERVICE_EMAIL=
 MINDPLEX_SERVICE_PASSWORD=
 MINDPLEX_API_TOKEN=
 MINDPLEX_API_REFRESH_TOKEN=
-
-# Full owner-id:secret entry configured by metadata-extractor2PLN
-METADATA_EXTRACTOR_BASE_URL=http://127.0.0.1:8080
-METADATA_EXTRACTOR_API_KEY=
-
-# Secret portion of an owner-id:secret entry configured by PeTTaChainer
-PETTACHAINER_BASE_URL=http://127.0.0.1:8000
-PETTACHAINER_API_KEY=
-
-# Used by the chat assistant
-ASI_API_KEY=
 ```
 
 Start the application:
@@ -52,7 +50,7 @@ Start the application:
 docker compose up --build
 ```
 
-Open [http://localhost:3001](http://localhost:3001). The API health endpoint is available at [http://localhost:5000/api/health](http://localhost:5000/api/health).
+Compose builds the dependency repositories from GitHub and starts the complete stack. Open [http://localhost:3001](http://localhost:3001). The health endpoint is [http://localhost:3001/api/health](http://localhost:3001/api/health).
 
 ## Basic workflow
 

@@ -1,48 +1,171 @@
 services:
+  postgres:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_DB: pettachainer
+      POSTGRES_USER: pettachainer
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pettachainer -d pettachainer"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  pettachainer:
+    build:
+      context: .
+      dockerfile: docker/pettachainer.Dockerfile
+      additional_contexts:
+        pettachainer-source: "${PETTACHAINER_BUILD_CONTEXT:-https://github.com/yotors/PeTTaChainer.git#master}"
+        petta-source: "${PETTA_BUILD_CONTEXT:-https://github.com/yotors/PeTTa.git#main}"
+    environment:
+      PETTACHAINER_DATABASE_HOST: postgres
+      PETTACHAINER_DATABASE_NAME: pettachainer
+      PETTACHAINER_DATABASE_USER: pettachainer
+      PETTACHAINER_DATABASE_PASSWORD: "${POSTGRES_PASSWORD}"
+      PETTACHAINER_API_KEYS: "mindplex:${PETTACHAINER_API_KEY:?set PETTACHAINER_API_KEY}"
+      PETTACHAINER_ALLOWED_HOSTS: pettachainer,localhost,127.0.0.1
+      PETTACHAINER_ENVIRONMENT: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/readyz', timeout=5).read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    read_only: true
+    tmpfs:
+      - /tmp:size=1g,mode=700,uid=10001,gid=10001
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 3g
+    restart: unless-stopped
+
+  metadata-extractor:
+    build:
+      context: "${METADATA_EXTRACTOR_BUILD_CONTEXT:-https://github.com/yotors/metadata-extracter2PLN.git#main}"
+    environment:
+      METADATA_ENVIRONMENT: production
+      METADATA_API_KEYS: "${METADATA_EXTRACTOR_API_KEY:?set METADATA_EXTRACTOR_API_KEY}"
+      METADATA_ALLOWED_HOSTS: metadata-extractor,localhost,127.0.0.1
+      METADATA_MODEL_PROVIDER: "${METADATA_MODEL_PROVIDER:-asi}"
+      METADATA_ASI_MODEL: "${METADATA_ASI_MODEL:-asi1-mini}"
+      METADATA_GEMINI_MODEL: "${METADATA_GEMINI_MODEL:-gemini-2.5-flash}"
+      ASI_ONE_API_KEY: "${ASI_ONE_API_KEY:-}"
+      GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/ready', timeout=5).read()"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,noexec,nosuid
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  nl2pln:
+    build:
+      context: "${NL2PLN_BUILD_CONTEXT:-https://github.com/yotors/NL2PLN.git#master}"
+    environment:
+      NL2PC_ENVIRONMENT: production
+      NL2PC_MODEL: "${NL2PLN_MODEL:-gemini/gemini-2.5-flash}"
+      NL2PC_API_KEYS: "mindplex:${NL2PLN_API_KEY:?set NL2PLN_API_KEY}"
+      NL2PC_ALLOWED_HOSTS: nl2pln,localhost,127.0.0.1
+      GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
+      OPENROUTER_API_KEY: "${OPENROUTER_API_KEY:-}"
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/ready', timeout=5).read()"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid,nodev
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
   mining-api:
     build:
       context: .
       args:
-        DEBIAN_MIRROR: ${DEBIAN_MIRROR:-http://ftp.us.debian.org/debian}
-        DEBIAN_SECURITY_MIRROR: ${DEBIAN_SECURITY_MIRROR:-http://security.debian.org/debian-security}
+        DEBIAN_MIRROR: "${DEBIAN_MIRROR:-http://ftp.us.debian.org/debian}"
+        DEBIAN_SECURITY_MIRROR: "${DEBIAN_SECURITY_MIRROR:-http://security.debian.org/debian-security}"
     env_file: .env
     environment:
       FLASK_DEBUG: "0"
       INGESTION_ENABLED: "${INGESTION_ENABLED:-true}"
       INGESTION_CACHE_TTL_DAYS: "${INGESTION_CACHE_TTL_DAYS:-3}"
-      METADATA_EXTRACTOR_BASE_URL: "${METADATA_EXTRACTOR_BASE_URL:-http://127.0.0.1:8080}"
-      METADATA_EXTRACTOR_API_KEY: "${METADATA_EXTRACTOR_API_KEY:-}"
+      METADATA_EXTRACTOR_BASE_URL: http://metadata-extractor:8080
+      METADATA_EXTRACTOR_API_KEY: "${METADATA_EXTRACTOR_API_KEY}"
       METADATA_EXTRACTOR_NAMESPACE: "${METADATA_EXTRACTOR_NAMESPACE:-A}"
       METADATA_EXTRACTOR_TIMEOUT_SECONDS: "${METADATA_EXTRACTOR_TIMEOUT_SECONDS:-150}"
       METADATA_EXTRACTOR_CHUNK_SIZE: "${METADATA_EXTRACTOR_CHUNK_SIZE:-10}"
       METADATA_EXTRACTOR_USE_MODEL: "${METADATA_EXTRACTOR_USE_MODEL:-true}"
       METADATA_EXTRACTOR_REQUIRED_PROPERTIES: "${METADATA_EXTRACTOR_REQUIRED_PROPERTIES:-engagement,audience-expertise}"
+      NL2PLN_BASE_URL: http://nl2pln:8080
+      NL2PLN_API_KEY: "${NL2PLN_API_KEY}"
+      NL2PLN_NAMESPACE: "${NL2PLN_NAMESPACE:-mindplex}"
+      NL2PLN_TIMEOUT_SECONDS: "${NL2PLN_TIMEOUT_SECONDS:-60}"
       PETTA_DEBUG: "0"
       PETTA_CHAIN_DEPTH: "${PETTA_CHAIN_DEPTH:-3}"
       PETTA_MINING_TIMEOUT_SECONDS: "${PETTA_MINING_TIMEOUT_SECONDS:-90}"
       PETTA_MINING_MAX_OUTPUT_BYTES: "${PETTA_MINING_MAX_OUTPUT_BYTES:-8388608}"
       PETTA_CHAIN_TIMEOUT_SECONDS: "${PETTA_CHAIN_TIMEOUT_SECONDS:-90}"
-      PETTACHAINER_BASE_URL: "${PETTACHAINER_BASE_URL:-http://127.0.0.1:8000}"
-      PETTACHAINER_API_KEY: "${PETTACHAINER_API_KEY:-}"
+      PETTACHAINER_BASE_URL: http://pettachainer:8000
+      PETTACHAINER_API_KEY: "${PETTACHAINER_API_KEY}"
       PETTACHAINER_KB_PREFIX: "${PETTACHAINER_KB_PREFIX:-mindplex}"
-      MINDPLEX_API_DOMAIN: https://api-dev.mindplex.ai
+      MINDPLEX_API_DOMAIN: "${MINDPLEX_API_DOMAIN:-https://api-dev.mindplex.ai}"
       MINDPLEX_TOKEN_CACHE_PATH: /app/.mindplex-auth/tokens.json
+    depends_on:
+      metadata-extractor:
+        condition: service_healthy
+      nl2pln:
+        condition: service_healthy
+      pettachainer:
+        condition: service_healthy
     volumes:
       - ./.mindplex-auth:/app/.mindplex-auth
       - ingestion-data:/app/experiments/atomspace_visualizer/public
+    expose:
+      - "5000"
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health', timeout=10).read()"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/api/health', timeout=10).read()"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
-    network_mode: host
+    restart: unless-stopped
 
   frontend:
     build:
       context: ./experiments/atomspace_visualizer
       args:
-        VITE_API_BASE_URL: "http://localhost:5000"
+        VITE_API_BASE_URL: ""
         VITE_INGESTION_ENABLED: "${INGESTION_ENABLED:-true}"
         VITE_MAX_VIS_ARTICLES: "${VITE_MAX_VIS_ARTICLES:-1500}"
         VITE_DEFAULT_CHAIN_DEPTH: "${PETTA_CHAIN_DEPTH:-3}"
@@ -51,6 +174,8 @@ services:
         condition: service_healthy
     ports:
       - "3001:80"
+    restart: unless-stopped
 
 volumes:
   ingestion-data:
+  postgres-data:
