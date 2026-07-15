@@ -1,114 +1,89 @@
-// Highlight state management utilities for ColumnarVisualizer
-import { GraphData, FilterState, HighlightState } from '../types';
+// Highlight state management shared by the columnar and atlas visualizers.
+import { FilterState, GraphData, HighlightState } from '../types';
 
-// Update highlight state based on selected node and filter
+type PropertyFilter = { property: string; value: string };
+
+const activeArticleIds = (filterState: FilterState) => {
+  const ids = new Set(filterState.articleIds || []);
+  if (filterState.articleId) ids.add(filterState.articleId);
+  return ids;
+};
+
+const activePropertyFilters = (filterState: FilterState): PropertyFilter[] => {
+  const filters = [...(filterState.propertyFilters || [])];
+  if (
+    filterState.property
+    && filterState.value
+    && !filters.some(
+      (filter) => filter.property === filterState.property && filter.value === filterState.value,
+    )
+  ) {
+    filters.push({ property: filterState.property, value: filterState.value });
+  }
+  return filters;
+};
+
 export const updateHighlightState = (
   graphData: GraphData,
-  filterState: FilterState
+  filterState: FilterState,
 ): HighlightState => {
-  const highlighted = new Set<string>();
+  const highlightedNodes = new Set<string>();
   const highlightedEdges = new Set<string>();
-  const dimmed = new Set<string>();
+  const dimmedNodes = new Set<string>();
   const dimmedEdges = new Set<string>();
 
-  if (filterState.active) {
-    // AND logic for property filters and articles
-    let filteredNodeIds = new Set(graphData.nodes.map(n => n.id));
-    let filteredEdgeIds = new Set(graphData.edges.map(e => e.id));
-
-    // Multi-article selection (AND): only nodes/edges connected to ALL selected articles
-    if (filterState.articleIds && filterState.articleIds.length > 0) {
-      for (const articleId of filterState.articleIds) {
-        const articleNodeId = `article-${articleId}`;
-        // Only keep nodes/edges connected to this article
-        const connectedNodeIds = new Set<string>();
-        const connectedEdgeIds = new Set<string>();
-        for (const edge of graphData.edges) {
-          if (edge.source === articleNodeId) {
-            connectedEdgeIds.add(edge.id);
-            connectedNodeIds.add(edge.target);
-          }
-        }
-        filteredNodeIds = new Set([...filteredNodeIds].filter(id => connectedNodeIds.has(id) || id === articleNodeId));
-        filteredEdgeIds = new Set([...filteredEdgeIds].filter(id => connectedEdgeIds.has(id)));
-      }
-    }
-
-    // Property filters: OR within property, AND across properties
-    if (filterState.propertyFilters && filterState.propertyFilters.length > 0) {
-      // Group filters by property
-      const propertyGroups: Record<string, string[]> = {};
-      for (const filter of filterState.propertyFilters) {
-        if (!propertyGroups[filter.property]) propertyGroups[filter.property] = [];
-        propertyGroups[filter.property].push(filter.value);
-      }
-      // For each property, get all nodes/edges matching any value (OR)
-      let propertyNodeSets: Array<Set<string>> = [];
-      let propertyEdgeSets: Array<Set<string>> = [];
-      for (const property in propertyGroups) {
-        const values = propertyGroups[property];
-        const nodeSet = new Set<string>();
-        const edgeSet = new Set<string>();
-        for (const value of values) {
-          const propertyNodeId = `${property}-${value}`;
-          for (const edge of graphData.edges) {
-            if (edge.target === propertyNodeId) {
-              edgeSet.add(edge.id);
-              nodeSet.add(edge.source);
-            }
-          }
-          nodeSet.add(propertyNodeId);
-        }
-        propertyNodeSets.push(nodeSet);
-        propertyEdgeSets.push(edgeSet);
-      }
-      // AND across properties: intersection of all property sets
-      if (propertyNodeSets.length > 0) {
-        let intersectionNodes = propertyNodeSets[0];
-        for (let i = 1; i < propertyNodeSets.length; i++) {
-          intersectionNodes = new Set([...intersectionNodes].filter(x => propertyNodeSets[i].has(x)));
-        }
-        filteredNodeIds = new Set([...filteredNodeIds].filter(id => intersectionNodes.has(id)));
-      }
-      if (propertyEdgeSets.length > 0) {
-        let intersectionEdges = propertyEdgeSets[0];
-        for (let i = 1; i < propertyEdgeSets.length; i++) {
-          intersectionEdges = new Set([...intersectionEdges].filter(x => propertyEdgeSets[i].has(x)));
-        }
-        filteredEdgeIds = new Set([...filteredEdgeIds].filter(id => intersectionEdges.has(id)));
-      }
-    }
-
-    // Legacy single property filter (AND)
-    if (filterState.property && filterState.value) {
-      const propertyNodeId = `${filterState.property}-${filterState.value}`;
-      const connectedNodeIds = new Set<string>();
-      const connectedEdgeIds = new Set<string>();
-      for (const edge of graphData.edges) {
-        if (edge.target === propertyNodeId) {
-          connectedEdgeIds.add(edge.id);
-          connectedNodeIds.add(edge.source);
-        }
-      }
-      filteredNodeIds = new Set([...filteredNodeIds].filter(id => connectedNodeIds.has(id) || id === propertyNodeId));
-      filteredEdgeIds = new Set([...filteredEdgeIds].filter(id => connectedEdgeIds.has(id)));
-    }
-
-    // Highlight and dim
-    for (const id of filteredNodeIds) highlighted.add(id);
-    for (const id of filteredEdgeIds) highlightedEdges.add(id);
-    for (const node of graphData.nodes) {
-      if (!highlighted.has(node.id)) dimmed.add(node.id);
-    }
-    for (const edge of graphData.edges) {
-      if (!highlightedEdges.has(edge.id)) dimmedEdges.add(edge.id);
-    }
+  if (!filterState.active) {
+    return { highlightedNodes, highlightedEdges, dimmedNodes, dimmedEdges };
   }
 
-  return {
-    highlightedNodes: highlighted,
-    highlightedEdges: highlightedEdges,
-    dimmedNodes: dimmed,
-    dimmedEdges: dimmedEdges
-  };
+  const articleIds = activeArticleIds(filterState);
+  const propertyFilters = activePropertyFilters(filterState);
+  const propertyNodes = graphData.nodes.filter((node) => node.metadata.columnType === 'property');
+  const propertyNodeIdsByFilter = propertyFilters.map(
+    (filter) => new Set(
+      propertyNodes
+        .filter(
+          (node) => node.metadata.propertyName === filter.property && node.label === filter.value,
+        )
+        .map((node) => node.id),
+    ),
+  );
+
+  const matchingArticleNodeIds = new Set(
+    graphData.nodes
+      .filter((node) => node.metadata.columnType === 'article')
+      .filter((node) => {
+        const articleId = node.metadata.originalExpression || node.label;
+        if (articleIds.size > 0 && !articleIds.has(articleId)) return false;
+
+        // Every selected attribute is mandatory. This intentionally also means
+        // that selecting two different values of one property yields no article.
+        return propertyNodeIdsByFilter.every((propertyNodeIds) =>
+          graphData.edges.some(
+            (edge) => edge.source === node.id && propertyNodeIds.has(edge.target),
+          ));
+      })
+      .map((node) => node.id),
+  );
+
+  matchingArticleNodeIds.forEach((id) => highlightedNodes.add(id));
+
+  const selectedPropertyNodeIds = new Set(propertyNodeIdsByFilter.flatMap((ids) => [...ids]));
+  selectedPropertyNodeIds.forEach((id) => highlightedNodes.add(id));
+
+  for (const edge of graphData.edges) {
+    if (!matchingArticleNodeIds.has(edge.source)) continue;
+    if (selectedPropertyNodeIds.size > 0 && !selectedPropertyNodeIds.has(edge.target)) continue;
+    highlightedEdges.add(edge.id);
+    highlightedNodes.add(edge.target);
+  }
+
+  for (const node of graphData.nodes) {
+    if (!highlightedNodes.has(node.id)) dimmedNodes.add(node.id);
+  }
+  for (const edge of graphData.edges) {
+    if (!highlightedEdges.has(edge.id)) dimmedEdges.add(edge.id);
+  }
+
+  return { highlightedNodes, highlightedEdges, dimmedNodes, dimmedEdges };
 };

@@ -10,7 +10,8 @@ import {
   type SimulationNodeDatum,
 } from 'd3-force';
 import { Component, createEffect, createMemo, createSignal, onCleanup, onMount, Show } from 'solid-js';
-import type { FilterState, GraphData, GraphNode, Point } from '../../../types';
+import type { FilterState, GraphData, GraphNode, HighlightState, Point } from '../../../types';
+import { updateHighlightState } from '../../../utils/highlightManager';
 import styles from './SemanticAtlas.module.css';
 import { buildPropertyColorMap, colorForAtlasSubject, readAtlasColorTheme } from './colorMapping';
 
@@ -197,21 +198,6 @@ const createLayoutSimulation = (layout: AtlasLayout): Simulation<AtlasNode, Atla
     .velocityDecay(0.34)
     .alphaDecay(0.025);
 
-const getActiveArticleIds = (filterState: FilterState) => new Set(filterState.articleIds || []);
-const getActivePropertyFilters = (filterState: FilterState) =>
-  new Set((filterState.propertyFilters || []).map((filter) => `${filter.property}:${filter.value}`));
-
-const shouldHighlightNode = (node: AtlasNode, filterState: FilterState) => {
-  if (!filterState.active) return true;
-  const articleIds = getActiveArticleIds(filterState);
-  const propertyFilters = getActivePropertyFilters(filterState);
-  if (node.kind === 'article') return articleIds.size === 0 || articleIds.has(node.articleId || '');
-  return propertyFilters.size === 0 || propertyFilters.has(`${node.propertyName}:${node.label}`);
-};
-
-const shouldHighlightEdge = (edge: AtlasEdge, filterState: FilterState) =>
-  !filterState.active || (shouldHighlightNode(edge.source, filterState) && shouldHighlightNode(edge.target, filterState));
-
 const isLinked = (edge: AtlasEdge, node: AtlasNode | null) =>
   Boolean(node && (edge.source.id === node.id || edge.target.id === node.id));
 
@@ -253,13 +239,14 @@ const drawEdge = (
   ctx: CanvasRenderingContext2D,
   edge: AtlasEdge,
   filterState: FilterState,
+  highlightState: HighlightState,
   focusNode: AtlasNode | null,
   theme: CanvasTheme,
   propertyColors: Map<string, string>,
   dense: boolean,
 ) => {
   const linked = isLinked(edge, focusNode);
-  const highlighted = shouldHighlightEdge(edge, filterState);
+  const highlighted = !filterState.active || highlightState.highlightedEdges.has(edge.id);
   const alpha = linked ? 0.78 : filterState.active ? (highlighted ? 0.34 : 0.018) : dense ? 0.075 : 0.15;
 
   ctx.save();
@@ -302,6 +289,7 @@ const drawNode = (
   ctx: CanvasRenderingContext2D,
   node: AtlasNode,
   filterState: FilterState,
+  highlightState: HighlightState,
   hoveredNode: AtlasNode | null,
   selectedNode: AtlasNode | null,
   focusedNode: AtlasNode | null,
@@ -310,7 +298,7 @@ const drawNode = (
   theme: CanvasTheme,
   propertyColors: Map<string, string>,
 ) => {
-  const filterHighlighted = shouldHighlightNode(node, filterState);
+  const filterHighlighted = !filterState.active || highlightState.highlightedNodes.has(node.id);
   const hovered = hoveredNode?.id === node.id;
   const selected = selectedNode?.id === node.id;
   const focused = hovered || selected;
@@ -498,15 +486,17 @@ const SemanticAtlas: Component<SemanticAtlasProps> = (props) => {
     );
     const focusNode = hoveredNode || selectedNode;
     const focusedNodeIds = focusNeighborhood(currentLayout, focusNode);
+    const highlightState = updateHighlightState(props.graphData, props.filterState);
     const dense = currentLayout.edgeCount > 220;
     for (const edge of currentLayout.edges) {
-      drawEdge(ctx, edge, props.filterState, focusNode, theme, propertyColors, dense);
+      drawEdge(ctx, edge, props.filterState, highlightState, focusNode, theme, propertyColors, dense);
     }
     for (const node of currentLayout.nodes) {
       drawNode(
         ctx,
         node,
         props.filterState,
+        highlightState,
         hoveredNode,
         selectedNode,
         focusNode,
