@@ -40,25 +40,43 @@ def register_core_routes(
         try:
             data = request.get_json(silent=True) or {}
             username = data.get('username') if data else None
-            source_name = data.get('source', "mindplex") if data else None
+            source_name = data.get('source', "mindplex") if data else "mindplex"
             limit = data.get('limit') if data else None
-            source_config = data.get('source_config') if data else None
-            output_path = data.get('output_path') if data else None
             force = data.get('force', False) if data else False
 
-            if source_name == "mindplex" and not username:
+            if "output_path" in data or "source_config" in data:
+                return public_error(
+                    "unsupported_ingestion_option",
+                    "output_path and source_config are no longer accepted.",
+                    400,
+                )
+            if source_name != "mindplex":
+                return public_error(
+                    "unsupported_source",
+                    "This application only fetches Mindplex articles.",
+                    400,
+                )
+            if not username:
                 return public_error("username_required", "Enter a Mindplex username.", 400)
             if not isinstance(force, bool):
                 return public_error("invalid_force", "force must be a boolean.", 400)
+            if isinstance(limit, bool):
+                return public_error("invalid_limit", "limit must be an integer.", 400)
+            try:
+                limit = int(limit or 50)
+            except (TypeError, ValueError):
+                return public_error("invalid_limit", "limit must be an integer.", 400)
+            if not 1 <= limit <= 100:
+                return public_error("invalid_limit", "limit must be between 1 and 100.", 400)
 
             logger.info("Received ingestion request for source=%s force=%s", source_name, force)
             result = run_ingestion_request(
                 run_ingestion,
                 username=username,
                 source_name=source_name,
-                limit=int(limit or 50),
-                output_path=output_path,
-                source_config=source_config,
+                limit=limit,
+                output_path=None,
+                source_config=None,
                 force=force,
             )
 
@@ -69,6 +87,12 @@ def register_core_routes(
                         "ingestion_disabled",
                         "Ingestion is disabled by the server configuration.",
                         403,
+                    )
+                if result.get("code") == "remote_ingestion_failed":
+                    return public_error(
+                        "metadata_extractor_unavailable",
+                        "Articles were fetched, but metadata extraction failed. The existing dataset was preserved.",
+                        502,
                     )
                 return public_error(
                     "ingestion_failed",
