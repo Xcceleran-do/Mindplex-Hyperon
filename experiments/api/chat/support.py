@@ -210,9 +210,7 @@ def handle_backward_chain_for_message(
     message: str,
     *,
     get_all_facts_and_rules: Callable[[], dict],
-    select_facts_for_prompt: Callable[[list[str], str, int], list[str]],
-    call_asi_api: Callable[[list[dict[str, Any]], Optional[list[dict[str, Any]]]], dict[str, Any]],
-    system_instruction: str,
+    translate_query: Callable[[str, list[str]], str],
     get_chainer_result: Callable[[str], dict],
     logger: Any,
 ) -> tuple[Optional[str], Optional[list]]:
@@ -242,34 +240,16 @@ def handle_backward_chain_for_message(
         function_calls.append({'name': 'rewrite_query_deterministic', 'args': {'message': message}, 'result': candidate_query})
     else:
         try:
-            facts_text = "\n".join(select_facts_for_prompt(facts, message, 200))
-            rewrite_prompt = f"""
-                You are given the following KB atoms (facts/rules), one per line:
-                {facts_text}
-
-                User question: "{message}"
-
-                Task (STRICT):
-                - Do NOT narrate or describe any internal steps.
-                - Do NOT output anything except a SINGLE canonical MeTTa expression that uses predicate and constant names from the KB above.
-                - If mapping is ambiguous, pick the most semantically likely predicate present in the KB.
-                - If you cannot produce a valid MeTTa expression, output the single token NO_QUERY and NOTHING ELSE.
-
-                Example mapping (for clarity only, do not output this): if facts contain (engagement 1 high) -> question "Why article A_16624 has low engagement?" -> output should be like : "(: $prf (engagement A_16624 \"Low\") $tv)"
-
-                OUTPUT ONLY the MeTTa expression or NO_QUERY.
-                """
-            messages = [
-                {"role": "system", "content": system_instruction},
-                {"role": "user", "content": rewrite_prompt},
-            ]
-            response_data = call_asi_api(messages)
-            if 'choices' in response_data and response_data['choices']:
-                candidate_query = response_data['choices'][0]['message'].get('content', '').strip()
-            function_calls.append({'name': 'rewrite_query', 'args': {'message': message}, 'result': candidate_query})
+            candidate_query = translate_query(message, facts)
+            function_calls.append({'name': 'translate_query_nl2pln', 'args': {'message': message}, 'result': candidate_query})
         except Exception:
-            logger.exception("Failed to rewrite a backward-chaining query from chat input")
-            return None, None
+            if logger is not None:
+                logger.exception("NL2PLN failed to translate a backward-chaining query")
+            return (
+                "I could not translate that question into a safe reasoning query. "
+                "Check that NL2PLN is available and try a more specific question.",
+                function_calls,
+            )
 
     candidate_query = clean_metta_query(candidate_query)
     if not candidate_query or candidate_query == "NO_QUERY":

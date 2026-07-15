@@ -37,6 +37,10 @@ from experiments.api.config import (
     DEFAULT_CONJUNCTION_COUNT,
     DEFAULT_MIN_SUPPORT,
     dataset_file_path,
+    NL2PLN_API_KEY,
+    NL2PLN_BASE_URL,
+    NL2PLN_NAMESPACE,
+    NL2PLN_TIMEOUT_SECONDS,
 )
 from experiments.api.routes import register_core_routes
 from experiments.api.support import (
@@ -49,6 +53,7 @@ from experiments.api.support import (
     parse_petta_output,
     select_facts_for_prompt,
 )
+from experiments.services.nl2pln_client import NL2PLNClient
 from experiments.api.mining import (
     MiningJob,
     formatter,
@@ -93,6 +98,17 @@ tools_schema = build_tools_schema(DEFAULT_CHAIN_DEPTH)
 conversations: Dict[str, list] = {}
 
 
+def translate_query_with_nl2pln(message: str, facts: list[str]) -> str:
+    client = NL2PLNClient(
+        base_url=NL2PLN_BASE_URL,
+        api_key=NL2PLN_API_KEY,
+        namespace=NL2PLN_NAMESPACE,
+        timeout_seconds=NL2PLN_TIMEOUT_SECONDS,
+    )
+    selected_facts = select_facts_for_prompt(facts, message, 200)
+    return client.translate_query(message, selected_facts)
+
+
 def parse_chat_mining_intent(message: str) -> Optional[Dict[str, int]]:
     return parse_chat_mining_intent_impl(
         message,
@@ -128,9 +144,7 @@ def handle_backward_chain_for_message(message: str) -> tuple[Optional[str], Opti
     return handle_backward_chain_for_message_impl(
         message,
         get_all_facts_and_rules=getAllFactsAndRules,
-        select_facts_for_prompt=select_facts_for_prompt,
-        call_asi_api=call_asi_api,
-        system_instruction=SYSTEM_INSTRUCTION,
+        translate_query=translate_query_with_nl2pln,
         get_chainer_result=getChainerResult,
         logger=logger,
     )

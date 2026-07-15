@@ -26,9 +26,7 @@ class TestChatBackwardChainGuard(unittest.TestCase):
                 "status": "success",
                 "facts": ['(: fact_1 (tone A_24014 "informative") (STV 1 1))'],
             },
-            select_facts_for_prompt=lambda facts, _query, _limit: facts,
-            call_asi_api=lambda _messages: {},
-            system_instruction="test",
+            translate_query=lambda _message, _facts: "(: $proof (engagement A_14219 \"Low\") $tv)",
             get_chainer_result=get_chainer_result,
             logger=None,
         )
@@ -36,6 +34,28 @@ class TestChatBackwardChainGuard(unittest.TestCase):
         self.assertFalse(chainer_called)
         self.assertIn("not in the active knowledge base", response)
         self.assertEqual(calls[-1]["name"], "check_article_in_knowledge_base")
+
+    def test_nontrivial_question_uses_nl2pln_translation(self) -> None:
+        translated_queries = []
+
+        response, calls = handle_backward_chain_for_message(
+            "What tone can be proved for article A_1?",
+            get_all_facts_and_rules=lambda: {
+                "status": "success",
+                "facts": ['(: fact_1 (tone A_1 "Analytical") (STV 1 1))'],
+            },
+            translate_query=lambda message, facts: translated_queries.append((message, facts))
+            or '(: $proof (tone A_1 "Analytical") $tv)',
+            get_chainer_result=lambda query: {
+                "status": "success",
+                "justification": query,
+            },
+            logger=None,
+        )
+
+        self.assertEqual(len(translated_queries), 1)
+        self.assertIn('(tone A_1 "Analytical")', response)
+        self.assertEqual(calls[0]["name"], "translate_query_nl2pln")
 
 
 if __name__ == "__main__":
