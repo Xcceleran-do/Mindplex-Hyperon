@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { GraphData, GraphNode } from '../types';
 import { updateHighlightState } from '../utils/highlightManager';
+import { MettaParserImpl } from '../services/parser/MettaParser';
+import { ColumnarTransformer } from '../services/graph/ColumnarTransformer';
 
 const node = (
   id: string,
@@ -78,5 +80,35 @@ describe('updateHighlightState', () => {
     });
 
     expect([...result.highlightedNodes].filter((id) => id.startsWith('article-'))).toEqual([]);
+  });
+
+  it('intersects filters produced from real PeTTa-formatted facts', () => {
+    const source = [
+      '((engagement A_1 "High") (STV 0.8 0.9))',
+      '((tone A_1 "Analytical") (STV 0.9 0.9))',
+      '((engagement A_2 "High") (STV 0.8 0.9))',
+      '((tone A_2 "Critical") (STV 0.9 0.9))',
+      '((engagement A_3 "Low") (STV 0.3 0.9))',
+      '((tone A_3 "Analytical") (STV 0.9 0.9))',
+    ].join('\n');
+    const triples = new MettaParserImpl().extractTriples(source);
+    const parsedGraph = new ColumnarTransformer().transformToColumnar(triples);
+
+    const result = updateHighlightState(parsedGraph, {
+      active: true,
+      propertyFilters: [
+        { property: 'engagement', value: '"High"' },
+        { property: 'tone', value: '"Analytical"' },
+      ],
+    });
+
+    expect(
+      parsedGraph.nodes
+        .filter(
+          (candidate) => candidate.metadata.columnType === 'article'
+            && result.highlightedNodes.has(candidate.id),
+        )
+        .map((candidate) => candidate.metadata.originalExpression),
+    ).toEqual(['A_1']);
   });
 });

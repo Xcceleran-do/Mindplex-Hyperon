@@ -245,6 +245,7 @@ const drawEdge = (
   propertyColors: Map<string, string>,
   dense: boolean,
 ) => {
+  if (filterState.active && !highlightState.highlightedEdges.has(edge.id)) return;
   const linked = isLinked(edge, focusNode);
   const highlighted = !filterState.active || highlightState.highlightedEdges.has(edge.id);
   const alpha = linked ? 0.78 : filterState.active ? (highlighted ? 0.34 : 0.018) : dense ? 0.075 : 0.15;
@@ -299,6 +300,7 @@ const drawNode = (
   propertyColors: Map<string, string>,
 ) => {
   const filterHighlighted = !filterState.active || highlightState.highlightedNodes.has(node.id);
+  if (filterState.active && node.kind === 'article' && !filterHighlighted) return;
   const hovered = hoveredNode?.id === node.id;
   const selected = selectedNode?.id === node.id;
   const focused = hovered || selected;
@@ -373,16 +375,21 @@ const addOrToggleFilter = (node: AtlasNode, filterState: FilterState, multi: boo
 
   const propertyFilter = { property: node.propertyName || '', value: node.label };
   const currentPropertyFilters = filterState.propertyFilters || [];
-  const propertyFilters = multi ? [...currentPropertyFilters] : [];
+  const propertyFilters = [...currentPropertyFilters];
   const existing = propertyFilters.findIndex(
     (filter) => filter.property === propertyFilter.property && filter.value === propertyFilter.value,
   );
-  const isOnlyCurrentFilter = !multi
-    && currentPropertyFilters.length === 1
-    && currentPropertyFilters[0].property === propertyFilter.property
-    && currentPropertyFilters[0].value === propertyFilter.value;
   if (existing >= 0) propertyFilters.splice(existing, 1);
-  else if (!isOnlyCurrentFilter) propertyFilters.push(propertyFilter);
+  else {
+    if (!multi) {
+      for (let index = propertyFilters.length - 1; index >= 0; index -= 1) {
+        if (propertyFilters[index].property === propertyFilter.property) {
+          propertyFilters.splice(index, 1);
+        }
+      }
+    }
+    propertyFilters.push(propertyFilter);
+  }
   return {
     active: propertyFilters.length > 0 || (filterState.articleIds?.length || 0) > 0,
     articleIds: filterState.articleIds || [],
@@ -408,6 +415,15 @@ const SemanticAtlas: Component<SemanticAtlasProps> = (props) => {
   const [tooltip, setTooltip] = createSignal({ visible: false, x: 0, y: 0, node: null as AtlasNode | null });
   const [focusedNode, setFocusedNode] = createSignal<AtlasNode | null>(null);
   const layout = createMemo(() => buildLayout(props.graphData));
+
+  const interactiveNodes = () => {
+    const currentLayout = layout();
+    if (!props.filterState.active) return currentLayout.nodes;
+    const highlighted = updateHighlightState(props.graphData, props.filterState).highlightedNodes;
+    return currentLayout.nodes.filter(
+      (node) => node.kind !== 'article' || highlighted.has(node.id),
+    );
+  };
 
   const worldFromEvent = (event: MouseEvent | WheelEvent): Point => {
     const rect = canvasRef!.getBoundingClientRect();
@@ -533,7 +549,7 @@ const SemanticAtlas: Component<SemanticAtlasProps> = (props) => {
     pointerStart = { x: event.clientX, y: event.clientY };
     lastPoint = pointerStart;
     moved = false;
-    const node = getNodeAtPoint(layout().nodes, worldFromEvent(event), transform.scale);
+    const node = getNodeAtPoint(interactiveNodes(), worldFromEvent(event), transform.scale);
     if (node) {
       interaction = 'node';
       draggedNode = node;
@@ -567,7 +583,7 @@ const SemanticAtlas: Component<SemanticAtlasProps> = (props) => {
     }
 
     const rect = canvasRef.getBoundingClientRect();
-    hoveredNode = getNodeAtPoint(layout().nodes, worldFromEvent(event), transform.scale);
+    hoveredNode = getNodeAtPoint(interactiveNodes(), worldFromEvent(event), transform.scale);
     updateCursor(hoveredNode ? 'grab' : 'default');
     setTooltip({
       visible: Boolean(hoveredNode),
@@ -602,7 +618,7 @@ const SemanticAtlas: Component<SemanticAtlasProps> = (props) => {
   };
 
   const handleDoubleClick = (event: MouseEvent) => {
-    const node = getNodeAtPoint(layout().nodes, worldFromEvent(event), transform.scale);
+    const node = getNodeAtPoint(interactiveNodes(), worldFromEvent(event), transform.scale);
     if (!node) return;
     node.fx = undefined;
     node.fy = undefined;
