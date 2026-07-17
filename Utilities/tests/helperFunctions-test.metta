@@ -202,43 +202,38 @@
 !(test (multiCartesian ((x) (1 2 3) (a b))) ((x 1 a) (x 1 b) (x 2 a) (x 2 b) (x 3 a) (x 3 b)))
 !(test (multiCartesian ((1) (a b) (x z) (3 4))) ((1 a x 3) (1 a x 4) (1 a z 3) (1 a z 4) (1 b x 3) (1 b x 4) (1 b z 3) (1 b z 4)))
 
-;; ---- find-atom ----
-!(assertEqual (find-atom ((audience-expertise $x "intermediate") (STV 0.4 0.9)) STV) (STV 0.4 0.9))
-!(assertEqual (find-atom ((audience-expertise $x "intermediate")) STV) ())
+;; Test cases for clamp01
+!(test (clamp01 0.5) 0.5)
+!(test (clamp01 0.0) 0.0)
+!(test (clamp01 1.0) 1.0)
+!(test (clamp01 -0.3) 0.0)
+!(test (clamp01 1.7) 1.0)
+!(test (clamp01 -5.0) 0.0)
+!(test (clamp01 100.0) 1.0)
 
-;; ---- pick-consequent ----
-!(assertEqual (pick-consequent ((audience-expertise $x "intermediate") (engagement $x "Low"))) (engagement $x "Low"))
-!(assertEqual (pick-consequent ((audience-expertise $x "intermediate") (style $x humor))) (style $x humor))
-
-;; ---- remove-equal ----
-!(assertEqual (remove-equal ((a 1) (b 2) (c 3)) (b 2)) ((a 1) (c 3)))
-
-;; ---- clamp01 ----
-!(assertEqual (clamp01 0.5) 0.5)
-!(assertEqual (clamp01 (-0.3)) 0.0)
-!(assertEqual (clamp01 1.7) 1.0)
-
-;; ---- stv-values ----
-!(assertEqual (stv-values ((a 1) (STV 0.4 0.9))) (0.4 0.9))
-!(assertEqual (stv-values ((a 1))) (1.0 1.0))
-
-;; ---- strip-stv ----
-!(assertEqual (strip-stv ((a 1) (STV 0.4 0.9))) ((a 1)))
-!(assertEqual (strip-stv ((a 1))) ((a 1)))
-
-;; ---- build-rule ----
-!(assertEqual
-  (build-rule ((audience-expertise $x "intermediate") (engagement $x "Low")) (0.4 0.9) rule_1)
+;; Test cases for build-rule
+!(test
+  (build-rule (((audience-expertise $x "intermediate") (engagement $x "Low")) (STV 0.4 0.9)) rule_1)
   (: rule_1 (Implication (Premises (audience-expertise $x "intermediate")) (Conclusions (engagement $x "Low"))) (STV 0.4 0.9)))
 
-;; ---- pattern->rule ----
-!(assertEqual
-  (pattern->rule (, (audience-expertise $x "intermediate") (engagement $x "Low")) rule_1)
-  (: rule_1 (Implication (Premises (audience-expertise $x "intermediate")) (Conclusions (engagement $x "Low"))) (STV 1.0 1.0)))
+!(test
+  (build-rule (((style $x humor) (word-length $x short) (engagement $x "High")) (STV 1.0 1.0)) rule_2)
+  (: rule_2 (Implication (Premises (style $x humor) (word-length $x short)) (Conclusions (engagement $x "High"))) (STV 1.0 1.0)))
+!(test
+  (build-rule (((audience-expertise $x "intermediate") (engagement $x "Low")) (STV 1.5 -0.2)) rule_3)
+  (: rule_3 (Implication (Premises (audience-expertise $x "intermediate")) (Conclusions (engagement $x "Low"))) (STV 1.0 0.0)))
 
-;; ---- patterns->rules on your real dataset ----
-!(patterns->rules
-  ((((audience-expertise $x1 "intermediate") (engagement $x1 "Low")) (STV 0.4117647058823529 0.9333333333333333))
-   (((audience-expertise $x2 "intermediate") (engagement $x2 "High")) (STV 0.38235294117647056 0.9285714285714286))
-   (((audience-expertise $x3 "mixed") (engagement $x3 "Medium")) (STV 0.6153846153846154 0.8888888888888888))
-   (((audience-expertise $x4 "intermediate") (engagement $x4 "Medium")) (STV 0.17647058823529413 0.8571428571428571))))
+;; Test cases for patterns->rules
+!(test
+  (patterns->rules
+    ((((audience-expertise $x1 "intermediate") (engagement $x1 "Low")) (STV 0.41 0.93))))
+  ((: rule_1 (Implication (Premises (audience-expertise $x1 "intermediate")) (Conclusions (engagement $x1 "Low"))) (STV 0.41 0.93))))
+
+!(test
+  (patterns->rules
+    ((((audience-expertise $x1 "intermediate") (engagement $x1 "Low")) (STV 0.41 0.93))
+     (((audience-expertise $x2 "mixed") (engagement $x2 "Medium")) (STV 0.61 0.88))))
+  ((: rule_1 (Implication (Premises (audience-expertise $x1 "intermediate")) (Conclusions (engagement $x1 "Low"))) (STV 0.41 0.93))
+   (: rule_2 (Implication (Premises (audience-expertise $x2 "mixed")) (Conclusions (engagement $x2 "Medium"))) (STV 0.61 0.88))))
+
+!(test (patterns->rules ()) ())
