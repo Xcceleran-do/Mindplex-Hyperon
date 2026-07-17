@@ -36,6 +36,7 @@ def dataset_file_path() -> str:
 CHAINER_METTA_SETUP = f"""
 !(import! &self {PROJECT_ROOT}/experiments/utils/common-utils)
 !(import! &self {PROJECT_ROOT}/experiments/frequent-pattern-miner/etv-utils)
+!(import! &self {PROJECT_ROOT}/Utilities/helperFunctions)
 """
 
 MINING_METTA_SETUP = f"""
