@@ -401,91 +401,52 @@
 (= (match-type-or $value $type1 $type2)
    (match-types $type1 $type2 True $value))
 
-; utilities
-(: find-atom (-> Expression Atom Atom))
-(= (find-atom $lst $sym)
-   (let $matches (filter-atom $lst $a (== (car-atom $a) $sym))
-     (if (== $matches ()) () (car-atom $matches))))
-
+;; ============================================================
+;; utilities
+;; ============================================================
+;; Returns the engagement fact from a list of atoms, or `empty`
 (: pick-consequent (-> Expression Atom))
 (= (pick-consequent $atoms)
-   (let $found (find-atom $atoms engagement)
-     (if (== $found ()) (last $atoms) $found)))
-
-(: remove-equal (-> Expression Atom Expression))
-(= (remove-equal $lst $target) (exclude-item $target $lst))
-
+   (let $matches (filter-atom $atoms $a (== (car-atom $a) engagement))
+     (if (== $matches ()) empty (car-atom $matches))))
+;; Clamps a number into the closed interval [0.0, 1.0].
 (: clamp01 (-> Number Number))
 (= (clamp01 $n)
    (let $lo (max-atom ($n 0.0))
      (min-atom ($lo 1.0))))
-
-; STV extraction
-
-(: stv-values (-> Expression Expression))
-(= (stv-values $atoms)
-   (let $found (find-atom $atoms STV)
-     (if (== $found ())
-         (1.0 1.0)
-         (cdr-atom $found))))
-
-(: strip-stv (-> Expression Expression))
-(= (strip-stv $atoms)
-   (let $found (find-atom $atoms STV)
-     (if (== $found ())
-         $atoms
-         (remove-equal $atoms $found))))
-
-
-; build-rule
-
-(: build-rule (-> Expression Expression Atom Atom))
-(= (build-rule $atoms $sc $name)
-   (let* (
-          ($consequent      (pick-consequent $atoms))
-          ($premises        (remove-equal $atoms $consequent))
-          ($premises-expr   (cons-atom Premises $premises))
-          ($conclusion-expr (Conclusions $consequent))
-          ($s (clamp01 (first-from-pair $sc)))
-          ($c (clamp01 (second-from-pair $sc)))
-         )
-     (if (== (length $premises) 0)
-         ()
-         (: $name (Implication $premises-expr $conclusion-expr) (STV $s $c)))))
-
 ;; ============================================================
-;; pattern->rule
-;; normalize-atoms intentionally not wired in here, matching your
-;; uploaded file's documented block on this — unchanged.
+;; build-rule
+;; Takes a whole mined pattern — (atoms-list (STV s c)) — and a
+;; rule name, and builds the Implication/STV rule atom directly.
+;;If $pattern doesn't match the (atoms (STV s c)) shape, the outer unify
+;; returns () and no rule is built for that pattern.
 ;; ============================================================
-
-(: pattern->rule (-> Expression Atom Atom))
-(= (pattern->rule $conjunction $name)
-   (let* (
-          ($raw-atoms (cdr-atom $conjunction))
-          ($atoms     (strip-stv $raw-atoms))
-          ($sc        (stv-values $raw-atoms))
-         )
-     (if (== (length $atoms) 0)
-         ()
-         (build-rule $atoms $sc $name))))
-
-; rule naming
-
-(: index->name (-> Number Atom))
-(= (index->name $i) (atom_concat rule_ $i))
-
-; patterns->rules — replaces patterns_to_chainer_rules
-
-(: patterns->rules-from (-> Expression Number Expression))
-(= (patterns->rules-from () $i) ())
-(= (patterns->rules-from $patterns $i)
+(: build-rule (-> Expression Atom Atom))
+(= (build-rule $pattern $name)
+   (if (= $pattern ($atoms (STV $s $c)))
+     (let* (
+            ($consequent      (pick-consequent $atoms))
+            ($premises        (exclude-item $consequent $atoms))
+            ($premises-expr   (cons-atom Premises $premises))
+            ($conclusion-expr (Conclusions $consequent))
+           )
+       (: $name (Implication $premises-expr $conclusion-expr)
+          (STV (clamp01 $s) (clamp01 $c))))
+     ()))
+;; ============================================================
+;; patterns->rules —
+;; Recursive driver: builds a rule per pattern, starting from
+;; index $i, skipping any pattern that fails to produce a rule.
+;; ============================================================
+(: patterns->rules (-> Expression Number Expression))
+(= (patterns->rules () $i) ())
+(= (patterns->rules $patterns $i)
    (let ($h $t) (decons-atom $patterns)
-     (let $rule (pattern->rule $h (index->name $i))
-       (let $rest (patterns->rules-from $t (+ $i 1))
+     (let $rule (build-rule $h (atom_concat rule_ $i))
+       (let $rest (patterns->rules $t (+ $i 1))
          (if (== $rule ())
              $rest
              (cons-atom $rule $rest))))))
 
-(: patterns->rules (-> Expression Expression))
-(= (patterns->rules $patterns) (patterns->rules-from $patterns 1))
+;; Overload: default starting index of 1.
+(= (patterns->rules $patterns) (patterns->rules $patterns 1))
