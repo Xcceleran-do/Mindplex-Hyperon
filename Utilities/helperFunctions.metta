@@ -400,3 +400,53 @@
 
 (= (match-type-or $value $type1 $type2)
    (match-types $type1 $type2 True $value))
+
+;; ============================================================
+;; utilities
+;; ============================================================
+;; Returns the engagement fact from a list of atoms, or `empty`
+(: pick-consequent (-> Expression Atom))
+(= (pick-consequent $atoms)
+   (let $matches (filter-atom $atoms $a (== (car-atom $a) engagement))
+     (if (== $matches ()) empty (car-atom $matches))))
+;; Clamps a number into the closed interval [0.0, 1.0].
+(: clamp01 (-> Number Number))
+(= (clamp01 $n)
+   (let $lo (max-atom ($n 0.0))
+     (min-atom ($lo 1.0))))
+;; ============================================================
+;; build-rule
+;; Takes a whole mined pattern — (atoms-list (STV s c)) — and a
+;; rule name, and builds the Implication/STV rule atom directly.
+;;If $pattern doesn't match the (atoms (STV s c)) shape, the outer unify
+;; returns () and no rule is built for that pattern.
+;; ============================================================
+(: build-rule (-> Expression Atom Atom))
+(= (build-rule $pattern $name)
+   (if (= $pattern ($atoms (STV $s $c)))
+     (let* (
+            ($consequent      (pick-consequent $atoms))
+            ($premises        (exclude-item $consequent $atoms))
+            ($premises-expr   (cons-atom Premises $premises))
+            ($conclusion-expr (Conclusions $consequent))
+           )
+       (: $name (Implication $premises-expr $conclusion-expr)
+          (STV (clamp01 $s) (clamp01 $c))))
+     ()))
+;; ============================================================
+;; patterns->rules —
+;; Recursive driver: builds a rule per pattern, starting from
+;; index $i, skipping any pattern that fails to produce a rule.
+;; ============================================================
+(: patterns->rules (-> Expression Number Expression))
+(= (patterns->rules () $i) ())
+(= (patterns->rules $patterns $i)
+   (let ($h $t) (decons-atom $patterns)
+     (let $rule (build-rule $h (atom_concat rule_ $i))
+       (let $rest (patterns->rules $t (+ $i 1))
+         (if (== $rule ())
+             $rest
+             (cons-atom $rule $rest))))))
+
+;; Overload: default starting index of 1.
+(= (patterns->rules $patterns) (patterns->rules $patterns 1))

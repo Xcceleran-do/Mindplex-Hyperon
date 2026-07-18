@@ -4,7 +4,8 @@ import hashlib
 import re
 from collections.abc import Mapping
 from typing import Any, Optional
-
+from experiments.services.petta_service import PeTTaService
+from experiments.api.config import  MINING_METTA_SETUP,PROJECT_ROOT
 DATASET_FACT_LINE_RE = re.compile(
     r'^\s*\(\s*(\(.+\))\s+(\(STV\s+[0-9eE\.\-]+\s+[0-9eE\.\-]+\))\s*\)\s*$'
 )
@@ -61,29 +62,19 @@ def parse_pattern_string(pattern_text: str) -> Optional[dict[str, str]]:
 
 
 def patterns_to_chainer_rules(patterns: list[Any]) -> list[str]:
-    rules: list[str] = []
-    for index, pattern in enumerate(patterns, start=1):
-        pattern_text = str(pattern.get("pattern", "")) if isinstance(pattern, dict) else str(pattern)
-        atoms = [
-            re.sub(r"\$_\d+", "$x", atom)
-            for atom in MINED_PATTERN_ATOM_RE.findall(pattern_text)
-        ]
-        if not atoms:
-            continue
-        stv_match = MINED_PATTERN_STV_RE.search(pattern_text)
-        strength, confidence = stv_match.groups() if stv_match else ("1.0", "1.0")
-        strength_value = min(max(float(strength), 0.0), 1.0)
-        confidence_value = min(max(float(confidence), 0.0), 1.0)
-        consequent = next((atom for atom in atoms if atom.startswith("(engagement ")), atoms[-1])
-        premises = [atom for atom in atoms if atom != consequent]
-        if not premises:
-            continue
-        rules.append(
-            f"(: rule_{index} (Implication (Premises {' '.join(premises)}) "
-            f"(Conclusions {consequent})) (STV {strength_value} {confidence_value}))"
-        )
-    return rules
 
+    query = f"""
+    !(patterns->rules 
+        {patterns}
+    )
+    """
+    service = PeTTaService.create_required(
+        PROJECT_ROOT,
+        MINING_METTA_SETUP,
+        verbose=False,
+        load_chainer=False,
+    )
+    return service.query_lines(query)
 
 def _balanced_expression_at(text: str, idx: int) -> Optional[str]:
     if idx < 0 or idx >= len(text) or text[idx] != "(":

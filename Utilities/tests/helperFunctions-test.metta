@@ -201,3 +201,39 @@
 !(test (multiCartesian ((1 2) (a b) (x z))) ((1 a x) (1 a z) (1 b x) (1 b z) (2 a x) (2 a z) (2 b x) (2 b z)))
 !(test (multiCartesian ((x) (1 2 3) (a b))) ((x 1 a) (x 1 b) (x 2 a) (x 2 b) (x 3 a) (x 3 b)))
 !(test (multiCartesian ((1) (a b) (x z) (3 4))) ((1 a x 3) (1 a x 4) (1 a z 3) (1 a z 4) (1 b x 3) (1 b x 4) (1 b z 3) (1 b z 4)))
+
+;; Test cases for clamp01
+!(test (clamp01 0.5) 0.5)
+!(test (clamp01 0.0) 0.0)
+!(test (clamp01 1.0) 1.0)
+!(test (clamp01 -0.3) 0.0)
+!(test (clamp01 1.7) 1.0)
+!(test (clamp01 -5.0) 0.0)
+!(test (clamp01 100.0) 1.0)
+
+;; Test cases for build-rule
+!(test
+  (build-rule (((audience-expertise $x "intermediate") (engagement $x "Low")) (STV 0.4 0.9)) rule_1)
+  (: rule_1 (Implication (Premises (audience-expertise $x "intermediate")) (Conclusions (engagement $x "Low"))) (STV 0.4 0.9)))
+
+!(test
+  (build-rule (((style $x humor) (word-length $x short) (engagement $x "High")) (STV 1.0 1.0)) rule_2)
+  (: rule_2 (Implication (Premises (style $x humor) (word-length $x short)) (Conclusions (engagement $x "High"))) (STV 1.0 1.0)))
+!(test
+  (build-rule (((audience-expertise $x "intermediate") (engagement $x "Low")) (STV 1.5 -0.2)) rule_3)
+  (: rule_3 (Implication (Premises (audience-expertise $x "intermediate")) (Conclusions (engagement $x "Low"))) (STV 1.0 0.0)))
+
+;; Test cases for patterns->rules
+!(test
+  (patterns->rules
+    ((((audience-expertise $x1 "intermediate") (engagement $x1 "Low")) (STV 0.41 0.93))))
+  ((: rule_1 (Implication (Premises (audience-expertise $x1 "intermediate")) (Conclusions (engagement $x1 "Low"))) (STV 0.41 0.93))))
+
+!(test
+  (patterns->rules
+    ((((audience-expertise $x1 "intermediate") (engagement $x1 "Low")) (STV 0.41 0.93))
+     (((audience-expertise $x2 "mixed") (engagement $x2 "Medium")) (STV 0.61 0.88))))
+  ((: rule_1 (Implication (Premises (audience-expertise $x1 "intermediate")) (Conclusions (engagement $x1 "Low"))) (STV 0.41 0.93))
+   (: rule_2 (Implication (Premises (audience-expertise $x2 "mixed")) (Conclusions (engagement $x2 "Medium"))) (STV 0.61 0.88))))
+
+!(test (patterns->rules ()) ())
