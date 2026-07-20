@@ -60,24 +60,21 @@ def parse_pattern_string(pattern_text: str) -> Optional[dict[str, str]]:
         "support": support,
     }
 
-
 def patterns_to_chainer_rules(patterns: list[Any]) -> list[str]:
-    metta_patterns = []
-    for pattern in patterns:
-        metta_patterns.append(
-            f"""
-            (
-              {pattern["pattern"]}
-              {pattern["support"]}
-            )
-            """
+    metta_patterns = " ".join(
+        f"""
+        (
+            {p["pattern"]}
         )
-    metta_patterns = " ".join(metta_patterns)
+        """  for p in patterns)
     query = f"""
-    !(patterns->rules (
-        {metta_patterns}
-    ))
+    !(patterns->rules
+        (
+            {metta_patterns}
+        )
+    )
     """
+
     service = PeTTaService.create_required(
         PROJECT_ROOT,
         MINING_METTA_SETUP,
