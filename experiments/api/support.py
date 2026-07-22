@@ -60,22 +60,29 @@ def parse_pattern_string(pattern_text: str) -> Optional[dict[str, str]]:
         "support": support,
     }
 
-
 def patterns_to_chainer_rules(patterns: list[Any]) -> list[str]:
-
+    metta_patterns = " ".join(
+        f"""
+        (
+            {p["pattern"]}
+        )
+        """  for p in patterns)
     query = f"""
-    !(patterns->rules 
-        {patterns}
+    !(patterns->rules
+        (
+            {metta_patterns}
+        )
     )
     """
+
     service = PeTTaService.create_required(
         PROJECT_ROOT,
         MINING_METTA_SETUP,
         verbose=False,
         load_chainer=False,
     )
-    return service.query_lines(query)
 
+    return service.query_lines(query)
 def _balanced_expression_at(text: str, idx: int) -> Optional[str]:
     if idx < 0 or idx >= len(text) or text[idx] != "(":
         return None
