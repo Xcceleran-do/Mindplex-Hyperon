@@ -20,7 +20,7 @@
 ;; number of conjuncts 3 -4th arg
 
 !(pattern-miner purifiedDbSpace 3 4) 
-!(println! "============ end ================")
+; !(println! "============ end ================")
 ;; demo result structure
     ; ((supportOf (, (Inheritance $y human) (Inheritance $y man)) 3) 
     ; (supportOf (, (Inheritance $j human) (Inheritance $j ugly)) 3) 
