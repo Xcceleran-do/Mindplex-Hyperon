@@ -1,7 +1,7 @@
 ;; INFO: Uncomment for the use of MeTTaLog.
 ;; (: >= (-> Number Number Bool))
 ;; (= (>= $a $b) (or (== $a $b) (> $a $b)))
-
+(= (!= $x $y) (not (== $x $y)))
 ;Function to cocatinate two tuples (A B) (C D) ==> (A B C D)
 (: concatTuple (-> Expression Expression Expression))
 (= (concatTuple $x $y) (union-atom $x $y)) 
@@ -193,7 +193,7 @@
 (= (replaceByIndex $expr $index $new $acc)
     (if (== $expr ()) $acc 
         (let ($head $tail) (decons-atom $expr)
-        (if (= $index 0)
+        (if (== $index 0)
             (let $f (cons-atom $new $tail)
                 (union-atom $acc $f))
             (let $nacc (union-atom $acc ($head))
@@ -307,7 +307,8 @@
 (= (cartesianAppend $combinations $new-list)
     (foldl-atom $combinations () $acc-outer $combo
         (foldl-atom $new-list $acc-outer $acc-inner $new-element
-            (eval (union-atom $acc-inner ((appendAtom $combo $new-element))))
+            (let $appended (appendAtom $combo $new-element)
+                (union-atom $acc-inner ($appended)))
         )
     )
 )
@@ -333,74 +334,6 @@
 (= (if-equal2 $A $B $Then $Else)
    (if (== $A $B) $Then $Else))
 
-(= (assertEqual $A $B)
-   (assert (== $A $B)))
-
-(= (assertAlphaEqual $A $B)
-   (assert (=alpha $A $B)))
-
-(: unify (-> Expression Expression Expression Expression %Undefined%))
-
-(= (unify $space $pattern $then $else)
-   (if (is-space $space)
-       (let $temp (cut)
-            (case (match $space $pattern $pattern)
-                  (($pattern $then)
-                   (Empty $else)))) (empty)))
-
-(= (unify $a $b $then $else)
-   (if (= $a $b)
-       (eval $then)
-       (eval $else)))
-
-(: add-reduct (-> %Undefined% Expression Bool))
-(= (add-reduct $space $f)
-   (let* (($headbody (cdr-atom $f))
-          ($head (car-atom $headbody))
-          ($body (cdr-atom $headbody))
-          ($bodyreduced (eval $body)))
-         (add-atom $space (= $head $bodyreduced))))
-
-;Error Handling
-(= (if-error $X $A $B)
-   (if (== (car-atom $X) Error) 
-       $A $B))
-
-(= (return-on-error $result $B)
-   (if-error $result
-             $result
-             $B))
-
-;Evaluation control
-(= (for-each-in-atom $L $f)
-   (map-atom $L $f))
-
-(: evalc (-> Expression %Undefined% %Undefined%))
-(= (evalc $expression &self)
-   (eval $expression))
-
-;Quoting
-(: unquote (-> Expression %Undefined%))
-(= (unquote (quote $A))
-   (eval $A))
-
-(: noreduce-eq (-> Expression Expression Bool))
-(= (noreduce-eq $A $B)
-   (== $A $B))
-
-;Types
-(= (is-function (-> $A $B)) (let $temp (cut) True))
-(= (is-function $X) False)
-
-(= (get-type-space &self $x)
-   (get-type $x))
-
-(= (match-types $A $B $Then $Else)
-   (if (== $A $B) $Then $Else))
-
-(= (match-type-or $value $type1 $type2)
-   (match-types $type1 $type2 True $value))
-
 ;; ============================================================
 ;; utilities
 ;; ============================================================
@@ -423,7 +356,7 @@
 ;; ============================================================
 (: build-rule (-> Expression Atom Atom))
 (= (build-rule $pattern $name)
-   (if (= $pattern ($atoms (STV $s $c)))
+   (unify  $pattern ($atoms (STV $s $c))
      (let* (
             ($consequent      (pick-consequent $atoms))
             ($premises        (exclude-item $consequent $atoms))
@@ -438,15 +371,14 @@
 ;; Recursive driver: builds a rule per pattern, starting from
 ;; index $i, skipping any pattern that fails to produce a rule.
 ;; ============================================================
-(: patterns->rules (-> Expression Number Expression))
-(= (patterns->rules () $i) ())
-(= (patterns->rules $patterns $i)
-   (let ($h $t) (decons-atom $patterns)
-     (let $rule (build-rule $h (atom_concat rule_ $i))
-       (let $rest (patterns->rules $t (+ $i 1))
-         (if (== $rule ())
-             $rest
-             (cons-atom $rule $rest))))))
-
-;; Overload: default starting index of 1.
 (= (patterns->rules $patterns) (patterns->rules $patterns 1))
+
+(= (patterns->rules $patterns $start)
+   (let ($final-i $rules)
+        (foldl-atom $patterns ($start ()) $acc $p
+          (let ($i $built) $acc
+            (let $rule (build-rule $p (atom_concat rule_ $i))
+              (if (== $rule ())
+                  ((+ $i 1) $built)
+                  ((+ $i 1) (union-atom $built ($rule)))))))
+        $rules))
