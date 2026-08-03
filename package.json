@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "@metta-ts/core": "^2.10.0",
+    "@metta-ts/hyperon": "^2.7.0",
+    "@metta-ts/libraries": "^2.7.0",
+    "@metta-ts/node": "^2.10.0",
+    "@metta-ts/prolog": "^2.7.0"
+  }
+}
