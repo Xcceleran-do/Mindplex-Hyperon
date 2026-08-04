@@ -1,6 +1,5 @@
-
-!(import! &self ../../../PeTTa/lib/lib_import.metta)
-!(import_prolog_functions_from_file "/home/henok/Desktop/projects/Mindplex-Hyperon/experiments/frequent-pattern-miner/conj_exp.pl" (unique_combinations_star cut-first-char promote_engagement_conj)) 
+!(pragma! import-root "../../..")
+!(import! &self ../../../PeTTa/lib/lib_import.metta) 
 !(import! &self ../../utils/common-utils)
 !(import! &self ../../frequent-pattern-miner/frequent-pattern-miner)
 
