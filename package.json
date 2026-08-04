@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "mining-runner": "tsx mining-runner.ts"
+  },
   "dependencies": {
     "@metta-ts/core": "^2.10.0",
     "@metta-ts/hyperon": "^2.7.0",
