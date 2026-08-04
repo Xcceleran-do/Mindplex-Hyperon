@@ -756,7 +756,7 @@
 ; )
 ; )
 (= (n_conjuncts $pattern) (
-        if (== (get-metatype $var) Symbol)
+        if (== (get-metatype $pattern) Symbol)
             0
             (let $che (has-type , $pattern) (if $che (get-arity $pattern) 1)))
         )
@@ -796,7 +796,7 @@
 ; (: db_size (-> SpaceType  Number))
 (= (db_size $db)
      (tuple-count (collapse (get-atoms $db)))
-    
+
 )
 
  ;;abs accepts a number and returns an absolute value of a number
@@ -863,12 +863,14 @@
         (((engagement $x $y) True)
          ($other False))))
 
-(= (remove-engagement-clauses ()) ())
 (= (remove-engagement-clauses $clauses)
-    (let ($head $tail) (decons-atom $clauses)
-        (if (engagement-clause? $head)
-            (remove-engagement-clauses $tail)
-            (cons-atom $head (remove-engagement-clauses $tail)))))
+    (if (== $clauses ())
+        ()
+        (let ($head $tail) (decons-atom $clauses)
+            (if (engagement-clause? $head)
+                (remove-engagement-clauses $tail)
+                (let $rest (remove-engagement-clauses $tail)
+                    (cons-atom $head $rest))))))
 
 (= (wrap-conjunction $clauses)
     (if (== $clauses ())
