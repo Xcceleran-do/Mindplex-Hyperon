@@ -1,15 +1,13 @@
 {
-  "scripts": {
-    "mining-runner": "tsx mining-runner.ts"
-  },
-  "devDependencies": {
-    "tsx": "^4.0.0"
-  },
   "dependencies": {
     "@metta-ts/core": "^2.10.0",
     "@metta-ts/hyperon": "^2.7.0",
     "@metta-ts/libraries": "^2.7.0",
     "@metta-ts/node": "^2.10.0",
     "@metta-ts/prolog": "^2.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "tsx": "^4.23.7"
   }
 }
