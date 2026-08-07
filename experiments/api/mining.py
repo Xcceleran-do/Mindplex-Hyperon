@@ -175,9 +175,10 @@ def mine_pattern(numberOfConjunction: int, min_support: int = DEFAULT_MIN_SUPPOR
                 "message": "The reasoning engine did not evaluate the mining query.",
             }
         result_lines = parse_petta_output(petta_output)
-
+        print(f"PeTTa mining output lines: {result_lines}", file=sys.stderr)
         patterns = []
         full_answer_str = " ".join(result_lines)
+        print(f"PeTTa mining output: {full_answer_str}", file=sys.stderr)
         support_matches = extract_support_of_expressions(full_answer_str)
 
         for match in support_matches:
