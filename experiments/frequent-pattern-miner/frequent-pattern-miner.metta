@@ -22,7 +22,17 @@
 ;; Output: the instantiated pattern with a variable on the open side, or Empty
 ; (:candidatePatternMaker (-> SpaceType (Specialized Pattern) Number Expression Expression))
 
+(= (candidatePatternMaker $dbspace ($link left $rValue) $minsup)
+    (if (sup-eval $dbspace ($link $x $rValue $stv) $minsup)
+        ($link (cut-first-char l$x) $rValue $stv-l)
+        (empty))
+)
 
+(= (candidatePatternMaker $dbspace ($link $lValue right) $minsup)
+    (if (sup-eval $dbspace ($link $lValue $y $stv) $minsup)
+        ($link $lValue (cut-first-char r$y) $stv-r)
+        (empty))
+)
 
 ;---------------------------------------
 ;; createSpecials
