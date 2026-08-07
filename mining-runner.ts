@@ -1,52 +1,128 @@
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { MeTTa, E, S, atomToJs, type Atom } from '@metta-ts/hyperon';
+import { MeTTa, E, S, V, ValueAtom, atomToJs, type Atom } from '@metta-ts/hyperon';
 
+// ---------------------------------------------------------------------------
+// parseMettaExpr: Parses a MeTTa expression string into a JS array.
+// This preserves $ prefixes on variables, unlike atomToJs().
+// ---------------------------------------------------------------------------
+function parseMettaExpr(str: string): unknown {
+  let pos = 0;
+
+  function skipWhitespace(): void {
+    while (pos < str.length && /\s/.test(str[pos])) pos++;
+  }
+
+  function parseToken(): unknown {
+    skipWhitespace();
+    if (pos >= str.length) return '';
+
+    // Quoted strings
+    if (str[pos] === '"') {
+      pos++;
+      let result = '';
+      while (pos < str.length && str[pos] !== '"') {
+        if (str[pos] === '\\' && pos + 1 < str.length) pos++;
+        result += str[pos];
+        pos++;
+      }
+      pos++; // closing quote
+      return result;
+    }
+
+    // Parenthesized expression
+    if (str[pos] === '(') {
+      pos++; // skip (
+      const items: unknown[] = [];
+      skipWhitespace();
+      while (pos < str.length && str[pos] !== ')') {
+        items.push(parseToken());
+        skipWhitespace();
+      }
+      if (pos < str.length) pos++; // skip )
+      return items;
+    }
+
+    // Plain token: symbol, variable ($x), or number
+    let token = '';
+    while (pos < str.length && !/[\s()"]/.test(str[pos])) {
+      token += str[pos];
+      pos++;
+    }
+
+    if (/^-?\d+(\.\d+)?$/.test(token)) {
+      return Number(token);
+    }
+
+    return token; // keeps "$x" as "$x"
+  }
+
+  return parseToken();
+}
+
+// ---------------------------------------------------------------------------
+// atomToJsPreserveVars
+// Uses String(atom) + parseMettaExpr to preserve $ on variables.
+// ---------------------------------------------------------------------------
+function atomToJsPreserveVars(atom: Atom): unknown {
+  const str = String(atom);
+  return parseMettaExpr(str);
+}
+
+// ---------------------------------------------------------------------------
+// jsToExpr: Converts a JS value back into a native MeTTa Atom.
+// ---------------------------------------------------------------------------
 function jsToExpr(value: unknown): Atom {
+  if (value === undefined || value === null) {
+    return S('nil');
+  }
+
   if (typeof value === 'string') {
+    if (value.startsWith('$')) {
+      return V(value.slice(1));
+    }
     return S(value);
   }
+
   if (typeof value === 'number' || typeof value === 'boolean') {
-    return S(String(value));
+    return ValueAtom(value);
   }
+
   if (Array.isArray(value)) {
-    // FIX: E is variadic ((...children) => ...), not array-taking.
-    // Passing a single array made `children` = [theArray], so
-    // children.map(c => c.catom) tried to read .catom off the array
-    // itself (undefined), which then crashed inside core.expr() trying
-    // to read `.ground` off that undefined value. Spread the array so
-    // each atom is passed as its own argument, matching E's real signature.
-    return E(...value.map(jsToExpr));
+    const children = value
+      .map(jsToExpr)
+      .filter((child) => child !== undefined && child !== null);
+    return E(...children);
   }
-  // fallback for anything unexpected
+
   return S(String(value));
 }
 
 // ---------------------------------------------------------------------------
 // cut-first-char
-// Faithful port of conj_exp.pl's cut-first-char/2: strips the first
-// character of a symbol/string, leaving other atom kinds unchanged.
 // ---------------------------------------------------------------------------
 function registerCutFirstChar(metta: MeTTa): void {
   metta.registerOperation('cut-first-char', (args: Atom[]) => {
     const input = atomToJs(args[0]);
+
     if (typeof input !== 'string' || input.length === 0) {
       return [args[0]];
     }
+
     return [jsToExpr(input.slice(1))];
   });
 }
 
 // ---------------------------------------------------------------------------
 // promote_engagement_conj
-// Faithful port: move clauses whose functor is (or starts with) "engagement"
-// or "audience-expertise" to the end of the conjunction.
 // ---------------------------------------------------------------------------
 const REQUIRED_KEYWORDS = ['engagement', 'audience-expertise'];
 
 function clauseFunctor(clause: unknown): string | undefined {
-  return Array.isArray(clause) && typeof clause[0] === 'string' ? clause[0] : undefined;
+  return Array.isArray(clause) && typeof clause[0] === 'string'
+    ? clause[0]
+    : undefined;
 }
 
 function hasRequiredKeyword(clause: unknown): boolean {
@@ -56,25 +132,28 @@ function hasRequiredKeyword(clause: unknown): boolean {
 
 function registerPromoteEngagementConj(metta: MeTTa): void {
   metta.registerOperation('promote_engagement_conj', (args: Atom[]) => {
-    const conjunction = atomToJs(args[0]);
+    const conjunction = atomToJsPreserveVars(args[0]);
+
     if (!Array.isArray(conjunction) || conjunction[0] !== ',') {
       return [args[0]];
     }
-    const clauses = conjunction.slice(1);
-    const others = clauses.filter((c) => !hasRequiredKeyword(c));
-    const matches = clauses.filter((c) => hasRequiredKeyword(c));
+
+    const clauses = conjunction.slice(1).filter((c) => c !== undefined && c !== null);
+
+    const uniqueClauses = clauses.filter(
+      (clause, index, self) =>
+        index === self.findIndex((c) => JSON.stringify(c) === JSON.stringify(clause)),
+    );
+
+    const others = uniqueClauses.filter((c) => !hasRequiredKeyword(c));
+    const matches = uniqueClauses.filter((c) => hasRequiredKeyword(c));
+
     return [jsToExpr([',', ...others, ...matches])];
   });
 }
 
 // ---------------------------------------------------------------------------
 // unique_combinations_star
-// Faithful port of conj_exp.pl's unique_combinations_star/3:
-//  - build size-K conjunctions where all clauses share exactly one hub
-//    variable, and no other variable is shared across any pair of clauses
-//  - each combo uses at most one clause per functor
-//  - results are deduplicated
-//  - filtered to require at least one clause per REQUIRED_KEYWORDS entry
 // ---------------------------------------------------------------------------
 interface ClauseInfo {
   readonly expr: unknown;
@@ -97,11 +176,13 @@ function exprFunctor(expr: unknown): string {
 }
 
 function buildInfos(exprs: unknown[]): ClauseInfo[] {
-  return exprs.map((expr) => {
-    const vars = new Set<string>();
-    extractVarKeys(expr, vars);
-    return { expr, vars, functor: exprFunctor(expr) };
-  });
+  return exprs
+    .filter((e) => e !== undefined && e !== null)
+    .map((expr) => {
+      const vars = new Set<string>();
+      extractVarKeys(expr, vars);
+      return { expr, vars, functor: exprFunctor(expr) };
+    });
 }
 
 function sharedVars(a: ReadonlySet<string>, b: ReadonlySet<string>): string[] {
@@ -116,7 +197,12 @@ function onlyHubShared(hub: string, a: ReadonlySet<string>, b: ReadonlySet<strin
 function combosForHub(pool: ClauseInfo[], hub: string, k: number): ClauseInfo[][] {
   const results: ClauseInfo[][] = [];
 
-  function choose(rest: ClauseInfo[], remaining: number, selected: ClauseInfo[], usedFunctors: Set<string>): void {
+  function choose(
+    rest: ClauseInfo[],
+    remaining: number,
+    selected: ClauseInfo[],
+    usedFunctors: Set<string>,
+  ): void {
     if (remaining === 0) {
       results.push([...selected]);
       return;
@@ -128,7 +214,8 @@ function combosForHub(pool: ClauseInfo[], hub: string, k: number): ClauseInfo[][
     const compatible = selected.every((s) => onlyHubShared(hub, head.vars, s.vars));
 
     if (functorOk && compatible) {
-      const nextUsed = head.functor === '' ? usedFunctors : new Set([...usedFunctors, head.functor]);
+      const nextUsed =
+        head.functor === '' ? usedFunctors : new Set([...usedFunctors, head.functor]);
       choose(tail, remaining - 1, [...selected, head], nextUsed);
     }
     choose(tail, remaining, selected, usedFunctors);
@@ -146,21 +233,28 @@ function comboSortKey(combo: ClauseInfo[]): unknown[] {
 
 function registerUniqueCombinationsStar(metta: MeTTa): void {
   metta.registerOperation('unique_combinations_star', (args: Atom[]) => {
-    const exprs = atomToJs(args[0]) as unknown[];
+    const rawExprs = atomToJsPreserveVars(args[0]);
+
     const sizeRaw = atomToJs(args[1]) as number;
     const k = Number.isInteger(sizeRaw) ? sizeRaw : Math.floor(sizeRaw);
 
-    const candidateExprs = Array.isArray(exprs)
-      ? exprs.filter((e) => Array.isArray(e))
-       : [];
+    // If input is a conjunction (, ...), skip the "," functor
+    let exprsArray: unknown[] = [];
+    if (Array.isArray(rawExprs)) {
+      exprsArray = rawExprs[0] === ',' ? rawExprs.slice(1) : rawExprs;
+    }
 
-    if (k <= 0 || candidateExprs.length < k) {
+    const exprs = exprsArray.filter((e) => e !== undefined && e !== null);
+
+    if (k <= 0 || exprs.length < k) {
       return [jsToExpr([])];
     }
 
-    const infos = buildInfos(candidateExprs);
+    const infos = buildInfos(exprs);
     const hubs = new Set<string>();
-    for (const info of infos) for (const v of info.vars) hubs.add(v);
+    for (const info of infos) {
+      for (const v of info.vars) hubs.add(v);
+    }
 
     const seen = new Set<string>();
     const results: unknown[] = [];
@@ -174,7 +268,9 @@ function registerUniqueCombinationsStar(metta: MeTTa): void {
         if (seen.has(key)) continue;
         seen.add(key);
 
-        const clauses = combo.map((i) => i.expr);
+        const clauses = combo.map((i) => i.expr).filter((c) => c !== undefined && c !== null);
+        if (clauses.length !== combo.length) continue;
+
         const passesFilter = REQUIRED_KEYWORDS.every((kw) =>
           clauses.some((c) => (clauseFunctor(c) ?? '').startsWith(kw)),
         );
@@ -189,9 +285,7 @@ function registerUniqueCombinationsStar(metta: MeTTa): void {
 }
 
 // ---------------------------------------------------------------------------
-// Runner: read the target file plus its real .metta imports from disk,
-// concatenate them into one real MeTTa program (no text-scraping of facts),
-// and execute it for real through metta.run().
+// Runner: read the target file plus its .metta imports from disk
 // ---------------------------------------------------------------------------
 const IMPORT_LINE = /^!?\(import!\s+&self\s+([^\s)]+)\)\s*$/;
 const PROLOG_IMPORT_LINE = /^!?\(import_prolog_functions_from_file\b.*\)\s*$/;
@@ -214,7 +308,6 @@ function loadWithImports(entryPath: string, seen = new Set<string>()): string {
   for (const line of rawLines) {
     const trimmed = line.trim();
 
-    // Skip the Prolog consult line entirely - replaced by native TS ops.
     if (PROLOG_IMPORT_LINE.test(trimmed)) continue;
 
     const importMatch = trimmed.match(IMPORT_LINE);
@@ -239,8 +332,9 @@ function loadWithImports(entryPath: string, seen = new Set<string>()): string {
 // ---------------------------------------------------------------------------
 // CLI entrypoint (ESM-safe)
 // ---------------------------------------------------------------------------
-const isMainModule = process.argv[1] !== undefined
-  && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+const isMainModule =
+  process.argv[1] !== undefined &&
+  resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (isMainModule) {
   const target = process.argv[2];
@@ -256,6 +350,7 @@ if (isMainModule) {
 
   const combinedSource = loadWithImports(target);
   const results = metta.run(combinedSource);
+
   for (const group of results) {
     console.log(group.map(String).join('\n'));
   }
