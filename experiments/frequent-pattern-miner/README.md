@@ -5,7 +5,7 @@ The frequent-pattern-miner is a MeTTa-based pipeline that mines frequent pattern
 ---
 
 ## What’s new in this version
-- Conjunctions are generated with unique_combinations_star (Python grounded op) that enforces a single hub variable shared by all clauses and prevents secondary shared variables. This yields clean “star-like” patterns.
+- Conjunctions are generated with the TypeScript `unique_combinations_star` grounded operation in `mining-runner.ts`. It enforces a single hub variable shared by all clauses and prevents secondary shared variables.
 - Formatting: conjunctions are normalized with promote_engagement_conj to bring engagement clauses forward, and emitted as supportOf (, ... ) support.
 - Simpler API: frequency-pattern-miner returns the final list of annotated patterns directly (no external spaces required by the caller).
 
@@ -51,13 +51,17 @@ With minsup=2 and depth=2, the frequent conjunction is:
 
 (supportOf (, (length $V0 "low") (topic $V0 "AI")) 2)
 
-See tests/frequent-pattern-miner-test.metta for a runnable check.
+Run the focused check through MeTTaScript from the repository root:
+
+```bash
+npm exec -- tsx mining-runner.ts experiments/frequent-pattern-miner/tests/frequent-pattern-miner-test.metta
+```
 
 ---
 
 ## Notes
-- unique_combinations_star lives in experiments/frequent-pattern-miner/conj-exp and is imported via conj-exp module.
-- promote_engagement_conj is provided by experiments/frequent-pattern-miner/conj_exp.pl; it moves engagement clauses to the front
+- `unique_combinations_star`, `cut-first-char`, and `promote_engagement_conj` are registered by `mining-runner.ts`.
+- Production mining invokes the same runner with `--mine <dataset> <min-support> <conjunction-count>`.
 	so results are easier to scan.
 - Support is computed with sup-num from experiments/utils/common-utils.metta.
 

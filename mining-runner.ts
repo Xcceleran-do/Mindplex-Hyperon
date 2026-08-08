@@ -271,6 +271,84 @@ function loadWithImports(entryPath: string, seen = new Set<string>()): string {
   return out.join('\n');
 }
 
+function createMiningRunner(): MeTTa {
+  const metta = new MeTTa();
+  registerCutFirstChar(metta);
+  registerPromoteEngagementConj(metta);
+  registerUniqueCombinationsStar(metta);
+  return metta;
+}
+
+function loadMiningLibraries(metta: MeTTa, projectRoot: string): void {
+  const seen = new Set<string>();
+  const libraryPaths = [
+    resolve(projectRoot, 'PeTTa/lib/lib_import.metta'),
+    resolve(projectRoot, 'experiments/utils/common-utils.metta'),
+    resolve(projectRoot, 'experiments/frequent-pattern-miner/etv-utils.metta'),
+    resolve(projectRoot, 'experiments/frequent-pattern-miner/frequent-pattern-miner.metta'),
+    resolve(projectRoot, 'experiments/pattern-miner/pattern-miner.metta'),
+  ];
+  const source = libraryPaths.map((path) => loadWithImports(path, seen)).join('\n');
+  metta.run(source);
+}
+
+function loadDatasetIntoSpace(metta: MeTTa, datasetPath: string): number {
+  const records = metta.parseAll(readFileSync(resolve(datasetPath), 'utf8'));
+  const facts: Atom[] = [];
+  let recordCount = 0;
+
+  for (const record of records) {
+    if (!isExpression(record)) {
+      throw new Error(`Dataset record is not an expression: ${record}`);
+    }
+    const children = record.children();
+    const fact = children[0];
+    const stv = children[1];
+    if (!fact || !isExpression(fact) || !stv || clauseFunctor(stv) !== 'STV') {
+      throw new Error(`Dataset record must have the form ((fact ...) (STV strength confidence)): ${record}`);
+    }
+    // Keep the domain fact for support/STV calculations and an augmented copy
+    // for candidate discovery, which explicitly matches the source STV.
+    facts.push(fact, E(...fact.children(), stv));
+    recordCount += 1;
+  }
+
+  if (facts.length === 0) throw new Error(`Dataset contains no facts: ${datasetPath}`);
+  metta.run(facts.map((fact) => `!(add-atom &miningDb ${fact})`).join('\n'));
+  return recordCount;
+}
+
+function mineDataset(
+  datasetPath: string,
+  minSupport: number,
+  conjunctionCount: number,
+  projectRoot = dirname(fileURLToPath(import.meta.url)),
+): Atom[] {
+  if (!Number.isInteger(minSupport) || minSupport < 1) {
+    throw new Error('min-support must be a positive integer');
+  }
+  if (!Number.isInteger(conjunctionCount) || conjunctionCount < 1) {
+    throw new Error('conjunction-count must be a positive integer');
+  }
+
+  const metta = createMiningRunner();
+  loadMiningLibraries(metta, projectRoot);
+  loadDatasetIntoSpace(metta, datasetPath);
+  return metta.run(`!(pattern-miner &miningDb ${minSupport} ${conjunctionCount})`).at(-1) ?? [];
+}
+
+function normalizeGeneratedVariables(source: string): string {
+  const variables = new Map<string, string>();
+  return source.replace(/\$[A-Za-z_][\w-]*(?:#\d+)?/g, (variable) => {
+    let normalized = variables.get(variable);
+    if (!normalized) {
+      normalized = `$V${variables.size}`;
+      variables.set(variable, normalized);
+    }
+    return normalized;
+  });
+}
+
 // ---------------------------------------------------------------------------
 // CLI entrypoint (ESM-safe)
 // ---------------------------------------------------------------------------
@@ -279,23 +357,44 @@ const isMainModule =
   resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (isMainModule) {
-  const target = process.argv[2];
-  if (!target) {
-    console.error('Usage: npx tsx mining-runner.ts <path-to-metta-test>');
-    process.exit(1);
-  }
-
-  const metta = new MeTTa();
-  registerCutFirstChar(metta);
-  registerPromoteEngagementConj(metta);
-  registerUniqueCombinationsStar(metta);
-
-  const combinedSource = loadWithImports(target);
-  const results = metta.run(combinedSource);
-
-  for (const group of results) {
-    console.log(group.map(String).join('\n'));
+  try {
+    if (process.argv[2] === '--mine') {
+      const datasetPath = process.argv[3];
+      const minSupport = Number(process.argv[4]);
+      const conjunctionCount = Number(process.argv[5]);
+      if (!datasetPath) {
+        throw new Error(
+          'Usage: npx tsx mining-runner.ts --mine <dataset.metta> <min-support> <conjunction-count>',
+        );
+      }
+      const results = mineDataset(datasetPath, minSupport, conjunctionCount).map((atom) =>
+        normalizeGeneratedVariables(atom.toString()),
+      );
+      // Mining functions may trace intermediate expressions to stdout. Keep a
+      // machine-readable final line so the Python worker can ignore that noise.
+      console.log(JSON.stringify({ results }));
+    } else {
+      const target = process.argv[2];
+      if (!target) {
+        throw new Error('Usage: npx tsx mining-runner.ts <path-to-metta-test>');
+      }
+      const metta = createMiningRunner();
+      const results = metta.run(loadWithImports(target));
+      for (const group of results) console.log(group.map(String).join('\n'));
+    }
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
   }
 }
 
-export { registerCutFirstChar, registerPromoteEngagementConj, registerUniqueCombinationsStar };
+export {
+  createMiningRunner,
+  loadDatasetIntoSpace,
+  loadMiningLibraries,
+  mineDataset,
+  normalizeGeneratedVariables,
+  registerCutFirstChar,
+  registerPromoteEngagementConj,
+  registerUniqueCombinationsStar,
+};

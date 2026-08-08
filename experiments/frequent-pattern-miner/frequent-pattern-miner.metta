@@ -24,13 +24,13 @@
 
 (= (candidatePatternMaker $dbspace ($link left $rValue) $minsup)
     (if (sup-eval $dbspace ($link $x $rValue $stv) $minsup)
-        ($link (cut-first-char l$x) $rValue $stv-l)
+        ($link (cut-first-char l$x) $rValue)
         (empty))
 )
 
 (= (candidatePatternMaker $dbspace ($link $lValue right) $minsup)
     (if (sup-eval $dbspace ($link $lValue $y $stv) $minsup)
-        ($link $lValue (cut-first-char r$y) $stv-r)
+        ($link $lValue (cut-first-char r$y))
         (empty))
 )
 

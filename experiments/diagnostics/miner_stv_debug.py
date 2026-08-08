@@ -23,7 +23,6 @@ def main() -> int:
     root = PROJECT_ROOT.replace("\\", "/")
     setup_metta = f"""
 !(import! &self {root}/PeTTa/lib/lib_import.metta)
-!(import_prolog_functions_from_file "{root}/experiments/frequent-pattern-miner/conj_exp.pl" (unique_combinations_star cut-first-char promote_engagement_conj))
 !(import! &self {root}/experiments/utils/common-utils)
 !(import! &self {root}/experiments/frequent-pattern-miner/etv-utils)
 !(import! &self {root}/experiments/frequent-pattern-miner/frequent-pattern-miner)
