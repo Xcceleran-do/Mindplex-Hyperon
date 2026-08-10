@@ -4,8 +4,6 @@ import hashlib
 import re
 from collections.abc import Mapping
 from typing import Any, Optional
-from experiments.services.petta_service import PeTTaService
-from experiments.api.config import  MINING_METTA_SETUP,PROJECT_ROOT
 DATASET_FACT_LINE_RE = re.compile(
     r'^\s*\(\s*(\(.+\))\s+(\(STV\s+[0-9eE\.\-]+\s+[0-9eE\.\-]+\))\s*\)\s*$'
 )
@@ -61,28 +59,34 @@ def parse_pattern_string(pattern_text: str) -> Optional[dict[str, str]]:
     }
 
 def patterns_to_chainer_rules(patterns: list[Any]) -> list[str]:
-    metta_patterns = " ".join(
-        f"""
-        (
-            {p["pattern"]}
+    rules: list[str] = []
+    for index, item in enumerate(patterns, start=1):
+        if not isinstance(item, Mapping) or not isinstance(item.get("pattern"), str):
+            continue
+        expressions = extract_parenthesized_expressions(item["pattern"])
+        if len(expressions) < 2:
+            continue
+        conjunction, stv = expressions[0], expressions[-1]
+        if not MINED_PATTERN_STV_RE.fullmatch(stv):
+            continue
+        conjunction_body = conjunction[1:-1].lstrip()
+        if conjunction_body.startswith(","):
+            conjunction_body = conjunction_body[1:]
+        clauses = extract_parenthesized_expressions(conjunction_body)
+        consequent = next(
+            (clause for clause in clauses if re.match(r"^\(\s*engagement(?:\s|\))", clause)),
+            None,
         )
-        """  for p in patterns)
-    query = f"""
-    !(patterns->rules
-        (
-            {metta_patterns}
+        if consequent is None:
+            continue
+        premises = [clause for clause in clauses if clause != consequent]
+        if not premises:
+            continue
+        rules.append(
+            f"(: rule_{index} (Implication (Premises {' '.join(premises)}) "
+            f"(Conclusions {consequent})) {stv})"
         )
-    )
-    """
-
-    service = PeTTaService.create_required(
-        PROJECT_ROOT,
-        MINING_METTA_SETUP,
-        verbose=False,
-        load_chainer=False,
-    )
-
-    return service.query_lines(query)
+    return [f"({' '.join(rules)})"] if rules else []
 def _balanced_expression_at(text: str, idx: int) -> Optional[str]:
     if idx < 0 or idx >= len(text) or text[idx] != "(":
         return None

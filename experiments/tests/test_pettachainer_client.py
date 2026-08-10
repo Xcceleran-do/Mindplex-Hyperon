@@ -12,8 +12,8 @@ class TestPeTTaChainerFormatting(unittest.TestCase):
         self.assertEqual(
             rules,
             [
-                '((: rule_1 (Implication (Premises (audience-expertise $_67904 "intermediate")) (Conclusions (engagement $_67904 "High"))) (STV 0.13333333333333333 0.8571428571428571)) '
-                '(: rule_2 (Implication (Premises (audience-expertise $_68056 "intermediate")) (Conclusions (engagement $_68056 "Very_High"))) (STV 0.7777777777777778 0.9722222222222222)))'
+                '((: rule_1 (Implication (Premises (audience-expertise $_14232 "intermediate")) (Conclusions (engagement $_14232 "High"))) (STV 0.13333333333333333 0.8571428571428571)) '
+                '(: rule_2 (Implication (Premises (audience-expertise $_14360 "intermediate")) (Conclusions (engagement $_14360 "Very_High"))) (STV 0.7777777777777778 0.9722222222222222)))'
             ]
         )
 

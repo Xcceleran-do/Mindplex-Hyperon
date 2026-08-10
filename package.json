@@ -1,6 +1,14 @@
 {
+  "scripts": {
+    "test:mining": "node --import tsx --test mining-runner.test.ts",
+    "typecheck:mining": "tsc --noEmit --target ES2022 --module ESNext --moduleResolution Bundler --allowImportingTsExtensions --strict mining-runner.ts mining-runner.test.ts"
+  },
   "dependencies": {
-    "@metta-ts/core": "^1.3.0",
-    "@metta-ts/node": "^1.3.0"
+    "@metta-ts/hyperon": "^2.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "tsx": "^4.23.7",
+    "typescript": "^5.9.3"
   }
 }

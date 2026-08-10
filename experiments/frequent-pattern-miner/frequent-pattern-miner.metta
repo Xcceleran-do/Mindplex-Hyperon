@@ -21,14 +21,18 @@
 ;;  - specialized pattern with `left`/`right` placeholder
 ;; Output: the instantiated pattern with a variable on the open side, or Empty
 ; (:candidatePatternMaker (-> SpaceType (Specialized Pattern) Number Expression Expression))
-( = (candidatePatternMaker $dbspace ($link left $rValue) $minsup)
-        (if (sup-eval $dbspace ($link $x $rValue) $minsup) ($link (cut-first-char l$x) $rValue) (empty))
+
+(= (candidatePatternMaker $dbspace ($link left $rValue) $minsup)
+    (if (sup-eval $dbspace ($link $x $rValue $stv) $minsup)
+        ($link (cut-first-char l$x) $rValue)
+        (empty))
 )
 
-( = (candidatePatternMaker $dbspace ($link $lValue right) $minsup)
-    (if (sup-eval $dbspace ($link $lValue $y) $minsup) ($link $lValue (cut-first-char r$y)) (empty))
+(= (candidatePatternMaker $dbspace ($link $lValue right) $minsup)
+    (if (sup-eval $dbspace ($link $lValue $y $stv) $minsup)
+        ($link $lValue (cut-first-char r$y))
+        (empty))
 )
-
 
 ;---------------------------------------
 ;; createSpecials
@@ -54,7 +58,7 @@
 ;;  3:- Use candidatePatternMaker to instantiate open sides and keep only those
 ;;     meeting $minsup
 ( = (absSpeCan $dbspace $minsup)
-    (let $specializedPattern (only_unique (collapse (createSpecials (match $dbspace ($link $x $y) ($link $x $y)))))
+    (let $specializedPattern (only_unique (collapse (createSpecials (match $dbspace ($link $x $y $stv) ($link $x $y)))))
         (candidatePatternMaker $dbspace (superpose $specializedPattern) $minsup))
 )
 

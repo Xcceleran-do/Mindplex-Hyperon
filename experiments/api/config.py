@@ -21,6 +21,7 @@ DEFAULT_CHAIN_DEPTH = int(os.getenv("PETTA_CHAIN_DEPTH", "3"))
 PETTA_MINING_TIMEOUT_SECONDS = int(os.getenv("PETTA_MINING_TIMEOUT_SECONDS", "90"))
 PETTA_MINING_MAX_OUTPUT_BYTES = int(os.getenv("PETTA_MINING_MAX_OUTPUT_BYTES", str(8 * 1024 * 1024)))
 PETTA_CHAIN_TIMEOUT_SECONDS = int(os.getenv("PETTA_CHAIN_TIMEOUT_SECONDS", "90"))
+METTASCRIPT_NODE_BINARY = os.getenv("METTASCRIPT_NODE_BINARY", "node")
 PETTACHAINER_BASE_URL = os.getenv("PETTACHAINER_BASE_URL", "http://127.0.0.1:8000")
 PETTACHAINER_API_KEY = os.getenv("PETTACHAINER_API_KEY", "")
 PETTACHAINER_KB_PREFIX = os.getenv("PETTACHAINER_KB_PREFIX", "mindplex")
@@ -43,11 +44,4 @@ CHAINER_METTA_SETUP = f"""
 !(import! &self {PROJECT_ROOT}/Utilities/helperFunctions)
 """
 
-MINING_METTA_SETUP = f"""
-!(import! &self {PROJECT_ROOT}/PeTTa/lib/lib_import.metta)
-!(import! &self {PROJECT_ROOT}/PeTTa/lib/lib_spaces)
-!(import_prolog_functions_from_file "{PROJECT_ROOT}/experiments/frequent-pattern-miner/conj_exp.pl" (unique_combinations_star cut-first-char promote_engagement_conj))
-{CHAINER_METTA_SETUP}
-!(import! &self {PROJECT_ROOT}/experiments/frequent-pattern-miner/frequent-pattern-miner)
-!(import! &self {PROJECT_ROOT}/experiments/pattern-miner/pattern-miner)
-"""
+METTASCRIPT_MINING_RUNNER = os.path.join(PROJECT_ROOT, "mining-runner.ts")

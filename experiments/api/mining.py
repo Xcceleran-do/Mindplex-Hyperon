@@ -16,7 +16,8 @@ from experiments.api.chat.support import parse_pattern as parse_pattern_impl
 from experiments.api.config import (
     DEFAULT_CONJUNCTION_COUNT,
     DEFAULT_MIN_SUPPORT,
-    MINING_METTA_SETUP,
+    METTASCRIPT_MINING_RUNNER,
+    METTASCRIPT_NODE_BINARY,
     PETTA_MINING_MAX_OUTPUT_BYTES,
     PETTA_MINING_TIMEOUT_SECONDS,
     PROJECT_ROOT,
@@ -51,45 +52,40 @@ class MiningJob:
 mining_jobs: Dict[str, MiningJob] = {}
 
 
-def run_metta_with_petta(metta_code: str) -> str:
-    """
-    Run mining MeTTa in a fresh worker process so heavy mining imports do not
-    poison the persistent chainer runtime.
-    """
-    worker_code = f"""
-import sys
-from experiments.services.petta_service import PeTTaService
-
-service = PeTTaService.create_required(
-    project_root={PROJECT_ROOT!r},
-    setup_metta={MINING_METTA_SETUP!r},
-    verbose=False,
-    load_chainer=False,
-)
-service.reload_dataset({dataset_file_path()!r})
-result = service.process_metta_string({metta_code!r})
-if isinstance(result, (list, tuple)):
-    sys.stdout.write("\\n".join(str(item) for item in result))
-else:
-    sys.stdout.write(str(result))
-"""
+def run_mining_with_mettascript(
+    min_support: int,
+    conjunction_count: int,
+    file_path: str | None = None,
+) -> str:
+    """Run one mining query through the isolated TypeScript MeTTa runtime."""
+    command = [
+        METTASCRIPT_NODE_BINARY,
+        "--import",
+        "tsx",
+        METTASCRIPT_MINING_RUNNER,
+        "--mine",
+        file_path or dataset_file_path(),
+        str(min_support),
+        str(conjunction_count),
+    ]
     env = os.environ.copy()
     env["PYTHONPATH"] = PROJECT_ROOT + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
     stdout_path = ""
     stderr_path = ""
     process: Optional[subprocess.Popen] = None
     try:
-        with tempfile.NamedTemporaryFile(prefix="petta-mine-out-", delete=False) as stdout_file:
+        with tempfile.NamedTemporaryFile(prefix="mettascript-mine-out-", delete=False) as stdout_file:
             stdout_path = stdout_file.name
-        with tempfile.NamedTemporaryFile(prefix="petta-mine-err-", delete=False) as stderr_file:
+        with tempfile.NamedTemporaryFile(prefix="mettascript-mine-err-", delete=False) as stderr_file:
             stderr_path = stderr_file.name
 
         with open(stdout_path, "wb") as stdout_file, open(stderr_path, "wb") as stderr_file:
             process = subprocess.Popen(
-                [sys.executable, "-c", worker_code],
+                command,
                 stdout=stdout_file,
                 stderr=stderr_file,
                 env=env,
+                cwd=PROJECT_ROOT,
                 start_new_session=True,
             )
 
@@ -132,8 +128,17 @@ else:
 
         if process.returncode != 0:
             stderr = stderr.strip() or "unknown mining worker failure"
-            raise RuntimeError(f"Mining worker failed: {stderr}")
-        return stdout
+            raise RuntimeError(f"MeTTaScript mining worker failed: {stderr}")
+
+        for line in reversed(stdout.splitlines()):
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            results = payload.get("results") if isinstance(payload, dict) else None
+            if isinstance(results, list) and all(isinstance(item, str) for item in results):
+                return "\n".join(results)
+        raise RuntimeError("MeTTaScript mining worker did not return a result payload.")
     finally:
         if process is not None and process.poll() is None:
             try:
@@ -149,7 +154,7 @@ else:
 
 
 def mine_pattern(numberOfConjunction: int, min_support: int = DEFAULT_MIN_SUPPORT) -> dict:
-    """Mine frequent patterns with PeTTa and parse the returned support records."""
+    """Mine frequent patterns with MeTTaScript and parse the support records."""
     try:
         dataset_reload = reload_petta_dataset_if_ready(force=False)
         numberOfConjunction = int(numberOfConjunction)
@@ -165,20 +170,12 @@ def mine_pattern(numberOfConjunction: int, min_support: int = DEFAULT_MIN_SUPPOR
                 "message": "min_support must be a positive integer",
             }
 
-        query = f"!(pattern-miner &purifiedDbSpace {min_support} {numberOfConjunction})"
-        petta_output = run_metta_with_petta(query)
-        normalized_query = query.strip().lstrip("!").strip()
-        if petta_output.strip() == normalized_query:
-            logger.error("PeTTa returned an unevaluated mining query: %s", petta_output)
-            return {
-                "status": "error",
-                "message": "The reasoning engine did not evaluate the mining query.",
-            }
-        result_lines = parse_petta_output(petta_output)
-        print(f"PeTTa mining output lines: {result_lines}", file=sys.stderr)
+        mining_output = run_mining_with_mettascript(min_support, numberOfConjunction)
+        result_lines = parse_petta_output(mining_output)
+        print(f"MeTTaScript mining output lines: {result_lines}", file=sys.stderr)
         patterns = []
         full_answer_str = " ".join(result_lines)
-        print(f"PeTTa mining output: {full_answer_str}", file=sys.stderr)
+        print(f"MeTTaScript mining output: {full_answer_str}", file=sys.stderr)
         support_matches = extract_support_of_expressions(full_answer_str)
 
         for match in support_matches:

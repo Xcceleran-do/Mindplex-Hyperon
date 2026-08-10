@@ -1,3 +1,9 @@
+FROM node:22-bookworm-slim AS mettascript
+
+WORKDIR /opt/mettascript
+COPY package.json package-lock.json ./
+RUN npm ci
+
 FROM swipl:10.0.2
 
 ARG DEBIAN_MIRROR=http://ftp.us.debian.org/debian
@@ -26,6 +32,9 @@ RUN printf 'Acquire::ForceIPv4 "true";\nAcquire::Retries "5";\nAcquire::http::Ti
 
 WORKDIR /app
 
+COPY --from=mettascript /usr/local/bin/node /usr/local/bin/node
+COPY --from=mettascript /opt/mettascript/node_modules /app/node_modules
+
 COPY experiments/requirements.txt /app/experiments/requirements.txt
 COPY PeTTa /app/PeTTa
 
@@ -35,6 +44,8 @@ RUN python3 -m venv "${VIRTUAL_ENV}" \
         exit 1; \
     fi \
     && python -m pip install -r experiments/requirements.txt \
+    && node --version \
+    && node --import tsx --input-type=module -e "import { MeTTa } from '@metta-ts/hyperon'; const m = new MeTTa(); if (String(m.run('!(+ 1 1)')[0][0]) !== '2') process.exit(1)" \
     && python -c "import janus_swi; print('janus_swi import ok')" \
     && python -c "from petta import PeTTa; print('petta import ok')"
 

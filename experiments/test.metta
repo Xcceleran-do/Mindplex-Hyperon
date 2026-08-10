@@ -1,6 +1,4 @@
 !(import! &self ../PeTTa/lib/lib_import.metta)
-!(import_prolog_functions_from_file "../experiments/frequent-pattern-miner/conj_exp.pl" (unique_combinations_star cut-first-char sort_conj))
-
 !(import! &self ../experiments/frequent-pattern-miner/frequent-pattern-miner)
 !(import! &self ../experiments/pattern-miner/pattern-miner)
 !(import! &self ../experiments/utils/common-utils)

@@ -62,7 +62,6 @@ from experiments.api.mining import (
     insert_mined_rules_into_chainer,
     mine_pattern,
     mining_jobs,
-    run_metta_with_petta,
     run_mining_task,
     run_mining_task_inprocess,
     start_mining_job,

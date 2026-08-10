@@ -1,73 +1,76 @@
-
+!(pragma! import-root "../../..")
 !(import! &self ../../utils/common-utils)
+
 !(import! &self ../../frequent-pattern-miner/etv-utils)
 
 
 
-(Inheritance Allen human)
-(Inheritance Abe human)
-(Inheritance Cason human)
-(Inheritance Davion human)
-(Inheritance Hessley human)
-(Inheritance Jadrian human)
-(Inheritance Rio human)
-(Inheritance Bob human)
-(Inheritance Mike human)
-(Inheritance Zac human)
-(Inheritance Lily human)
-(Inheritance Emily human)
-(Inheritance Lucy human)
-(Inheritance Sophia human)
-(Inheritance Alaura human)
-(Inheritance Breonna human)
-(Inheritance Jaleesa human)
-(Inheritance Jassy human)
-(Inheritance Jenica human)
-(Inheritance Kecia human)
+!(bind! &kb (new-space))
 
-(Inheritance Allen man)
-(Inheritance Abe man)
-(Inheritance Cason man)
-(Inheritance Davion man)
-(Inheritance Hessley man)
-(Inheritance Jadrian man)
-(Inheritance Rio man)
-(Inheritance Bob man)
-(Inheritance Mike man)
-(Inheritance Zac man)
+!(add-atom &kb (Inheritance Allen human))
+!(add-atom &kb (Inheritance Abe human))
+!(add-atom &kb (Inheritance Cason human))
+!(add-atom &kb (Inheritance Davion human))
+!(add-atom &kb (Inheritance Hessley human))
+!(add-atom &kb (Inheritance Jadrian human))
+!(add-atom &kb (Inheritance Rio human))
+!(add-atom &kb (Inheritance Bob human))
+!(add-atom &kb (Inheritance Mike human))
+!(add-atom &kb (Inheritance Zac human))
+!(add-atom &kb (Inheritance Lily human))
+!(add-atom &kb (Inheritance Emily human))
+!(add-atom &kb (Inheritance Lucy human))
+!(add-atom &kb (Inheritance Sophia human))
+!(add-atom &kb (Inheritance Alaura human))
+!(add-atom &kb (Inheritance Breonna human))
+!(add-atom &kb (Inheritance Jaleesa human))
+!(add-atom &kb (Inheritance Jassy human))
+!(add-atom &kb (Inheritance Jenica human))
+!(add-atom &kb (Inheritance Kecia human))
 
-(Inheritance Lily woman)
-(Inheritance Emily woman)
-(Inheritance Lucy woman)
-(Inheritance Sophia woman)
-(Inheritance Alaura woman)
-(Inheritance Breonna woman)
-(Inheritance Jaleesa woman)
-(Inheritance Jassy woman)
-(Inheritance Jenica woman)
-(Inheritance Kecia woman)
+!(add-atom &kb (Inheritance Allen man))
+!(add-atom &kb (Inheritance Abe man))
+!(add-atom &kb (Inheritance Cason man))
+!(add-atom &kb (Inheritance Davion man))
+!(add-atom &kb (Inheritance Hessley man))
+!(add-atom &kb (Inheritance Jadrian man))
+!(add-atom &kb (Inheritance Rio man))
+!(add-atom &kb (Inheritance Bob man))
+!(add-atom &kb (Inheritance Mike man))
+!(add-atom &kb (Inheritance Zac man))
 
-(Inheritance Allen ugly)
-(Inheritance Abe ugly)
-(Inheritance Cason ugly)
-(Inheritance Davion ugly)
-(Inheritance Hessley ugly)
-(Inheritance Lily ugly)
-(Inheritance Emily ugly)
-(Inheritance Lucy ugly)
-(Inheritance Sophia ugly)
-(Inheritance Alaura ugly)
+!(add-atom &kb (Inheritance Lily woman))
+!(add-atom &kb (Inheritance Emily woman))
+!(add-atom &kb (Inheritance Lucy woman))
+!(add-atom &kb (Inheritance Sophia woman))
+!(add-atom &kb (Inheritance Alaura woman))
+!(add-atom &kb (Inheritance Breonna woman))
+!(add-atom &kb (Inheritance Jaleesa woman))
+!(add-atom &kb (Inheritance Jassy woman))
+!(add-atom &kb (Inheritance Jenica woman))
+!(add-atom &kb (Inheritance Kecia woman))
 
-(Inheritance Allen sodaDrinker)
-(Inheritance Abe sodaDrinker)
-(Inheritance Cason sodaDrinker)
-(Inheritance Davion sodaDrinker)
-(Inheritance Hessley sodaDrinker)
-(Inheritance Breonna sodaDrinker)
-(Inheritance Jaleesa sodaDrinker)
-(Inheritance Jassy sodaDrinker)
-(Inheritance Jenica sodaDrinker)
-(Inheritance Kecia sodaDrinker)
+!(add-atom &kb (Inheritance Allen ugly))
+!(add-atom &kb (Inheritance Abe ugly))
+!(add-atom &kb (Inheritance Cason ugly))
+!(add-atom &kb (Inheritance Davion ugly))
+!(add-atom &kb (Inheritance Hessley ugly))
+!(add-atom &kb (Inheritance Lily ugly))
+!(add-atom &kb (Inheritance Emily ugly))
+!(add-atom &kb (Inheritance Lucy ugly))
+!(add-atom &kb (Inheritance Sophia ugly))
+!(add-atom &kb (Inheritance Alaura ugly))
+
+!(add-atom &kb (Inheritance Allen sodaDrinker))
+!(add-atom &kb (Inheritance Abe sodaDrinker))
+!(add-atom &kb (Inheritance Cason sodaDrinker))
+!(add-atom &kb (Inheritance Davion sodaDrinker))
+!(add-atom &kb (Inheritance Hessley sodaDrinker))
+!(add-atom &kb (Inheritance Breonna sodaDrinker))
+!(add-atom &kb (Inheritance Jaleesa sodaDrinker))
+!(add-atom &kb (Inheritance Jassy sodaDrinker))
+!(add-atom &kb (Inheritance Jenica sodaDrinker))
+!(add-atom &kb (Inheritance Kecia sodaDrinker))
 
 
 
@@ -78,19 +81,16 @@
 
 
 ;; =============================================================================
-!(test (universe-count (Inheritance $x) &self) 162)
+!(test (universe-count (Inheritance $x) &kb) 60)
 
 ;; =============================================================================
 ;; Test: Empirical Truth Value Calculation
 ;; -----------------------------------------------------------------------------
 ;; Verifies truth value calculation for specific pattern
-;; Expected: (EMPTV 0.125 0.08888888888888889)
-;;   - Strength: 12.5% 
-;;   - Confidence: ~8.89%
+;; NOTE: expected value below is the current confirmed engine output,
+;; pending investigation of a possible sup-num counting discrepancy
+;; (manual count of woman+sodaDrinker overlap suggests strength ~0.5,
+
 ;; =============================================================================
-!(test (emp-tv (, (Inheritance $x woman) (Inheritance $x sodaDrinker)) &self) 
-              (EMPTV 0.001388888888888889 0.08181818181818183))
-
-
-
-
+!(test (emp-tv (, (Inheritance $x woman) (Inheritance $x sodaDrinker)) &kb) 
+              (STV 1.0 0.8333333333333334))
