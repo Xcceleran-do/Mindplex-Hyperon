@@ -1,32 +1,171 @@
-name: PeTTa CI
+name: Petta CI/CD Pipeline
 
 on:
   push:
     branches:
-      - PeTTa
+      - feat/refactored
+      - ci/metta-petta
+      - main
   pull_request:
     branches:
-      - PeTTa
+      - feat/refactored
+  workflow_dispatch:
 
 jobs:
-  setup-and-test:
+  test-metta-with-petta:
+    name: Run all .metta files with Petta
     runs-on: ubuntu-latest
-    container:
-      image: bluesky21/petta:latest
-    
+    timeout-minutes: 30
+
+    env:
+      PETTA_DIR: ./PeTTa
+      PETTA_RUN_SCRIPT: ./PeTTa/run.sh
+      FILE_TIMEOUT: 60
+
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Python test dependencies
+      - name: Verify PeTTa folder and run.sh exist
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install pytest pytest-cov pytest-mock requests python-dotenv
+          echo "Looking for Petta directory: $PETTA_DIR"
+          if [ ! -d "$PETTA_DIR" ]; then
+            echo "❌ PeTTa directory not found: $PETTA_DIR"
+            echo "Current directory contents:"
+            ls -la
+            exit 1
+          fi
+          echo "✅ Found $PETTA_DIR"
 
-      - name: Run PeTTa tests
-        run: |
-          python3 run-tests.py
+          echo "Looking for Petta runner script: $PETTA_RUN_SCRIPT"
+          if [ ! -f "$PETTA_RUN_SCRIPT" ]; then
+            echo "❌ run.sh script not found: $PETTA_RUN_SCRIPT"
+            ls -la "$PETTA_DIR"
+            exit 1
+          fi
+          echo "✅ Found $PETTA_RUN_SCRIPT"
 
-      - name: Run Python ingestion tests
+      - name: Fix line endings and make run.sh executable
         run: |
-          python3 -m pytest experiments/ingestion/tests/ -v --tb=short
+          # Removes Windows \r characters that break Linux bash scripts
+          sed -i 's/\r$//' "$PETTA_RUN_SCRIPT" || true
+          chmod +x "$PETTA_RUN_SCRIPT"
+
+      - name: Run all .metta files using Petta
+        shell: bash
+        run: |
+          set -o pipefail
+
+          echo "Discovering .metta files..."
+
+          mapfile -d '' FILES < <(
+            find . -type f -name '*.metta' \
+              -not -path './.git/*' \
+              -not -path './dist/*' \
+              -not -path './build/*' \
+              -not -path './.next/*' \
+              -not -path './coverage/*' \
+              -not -path "$PETTA_DIR/*" \
+              -print0 \
+            | sort -z
+          )
+
+          if [ "${#FILES[@]}" -eq 0 ]; then
+            echo "❌ No .metta files found."
+            exit 1
+          fi
+
+          echo "Found ${#FILES[@]} .metta file(s)."
+
+          FAILED=0
+          FAILED_FILES=()
+          PASSED_FILES=()
+          SKIPPED_FILES=()
+
+          for FILE in "${FILES[@]}"; do
+            echo ""
+            echo "=== Running Petta: $FILE ==="
+
+            ABS_FILE=$(realpath "$FILE")
+
+            pushd "$PETTA_DIR" > /dev/null
+
+            OUTPUT=$(timeout "$FILE_TIMEOUT" bash run.sh "$ABS_FILE" 2>&1)
+            EXIT_CODE=$?
+
+            popd > /dev/null
+
+            echo "$OUTPUT"
+
+            if [ $EXIT_CODE -eq 124 ]; then
+              echo "⏱️ TIMEOUT: $FILE exceeded ${FILE_TIMEOUT}s"
+              FAILED=1
+              FAILED_FILES+=("$FILE (TIMEOUT)")
+              continue
+            fi
+
+            ERROR_DETECTED=0
+
+            if [ $EXIT_CODE -ne 0 ]; then
+              ERROR_DETECTED=1
+            fi
+
+            if echo "$OUTPUT" | grep -qE \
+              "test-failed|\bFAILED\b|\bFAIL\b|StackOverflow|Failed to resolve module|Unhandled (exception|error)|Traceback \(most recent call last\)|AssertionError|RuntimeError"; then
+              ERROR_DETECTED=1
+            fi
+
+            if [ $ERROR_DETECTED -eq 1 ]; then
+              echo "❌ FAIL: $FILE (exit code: $EXIT_CODE)"
+              FAILED=1
+              FAILED_FILES+=("$FILE")
+            else
+              echo "✅ PASS: $FILE"
+              PASSED_FILES+=("$FILE")
+            fi
+          done
+
+          echo ""
+          echo "============================================"
+          echo "           PETTA TEST SUMMARY"
+          echo "============================================"
+          echo "✅ Passed : ${#PASSED_FILES[@]}"
+          echo "❌ Failed : ${#FAILED_FILES[@]}"
+          echo "⏩ Skipped: ${#SKIPPED_FILES[@]}"
+          echo "--------------------------------------------"
+
+          {
+            echo "## Petta Test Results"
+            echo "| Status | Count |"
+            echo "|--------|-------|"
+            echo "| ✅ Passed  | ${#PASSED_FILES[@]} |"
+            echo "| ❌ Failed  | ${#FAILED_FILES[@]} |"
+            echo "| ⏩ Skipped | ${#SKIPPED_FILES[@]} |"
+
+            if [ "${#FAILED_FILES[@]}" -gt 0 ]; then
+              echo ""
+              echo "### ❌ Failed Files"
+              for f in "${FAILED_FILES[@]}"; do
+                echo "- \`$f\`"
+              done
+            fi
+
+            if [ "${#PASSED_FILES[@]}" -gt 0 ]; then
+              echo ""
+              echo "### ✅ Passed Files"
+              for f in "${PASSED_FILES[@]}"; do
+                echo "- \`$f\`"
+              done
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$FAILED" -eq 1 ]; then
+            echo ""
+            echo "❌ One or more .metta files failed:"
+            for f in "${FAILED_FILES[@]}"; do
+              echo "  - $f"
+            done
+            exit 1
+          fi
+
+          echo "✅ All .metta files passed with Petta."
