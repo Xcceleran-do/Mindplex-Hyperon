@@ -18,25 +18,17 @@ jobs:
     timeout-minutes: 30
 
     env:
-      PETTA_DIR: ./PeTTa
       FILE_TIMEOUT: 60
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Verify PeTTa directory exists
+      - name: Clone PeTTa repository
         run: |
-          echo "Looking for Petta directory: $PETTA_DIR"
-          if [ ! -d "$PETTA_DIR" ]; then
-            echo "❌ PeTTa directory not found: $PETTA_DIR"
-            echo "Current directory contents:"
-            ls -la
-            exit 1
-          fi
-          echo "✅ Found $PETTA_DIR"
-          echo "Contents of $PETTA_DIR:"
-          ls -la "$PETTA_DIR"
+          git clone https://github.com/Aryam-21/PeTTa.git PeTTa
+          sed -i 's/\r$//' PeTTa/run.sh || true
+          chmod +x PeTTa/run.sh
 
       - name: Run all .metta files using Petta
         shell: bash
@@ -52,7 +44,7 @@ jobs:
               -not -path './build/*' \
               -not -path './.next/*' \
               -not -path './coverage/*' \
-              -not -path "$PETTA_DIR/*" \
+              -not -path './PeTTa/*' \
               -print0 \
             | sort -z
           )
@@ -72,17 +64,13 @@ jobs:
             echo ""
             echo "=== Running Petta: $FILE ==="
 
-            # Get the absolute path of the file
             ABS_FILE=$(realpath "$FILE")
 
-            # cd into PeTTa directory and run the script
-            pushd "$PETTA_DIR" > /dev/null
+            pushd PeTTa > /dev/null
 
-            # Run the script (adjust the command if needed)
             OUTPUT=$(timeout "$FILE_TIMEOUT" bash run.sh "$ABS_FILE" 2>&1)
             EXIT_CODE=$?
 
-            # cd back to the root directory
             popd > /dev/null
 
             echo "$OUTPUT"
@@ -137,22 +125,9 @@ jobs:
                 echo "- \`$f\`"
               done
             fi
-
-            if [ "${#PASSED_FILES[@]}" -gt 0 ]; then
-              echo ""
-              echo "### ✅ Passed Files"
-              for f in "${PASSED_FILES[@]}"; do
-                echo "- \`$f\`"
-              done
-            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
           if [ "$FAILED" -eq 1 ]; then
-            echo ""
-            echo "❌ One or more .metta files failed:"
-            for f in "${FAILED_FILES[@]}"; do
-              echo "  - $f"
-            done
             exit 1
           fi
 
