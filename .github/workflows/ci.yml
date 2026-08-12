@@ -19,14 +19,13 @@ jobs:
 
     env:
       PETTA_DIR: ./PeTTa
-      PETTA_RUN_SCRIPT: ./PeTTa/run.sh
       FILE_TIMEOUT: 60
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Verify PeTTa folder and run.sh exist
+      - name: Verify PeTTa directory exists
         run: |
           echo "Looking for Petta directory: $PETTA_DIR"
           if [ ! -d "$PETTA_DIR" ]; then
@@ -36,20 +35,8 @@ jobs:
             exit 1
           fi
           echo "✅ Found $PETTA_DIR"
-
-          echo "Looking for Petta runner script: $PETTA_RUN_SCRIPT"
-          if [ ! -f "$PETTA_RUN_SCRIPT" ]; then
-            echo "❌ run.sh script not found: $PETTA_RUN_SCRIPT"
-            ls -la "$PETTA_DIR"
-            exit 1
-          fi
-          echo "✅ Found $PETTA_RUN_SCRIPT"
-
-      - name: Fix line endings and make run.sh executable
-        run: |
-          # Removes Windows \r characters that break Linux bash scripts
-          sed -i 's/\r$//' "$PETTA_RUN_SCRIPT" || true
-          chmod +x "$PETTA_RUN_SCRIPT"
+          echo "Contents of $PETTA_DIR:"
+          ls -la "$PETTA_DIR"
 
       - name: Run all .metta files using Petta
         shell: bash
@@ -80,19 +67,22 @@ jobs:
           FAILED=0
           FAILED_FILES=()
           PASSED_FILES=()
-          SKIPPED_FILES=()
 
           for FILE in "${FILES[@]}"; do
             echo ""
             echo "=== Running Petta: $FILE ==="
 
+            # Get the absolute path of the file
             ABS_FILE=$(realpath "$FILE")
 
+            # cd into PeTTa directory and run the script
             pushd "$PETTA_DIR" > /dev/null
 
+            # Run the script (adjust the command if needed)
             OUTPUT=$(timeout "$FILE_TIMEOUT" bash run.sh "$ABS_FILE" 2>&1)
             EXIT_CODE=$?
 
+            # cd back to the root directory
             popd > /dev/null
 
             echo "$OUTPUT"
@@ -110,8 +100,8 @@ jobs:
               ERROR_DETECTED=1
             fi
 
-            if echo "$OUTPUT" | grep -qE \
-              "test-failed|\bFAILED\b|\bFAIL\b|StackOverflow|Failed to resolve module|Unhandled (exception|error)|Traceback \(most recent call last\)|AssertionError|RuntimeError"; then
+            if echo "$OUTPUT" | grep -qiE \
+              "syntax error|input error|test error|parse error|type error|runtime error|compilation error|execution error|failed|failure|exception"; then
               ERROR_DETECTED=1
             fi
 
@@ -131,7 +121,6 @@ jobs:
           echo "============================================"
           echo "✅ Passed : ${#PASSED_FILES[@]}"
           echo "❌ Failed : ${#FAILED_FILES[@]}"
-          echo "⏩ Skipped: ${#SKIPPED_FILES[@]}"
           echo "--------------------------------------------"
 
           {
@@ -140,7 +129,6 @@ jobs:
             echo "|--------|-------|"
             echo "| ✅ Passed  | ${#PASSED_FILES[@]} |"
             echo "| ❌ Failed  | ${#FAILED_FILES[@]} |"
-            echo "| ⏩ Skipped | ${#SKIPPED_FILES[@]} |"
 
             if [ "${#FAILED_FILES[@]}" -gt 0 ]; then
               echo ""
