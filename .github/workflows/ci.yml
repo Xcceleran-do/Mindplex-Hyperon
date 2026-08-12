@@ -24,11 +24,24 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
       - name: Clone PeTTa repository
         run: |
           git clone https://github.com/Aryam-21/PeTTa.git PeTTa
           sed -i 's/\r$//' PeTTa/run.sh || true
           chmod +x PeTTa/run.sh
+
+      - name: Install SWI-Prolog and Dependencies
+        run: |
+          sudo apt-add-repository -y ppa:swi-prolog/stable
+          sudo apt-get update
+          sudo apt-get install -y swi-prolog
+          swipl --version
+          pip install -e PeTTa/
 
       - name: Run all .metta files using Petta
         shell: bash
