@@ -43,7 +43,7 @@ jobs:
           set +e
 
           echo "Discovering .metta test files..."
-          FILES=$(find Utilities/tests experiments -type f -name "*.metta" -path "*tests*" 2>/dev/null)
+          FILES=$(find Utilities/tests experiments/chainer/tests experiments/frequent-pattern-miner/tests -type f -name "*.metta" 2>/dev/null)
 
           if [ -z "$FILES" ]; then
             echo "No .metta test files found."
@@ -54,15 +54,15 @@ jobs:
 
           for FILE in $FILES; do
             echo ""
-
-            # Skip the miner test file; it needs the TS runner
-            if [[ "$FILE" == *"frequent-pattern-miner-test.metta"* ]]; then
-              echo "⏩ Skipping $FILE (handled by mining-runner.ts step)"
-              continue
-            fi
-
             echo "=== Running $FILE ==="
-            OUTPUT=$(./node_modules/.bin/metta-ts "$FILE" 2>&1)
+            
+            # Unified runner: use TS runner for the miner, metta-ts CLI for everything else
+            if [[ "$FILE" == *"frequent-pattern-miner-test.metta"* ]]; then
+              OUTPUT=$(npx tsx mining-runner.ts "$FILE" 2>&1)
+            else
+              OUTPUT=$(./node_modules/.bin/metta-ts "$FILE" 2>&1)
+            fi
+            
             EXIT_CODE=$?
             echo "$OUTPUT"
 
@@ -82,18 +82,3 @@ jobs:
 
           echo ""
           echo "All .metta test files passed."
-
-      - name: Run frequent-pattern-miner via mining-runner.ts (non-blocking, known issue)
-        continue-on-error: true
-        run: |
-          echo "=== Running mining-runner.ts ==="
-          echo "⚠️  Known issue: this test currently does not produce supportOf output"
-          echo "This step is non-blocking - CI will pass even if this fails"
-          OUTPUT=$(npx tsx mining-runner.ts experiments/frequent-pattern-miner/tests/frequent-pattern-miner-test.metta 2>&1)
-          echo "$OUTPUT"
-          
-          if echo "$OUTPUT" | grep -q "supportOf"; then
-            echo "✅ mining-runner.ts produced supportOf patterns (issue may be fixed!)"
-          else
-            echo "⚠️  mining-runner.ts did not produce expected supportOf patterns (known issue)"
-          fi
