@@ -1,14 +1,6 @@
 ;;;;;;;;;;;;;;;;;;
 ;; Common Utils ;;
 ;;;;;;;;;;;;;;;;;;
-;; Robust size that handles comma-wrapped tuples from collapse.
-;; Only subtracts 1 if the first element is actually a comma.
-(= (robust-size $expr)
-    (if (== (car-atom $expr) ,)
-        (- (size-atom $expr) 1)
-        (size-atom $expr)
-    )
-)
 
 ;;;;;;;;;; functions related to Conjunction ;;;;;;;;;;;;
 
@@ -691,7 +683,9 @@
 ;;(: counter (-> hyperon::space::DynSpace Atom Number))
 
 (= (counter $db $ptrn)
-    (let $got (collapse (match $db $ptrn 1)) (robust-size $got)))
+    ; `collapse` binds a comma-headed result tuple. Once stored through `let`,
+    ; `size-atom` includes that tuple head, so subtract it to count matches.
+    (let $got (collapse (match $db $ptrn 1)) (- (size-atom $got) 1)))
 
  ; Count the number of instances of a given pattern
 (= (count $pattern $db)
@@ -717,8 +711,9 @@
 )
 
 (= (sup-num-special $db $pattern)
-    (let $got (collapse (match $db $x (let $pattern $x $pattern)))
-        (robust-size $got))
+    (let $sup (tuple-count (collapse (match $db $x (let $pattern $x $pattern)) )) 
+        $sup
+    )
 )
 
  ;Check if expression is truth value or not
@@ -802,7 +797,9 @@
  ;;db size
 ; (: db_size (-> SpaceType  Number))
 (= (db_size $db)
-     (let $got (collapse (get-atoms $db)) (robust-size $got)))
+     (tuple-count (collapse (get-atoms $db)))
+
+)
 
  ;;abs accepts a number and returns an absolute value of a number
 ; (: abs (-> Number Number))
