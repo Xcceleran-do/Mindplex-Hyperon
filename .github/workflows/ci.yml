@@ -31,7 +31,8 @@ jobs:
 
       - name: Clone PeTTa repository
         run: |
-          git clone https://github.com/Aryam-21/PeTTa.git PeTTa
+          # Clone upstream trueagi-io repo and use the stable v1.0.5 tag
+          git clone --depth 1 --branch v1.0.5 https://github.com/trueagi-io/PeTTa.git PeTTa
           sed -i 's/\r$//' PeTTa/run.sh || true
           chmod +x PeTTa/run.sh
 
