@@ -31,7 +31,7 @@ jobs:
         run: |
           if [ ! -f "./node_modules/.bin/metta-ts" ]; then
             echo "❌ metta-ts binary not found in node_modules/.bin/"
-            echo "Check that @metta-ts/node is listed in package.json dependencies."
+            echo "Check that @metta-ts/node is listed in package.json devDependencies."
             ls -la node_modules/.bin/ | grep -i metta || echo "No metta binaries found"
             exit 1
           fi
