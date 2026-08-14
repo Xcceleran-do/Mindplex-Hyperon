@@ -1,6 +1,8 @@
+!(pragma! import-root "../../..")
 !(import! &self (library lib_roman))
 !(import! &self (library lib_spaces))
-!(import! &self (library lib_he))
+!(import! &self "../../../PeTTa/lib/lib_he.metta")
+
 
 (= (nextctx) (let $mn (catch (get-state ctxid))
              (let $n (if-error $mn 0 $mn)
