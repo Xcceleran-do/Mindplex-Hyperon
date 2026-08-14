@@ -4,11 +4,11 @@ on:
   push:
     branches:
       - feat/refactored
-      - ci/metta-petta
       - main
   pull_request:
     branches:
       - feat/refactored
+      - main
   workflow_dispatch:
 
 jobs:
