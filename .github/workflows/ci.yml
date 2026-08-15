@@ -43,7 +43,7 @@ jobs:
           set +e
 
           echo "Discovering .metta test files..."
-          FILES=$(find Utilities/tests experiments/chainer/tests experiments/frequent-pattern-miner/tests -type f -name "*.metta" 2>/dev/null)
+          FILES=$(find . -type f -name "*.metta" -path "*/tests/*" 2>/dev/null)
 
           if [ -z "$FILES" ]; then
             echo "No .metta test files found."
@@ -55,13 +55,8 @@ jobs:
           for FILE in $FILES; do
             echo ""
             echo "=== Running $FILE ==="
-            
-            # Unified runner: use TS runner for the miner, metta-ts CLI for everything else
-            if [[ "$FILE" == *"frequent-pattern-miner-test.metta"* ]]; then
-              OUTPUT=$(npx tsx mining-runner.ts "$FILE" 2>&1)
-            else
-              OUTPUT=$(./node_modules/.bin/metta-ts "$FILE" 2>&1)
-            fi
+
+            OUTPUT=$(npx tsx mining-runner.ts "$FILE" 2>&1)
             
             EXIT_CODE=$?
             echo "$OUTPUT"
