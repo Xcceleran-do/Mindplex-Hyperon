@@ -16,6 +16,46 @@ import {
 } from '@metta-ts/hyperon';
 
 // ---------------------------------------------------------------------------
+// Override size-atom to handle comma-wrapped collapse results
+// Makes TS runner behave identically to PeTTa and metta-ts CLI
+// ---------------------------------------------------------------------------
+function registerSizeAtom(metta: MeTTa): void {
+  metta.registerOperation('size-atom', (args: Atom[]) => {
+    const expr = args[0];
+    if (!isExpression(expr)) return [ValueAtom(0)];
+    
+    const children = expr.children();
+    const first = children[0];
+    
+    // Strip the comma head if present (TS runner artifact)
+    if (first && isSymbol(first) && first.name() === ',') {
+      return [ValueAtom(children.length - 1)];
+    }
+    return [ValueAtom(children.length)];
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Override tuple-count to handle comma-wrapped collapse results
+// Fixes db_size returning 61 instead of 60
+// ---------------------------------------------------------------------------
+function registerTupleCount(metta: MeTTa): void {
+  metta.registerOperation('tuple-count', (args: Atom[]) => {
+    const expr = args[0];
+    if (!isExpression(expr)) return [ValueAtom(0)];
+    
+    const children = expr.children();
+    const first = children[0];
+    
+    // Strip the comma head if present (TS runner artifact)
+    if (first && isSymbol(first) && first.name() === ',') {
+      return [ValueAtom(children.length - 1)];
+    }
+    return [ValueAtom(children.length)];
+  });
+}
+
+// ---------------------------------------------------------------------------
 // cut-first-char
 // ---------------------------------------------------------------------------
 function registerCutFirstChar(metta: MeTTa): void {
@@ -276,6 +316,8 @@ function createMiningRunner(): MeTTa {
   registerCutFirstChar(metta);
   registerPromoteEngagementConj(metta);
   registerUniqueCombinationsStar(metta);
+  registerSizeAtom(metta);    
+  registerTupleCount(metta); 
   return metta;
 }
 
