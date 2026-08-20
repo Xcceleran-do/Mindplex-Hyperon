@@ -683,9 +683,7 @@
 ;;(: counter (-> hyperon::space::DynSpace Atom Number))
 
 (= (counter $db $ptrn)
-    ; `collapse` binds a comma-headed result tuple. Once stored through `let`,
-    ; `size-atom` includes that tuple head, so subtract it to count matches.
-    (let $got (collapse (match $db $ptrn 1)) (- (size-atom $got) 1)))
+    (let $got (collapse (match $db $ptrn 1)) (size-atom $got)))
 
  ; Count the number of instances of a given pattern
 (= (count $pattern $db)

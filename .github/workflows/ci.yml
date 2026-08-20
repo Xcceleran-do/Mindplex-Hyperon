@@ -1,32 +1,79 @@
-name: PeTTa CI
+name: CI/CD Pipeline
 
 on:
   push:
-    branches:
-      - PeTTa
+    branches: ["main", "demo-mettascript"]
   pull_request:
-    branches:
-      - PeTTa
+    branches: ["main", "demo-mettascript"]
 
 jobs:
-  setup-and-test:
+  test-metta-suite:
     runs-on: ubuntu-latest
-    container:
-      image: bluesky21/petta:latest
-    
+
+    strategy:
+      matrix:
+        node-version: [20.x, 22.x]
+
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Python test dependencies
-        run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install pytest pytest-cov pytest-mock requests python-dotenv
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
 
-      - name: Run PeTTa tests
-        run: |
-          python3 run-tests.py
+      - name: Install dependencies
+        run: npm ci
 
-      - name: Run Python ingestion tests
+      - name: Verify metta-ts binary exists
         run: |
-          python3 -m pytest experiments/ingestion/tests/ -v --tb=short
+          if [ ! -f "./node_modules/.bin/metta-ts" ]; then
+            echo "❌ metta-ts binary not found in node_modules/.bin/"
+            echo "Check that @metta-ts/node is listed in package.json devDependencies."
+            ls -la node_modules/.bin/ | grep -i metta || echo "No metta binaries found"
+            exit 1
+          fi
+          echo "✅ metta-ts binary found"
+          chmod +x ./node_modules/.bin/metta-ts
+
+      - name: Run all .metta test files
+        run: |
+          set +e
+
+          echo "Discovering .metta test files..."
+          FILES=$(find . -type f -name "*.metta" -path "*/tests/*" 2>/dev/null)
+
+          if [ -z "$FILES" ]; then
+            echo "No .metta test files found."
+            exit 1
+          fi
+
+          FAILED=0
+
+          for FILE in $FILES; do
+            echo ""
+            echo "=== Running $FILE ==="
+
+            OUTPUT=$(npx tsx mining-runner.ts "$FILE" 2>&1)
+            
+            EXIT_CODE=$?
+            echo "$OUTPUT"
+
+            if [ $EXIT_CODE -ne 0 ] || echo "$OUTPUT" | grep -qE "test-failed|StackOverflow|Failed to resolve module"; then
+              echo "❌ FAIL: $FILE (exit code: $EXIT_CODE)"
+              FAILED=1
+            else
+              echo "✅ PASS: $FILE"
+            fi
+          done
+
+          if [ "$FAILED" -eq 1 ]; then
+            echo ""
+            echo "One or more .metta test files failed."
+            exit 1
+          fi
+
+          echo ""
+          echo "All .metta test files passed."
