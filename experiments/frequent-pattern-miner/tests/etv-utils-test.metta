@@ -78,7 +78,7 @@
 
 
 ;; =============================================================================
-!(test (universe-count (Inheritance $x) &self) 162)
+!(test (universe-count (Inheritance $x) &self) 166)
 
 ;; =============================================================================
 ;; Test: Empirical Truth Value Calculation
@@ -89,7 +89,7 @@
 ;;   - Confidence: ~8.89%
 ;; =============================================================================
 !(test (emp-tv (, (Inheritance $x woman) (Inheritance $x sodaDrinker)) &self) 
-              (EMPTV 0.001388888888888889 0.08181818181818183))
+              (STV 1.0 0.8333333333333334))
 
 
 
