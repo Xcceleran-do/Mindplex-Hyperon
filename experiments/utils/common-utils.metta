@@ -916,26 +916,40 @@
 (= (antecedent $atoms) (antecedent engagement $atoms))
 
 
-;; =============================================================================
+;; Helper: Safely unwraps a pattern into a LIST of clauses
+;; Handles both single clauses and (, clause1 clause2) conjunctions
+(= (clause-list $pattern)
+    (if (== (car-atom $pattern) ,)
+        (cdr-atom $pattern)
+        ($pattern)))
+
+;; Helper: Extracts distinct case IDs for a single clause
+(= (case-ids $db $clause)
+    (let $case-var (car-atom (cdr-atom $clause))
+        (collapse (match $db ($clause (STV $_ $_)) $case-var))))
+
+;; Helper: Intersects the case IDs of a LIST of clauses
+(= (intersect-case-ids $db $clauses)
+    (size-atom
+        (foldl-atom (cdr-atom $clauses) 
+                    (case-ids $db (car-atom $clauses)) 
+                    $acc $c 
+            (intersection-atom $acc (case-ids $db $c)))))
+;; -----------------------------------------------------------------------------
+;; Function: jointSupport
+;; -----------------------------------------------------------------------------
+;; Purpose:
+;;   Computes the support of a pattern by intersecting all its clauses.
+(= (jointSupport $pattern $db)
+    (intersect-case-ids $db (clause-list $pattern)))
+
 ;; Function: bodySupport
 ;; -----------------------------------------------------------------------------
 ;; Purpose:
 ;;   Computes nA — count of articles satisfying ALL body clauses together.
-;;   Strips the target clause, then intersects the article-id sets matched
-;;   by each remaining clause (handles the ((pred case val)(STV s c)) shape,
-;;   where a conjunction can't be matched as a single atom).
-;; =============================================================================
 (= (bodySupport $target-pred $pattern $db)
-    (let* (
-        ($body (antecedent $target-pred $pattern))
-        ($clauses (if (== (car-atom $body) ,) (cdr-atom $body) ($body)))
-        ($first (car-atom $clauses))
-        ($ids (collapse (match $db ($first (STV $_ $_)) (car-atom (cdr-atom $first)))))
-    )
-    (size-atom
-        (foldl-atom (cdr-atom $clauses) $ids $acc $clause
-            (intersection-atom $acc
-                (collapse (match $db ($clause (STV $_ $_)) (car-atom (cdr-atom $clause)))))))))
+    (let $body (antecedent $target-pred $pattern)
+        (intersect-case-ids $db (clause-list $body))))
 
 ;; Function: targetSupport
 ;; -----------------------------------------------------------------------------
@@ -962,17 +976,21 @@
     (db_size $db))
 
 
+
+
+
 ;; Function: pattern-stats
 ;; -----------------------------------------------------------------------------
 ;; Purpose:
 ;;   Computes the four raw counts needed to build a PeTTaChainer CTV rule for
 ;;   a mined pattern: joint support, body support, universe size, and target
 ;;   support. 
+;; =============================================================================
 (= (pattern-stats $target-pred $target-value $pattern $db)
-    ( (counter $db ($pattern (STV $_ $_)))    ; nAY
-      (bodySupport $target-pred $pattern $db)  ; nA
-      (universeSupport $db)                    ; N 
-      (targetSupport $target-pred $target-value $db) ; nY
+    ( (jointSupport $pattern $db)                      ; nAY
+      (bodySupport $target-pred $pattern $db)          ; nA
+      (universeSupport $db)                            ; N 
+      (targetSupport $target-pred $target-value $db)   ; nY
     ))
 
 
