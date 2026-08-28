@@ -40,6 +40,47 @@
         &test-db)
     2)
 
+;; TEST: jointSupport
+;; ethics AND High engagement → only A_3554 → 1
+!(test
+    (jointSupport
+        (, (topic $x "ethics")
+           (engagement $x "High"))
+        &test-db)
+    1)
+
+;; agi AND Medium engagement → A_2786, A_1549 → 2
+!(test
+    (jointSupport
+        (, (topic $x "agi")
+           (engagement $x "Medium"))
+        &test-db)
+    2)
+
+;; agi AND High engagement → no overlap → 0
+!(test
+    (jointSupport
+        (, (topic $x "agi")
+           (engagement $x "High"))
+        &test-db)
+    0)
+
+;; Single clause — no conjunction wrapper
+!(test
+    (jointSupport
+        (engagement $x "High")
+        &test-db)
+    2)
+
+;; Three-way conjunction: ethics AND text AND High → A_3554 only → 1
+!(test
+    (jointSupport
+        (, (topic $x "ethics")
+           (content-type $x "text")
+           (engagement $x "High"))
+        &test-db)
+    1)
+
 ;; TEST: pattern-stats — NON-ENGAGEMENT consequent (topic)
 ;; (nAY nA N nY)
 
@@ -48,14 +89,14 @@
         (, (content-type $x "text")
            (topic $x "agi"))
         &test-db)
-    (0 5 96 2))
+    (2 5 96 2))
 
 !(test
     (pattern-stats topic "ethics"
         (, (engagement $x "High")
            (topic $x "ethics"))
         &test-db)
-    (0 2 96 2))
+    (1 2 96 2))
 
 
 ;; TEST: antecedent generalization
