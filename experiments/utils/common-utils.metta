@@ -979,30 +979,20 @@
 ;; Function: compute-ctv
 ;; -----------------------------------------------------------------------------
 ;; Purpose:
-;;   Converts the raw (nAY, nA, N, nY) statistics from `pattern-stats` into a
-;;   PeTTaChainer-style two-branch CTV: a positive branch STV expressing
-;;   P(Y|A) with evidence-based confidence, and a negative branch STV
-;;   expressing P(Y|¬A). This is the predictive rule representation the
-;;   chainer needs — a single support/strength number is not sufficient.
-;;
-;; Inputs:
-;;   - `$stats`: A 4-tuple `(nAY nA N nY)` as produced by `pattern-stats`.
-;;
-;; Output:
-;;   - `(CTV (STV p-pos c-pos) (STV p-neg c-neg))`, where:
-;;       p-pos = P(Y|A)  = nAY / nA
-;;       c-pos = confidence of the positive branch = nA / (nA + 800)
-;;       p-neg = P(Y|¬A) = (nY - nAY) / (N - nA)
-;;       c-neg = confidence of the negative branch = (N - nA) / (N - nA + 800)
+;;   Converts (nAY nA N nY) into a CTV. Guards against division by zero:
+;;   - if nA = 0 (no articles satisfy the body), p-pos/c-pos default to 0.0/0.0
+;;     rather than dividing by zero — there's no evidence to support a rule.
+;;   - if N - nA = 0 (body covers the entire universe), p-neg/c-neg default
+;;     to 0.0/0.0 for the same reason — no articles exist to estimate P(Y|¬A).
 (= (compute-ctv $stats)
     (let ($nAY $nA $N $nY) $stats
         (let* (
-            ($p-y-given-a (// $nAY $nA))
+            ($p-y-given-a (if (== $nA 0) 0.0 (// $nAY $nA)))
+            ($c-pos       (if (== $nA 0) 0.0 (// $nA (+ $nA 800))))
             ($n-not-a (- $N $nA))
             ($n-not-a-y (- $nY $nAY))
-            ($p-y-given-not-a (// $n-not-a-y $n-not-a))
-            ($c-pos (// $nA (+ $nA 800)))
-            ($c-neg (// $n-not-a (+ $n-not-a 800))))
+            ($p-y-given-not-a (if (== $n-not-a 0) 0.0 (// $n-not-a-y $n-not-a)))
+            ($c-neg           (if (== $n-not-a 0) 0.0 (// $n-not-a (+ $n-not-a 800)))))
         (CTV (STV $p-y-given-a $c-pos) (STV $p-y-given-not-a $c-neg)))))
 
 
