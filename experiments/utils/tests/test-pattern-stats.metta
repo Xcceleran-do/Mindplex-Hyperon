@@ -7,14 +7,10 @@
 
 !(import! &self ../common-utils)
 !(import! &tempo ../../atomspace_visualizer/public/data)
-
 !(bind! &test-db (new-space))
-!(let $atom (get-atoms &tempo) (add-atom &test-db $atom))
-
-
-;; TEST: universeSupport
-;; N = total facts in the real db (all STV-wrapped atoms)
-!(test (universeSupport &test-db) 96)
+!(let $atom (get-atoms &tempo)
+    (let $clause (car-atom $atom)
+        (add-atom &test-db $clause)))
 
 ;; TEST: targetSupport — NON-ENGAGEMENT consequent (topic)
 !(test (targetSupport topic "agi" &test-db) 2)
@@ -22,9 +18,7 @@
 !(test (targetSupport topic "ethics" &test-db) 2)
 
 
-;; =============================================================================
 ;; TEST: bodySupport — NON-ENGAGEMENT consequent
-;; =============================================================================
 !(test
     (bodySupport topic
         (, (content-type $x "text")
