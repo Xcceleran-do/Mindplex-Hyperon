@@ -915,69 +915,40 @@
 ;; predicate for any caller still using the original single-argument form.
 (= (antecedent $atoms) (antecedent engagement $atoms))
 
-
-;; Helper: Safely unwraps a pattern into a LIST of clauses
-;; Handles both single clauses and (, clause1 clause2) conjunctions
-(= (clause-list $pattern)
-    (if (== (car-atom $pattern) ,)
-        (cdr-atom $pattern)
-        ($pattern)))
-
-;; Helper: Extracts distinct case IDs for a single clause
-(= (case-ids $db $clause)
-    (let $case-var (car-atom (cdr-atom $clause))
-        (collapse (match $db ($clause (STV $_ $_)) $case-var))))
-
-;; Helper: Intersects the case IDs of a LIST of clauses
-(= (intersect-case-ids $db $clauses)
-    (size-atom
-        (foldl-atom (cdr-atom $clauses) 
-                    (case-ids $db (car-atom $clauses)) 
-                    $acc $c 
-            (intersection-atom $acc (case-ids $db $c)))))
-;; -----------------------------------------------------------------------------
+;; =============================================================================
 ;; Function: jointSupport
 ;; -----------------------------------------------------------------------------
 ;; Purpose:
-;;   Computes the support of a pattern by intersecting all its clauses.
+;;   Counts cases satisfying ALL clauses in a conjunction by matching the
+;;   full conjunction pattern directly against the db using MeTTa's native
+;;   conjunction matching with `,`. No STV wrapper needed — facts stored
+;;   as raw (pred case val) 3-element atoms.
+;; =============================================================================
 (= (jointSupport $pattern $db)
-    (intersect-case-ids $db (clause-list $pattern)))
+    (let $matches (collapse (match $db $pattern $pattern))
+        (size-atom (only_unique $matches))))
 
+;; =============================================================================
 ;; Function: bodySupport
 ;; -----------------------------------------------------------------------------
 ;; Purpose:
-;;   Computes nA — count of articles satisfying ALL body clauses together.
+;;   Counts cases satisfying ALL body clauses (target clause stripped).
+;;   Uses same direct conjunction matching as jointSupport.
+;; =============================================================================
 (= (bodySupport $target-pred $pattern $db)
     (let $body (antecedent $target-pred $pattern)
-        (intersect-case-ids $db (clause-list $body))))
+        (let $matches (collapse (match $db $body $body))
+            (size-atom (only_unique $matches)))))
 
+;; =============================================================================
 ;; Function: targetSupport
 ;; -----------------------------------------------------------------------------
 ;; Purpose:
-;;   Computes nY — count of facts in the database where the target predicate
-;;   holds with a specific value. Matches against the actual stored fact shape:
-;;   ((target-pred $case "value") (STV $s $c)) since the dataset stores facts
-;;   pre-paired with STVs, not as raw triples.
-
+;;   Counts cases where the target predicate holds with a specific value.
+;;   Matches raw (pred case val) 3-element atoms directly.
+;; =============================================================================
 (= (targetSupport $target-pred $target-value $db)
-    (counter $db (($target-pred $_ $target-value) (STV $_ $_))))
-
-
-;; Function: universeSupport
-;; -----------------------------------------------------------------------------
-;; Purpose:
-;;   Computes N — the total number of facts in the database 
-;; Input:
-;;   - $db: the database/space to count.
-;;
-;; Output:
-;;   - A number: total fact count in $db (N).
-(= (universeSupport $db)
-    (db_size $db))
-
-
-
-
+    (counter $db ($target-pred $_ $target-value)))
 
 ;; Function: pattern-stats
 ;; -----------------------------------------------------------------------------
@@ -989,7 +960,7 @@
 (= (pattern-stats $target-pred $target-value $pattern $db)
     ( (jointSupport $pattern $db)                      ; nAY
       (bodySupport $target-pred $pattern $db)          ; nA
-      (universeSupport $db)                            ; N 
+      (db_size $db)                           ; N 
       (targetSupport $target-pred $target-value $db)   ; nY
     ))
 
