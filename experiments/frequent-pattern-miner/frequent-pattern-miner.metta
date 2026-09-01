@@ -60,13 +60,12 @@
 
 ;; --------------------------------------------
 ;;  formatter
-; --------------------------------------------
+;; --------------------------------------------
 ;; Formats conjunctions with deterministic ordering and CTV annotation.
 ;; 1:- Iterate over (conjunct ...) items
-;; 2:- Compute support with counter; skip if < $minSup
+;; 2:- Compute support with jointSupport; skip if < $minSup
 ;; 3:- Compute CTV via pattern-stats/compute-ctv against $target-pred/$target-value
-;;     (compute-ctv itself guards against nA=0 / N-nA=0 division by zero)
-;; 4:- Promote engagement clause and emit (supportOf (, $sorted) $CTV $cnt)
+;; 4:- Promote engagement clause and emit (supportOf (conjunction CTV) support-count)
 (= (formatter (conjunct $conjunct) $dbspace $minSup $target-pred $target-value)
     (let $cnt (jointSupport $conjunct $dbspace)
         (if (>= $cnt $minSup)
@@ -74,11 +73,14 @@
                 ($stats     (pattern-stats $target-pred $target-value $conjunct $dbspace))
                 ($CTV       (compute-ctv $stats))
                 ($organized (promote_engagement_conj $conjunct))
-                ($result    (supportOf (push-back $CTV $organized) $cnt))
+                ($result    (supportOf ($organized $CTV) $cnt))
             )
             $result)
             ())))
 
+;; Backward-compatible overload: defaults to engagement/"High"
+(= (formatter (conjunct $conjunct) $dbspace $minSup)
+    (formatter (conjunct $conjunct) $dbspace $minSup engagement "High"))
 
 ; --------------------------------------------------------
 ;; End-to-end frequent pattern mining pipeline.
