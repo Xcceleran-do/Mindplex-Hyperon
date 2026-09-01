@@ -74,10 +74,10 @@
                 ($stats     (pattern-stats $target-pred $target-value $conjunct $dbspace))
                 ($CTV       (compute-ctv $stats))
                 ($organized (promote_engagement_conj $conjunct))
-                ($result    (supportOf ($organized $CTV) $cnt))
+                ($result    (supportOf (push-back $CTV $organized) $cnt))
             )
             $result)
-            (empty))))
+            ())))
 
 
 ; --------------------------------------------------------
