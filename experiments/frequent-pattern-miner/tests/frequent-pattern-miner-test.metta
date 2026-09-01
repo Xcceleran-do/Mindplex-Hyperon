@@ -4,10 +4,7 @@
     (unique_combinations_star cut-first-char promote_engagement_conj))
 !(import! &self ../../utils/common-utils)
 !(import! &self ../../frequent-pattern-miner/frequent-pattern-miner)
-!(match &purifiedDbSpace (topic $x $y) (topic $x $y))
-!(match &purifiedDbSpace ((topic $x $y) (STV $s $c))
-  ((topic $x $y) (STV $s $c)))
-!(match &space (topic $x $y) (topic $x $y))
+
 !(bind! &space (new-space))
 
 !(add-atom &space (topic 0 "agi"))
@@ -28,14 +25,14 @@
 
 ;; =============================================================================
 ;; TEST: formatter
-;; Output shape: (supportOf (, clause1 clause2 ... (CTV...)) cnt)
-;; CTV is embedded inside the conjunction per mentor's review
+;; Output shape: (supportOf (conjunction CTV) support-count)
+;; ($organized $CTV) forms one 2-element expression as first arg to supportOf
 ;; =============================================================================
 
 ;; Valid conjunct meeting minSup=2
 ;; nAY=2, nA=2, N=12, nY=2
 ;; strength_pos=1.0, strength_neg=0.0
-;; conf_pos=2/802, conf_neg=10/810
+;; conf_pos=2/802≈0.002494, conf_neg=10/810≈0.012346
 !(test
     (formatter
         (conjunct (, (topic $x "agi")
@@ -43,14 +40,14 @@
                      (engagement $x "High")))
         &space 2 engagement "High")
     (supportOf
-        (, (topic $x "agi")
-           (audience-expertise $x "Intermediate")
-           (engagement $x "High")
-           (CTV (STV 1.0 0.0024937655860349127)
-                (STV 0.0 0.012345679012345678)))
+        ((, (topic $x "agi")
+            (audience-expertise $x "Intermediate")
+            (engagement $x "High"))
+         (CTV (STV 1.0 0.0024937655860349127)
+              (STV 0.0 0.012345679012345678)))
         2))
 
-;; Below minSup=3 → empty
+;; Below minSup=3 → ()
 !(test
     (formatter
         (conjunct (, (topic $x "agi")
@@ -59,7 +56,7 @@
         &space 3 engagement "High")
     ())
 
-;; Zero overlap → empty even with minSup=1
+;; Zero overlap → () even with minSup=1
 !(test
     (formatter
         (conjunct (, (topic $x "Gardening")
@@ -80,28 +77,29 @@
                      (engagement $x "High")))
         &space 2 topic "agi")
     (supportOf
-        (, (topic $x "agi")
-           (audience-expertise $x "Intermediate")
-           (engagement $x "High")
-           (CTV (STV 1.0 0.0024937655860349127)
-                (STV 0.1 0.012345679012345678)))
+        ((, (topic $x "agi")
+            (audience-expertise $x "Intermediate")
+            (engagement $x "High"))
+         (CTV (STV 1.0 0.0024937655860349127)
+              (STV 0.1 0.012345679012345678)))
         2))
 
 
 ;; =============================================================================
 ;; TEST: frequency-pattern-miner end-to-end
-;; Verifies both patterns are present in the results using is-member-custom.
-;; frequency-pattern-miner returns results via superposition 
+;; Uses is-member-custom (already in common-utils) against superposed results.
+;; frequency-pattern-miner returns results via superposition not a list,
+;; so is-member-custom handles membership check correctly.
 ;; =============================================================================
 
 ;; Intermediate/High pattern present with explicit target pred
 !(test
     (is-member-custom
         (supportOf
-            (, (audience-expertise $x "Intermediate")
-               (engagement $x "High")
-               (CTV (STV 1.0 0.0024937655860349127)
-                    (STV 0.0 0.012345679012345678)))
+            ((, (audience-expertise $x "Intermediate")
+                (engagement $x "High"))
+             (CTV (STV 1.0 0.0024937655860349127)
+                  (STV 0.0 0.012345679012345678)))
             2)
         (frequency-pattern-miner &space 2 2 engagement "High"))
     True)
@@ -110,10 +108,10 @@
 !(test
     (is-member-custom
         (supportOf
-            (, (audience-expertise $x "Advanced")
-               (engagement $x "Low")
-               (CTV (STV 1.0 0.0024937655860349127)
-                    (STV 0.0 0.012345679012345678)))
+            ((, (audience-expertise $x "Advanced")
+                (engagement $x "Low"))
+             (CTV (STV 1.0 0.0024937655860349127)
+                  (STV 0.0 0.012345679012345678)))
             2)
         (frequency-pattern-miner &space 2 2 engagement "High"))
     True)
@@ -122,10 +120,10 @@
 !(test
     (is-member-custom
         (supportOf
-            (, (audience-expertise $x "Intermediate")
-               (engagement $x "High")
-               (CTV (STV 1.0 0.0024937655860349127)
-                    (STV 0.0 0.012345679012345678)))
+            ((, (audience-expertise $x "Intermediate")
+                (engagement $x "High"))
+             (CTV (STV 1.0 0.0024937655860349127)
+                  (STV 0.0 0.012345679012345678)))
             2)
         (frequency-pattern-miner &space 2 2))
     True)
