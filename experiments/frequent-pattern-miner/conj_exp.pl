@@ -247,7 +247,8 @@ promote_engagement_conj(Conjunction, Promoted) :-
             Matches,
             Others
         ),
-        append(Others, Matches, Promoted)
+        append(Others, Matches, ReorderedClauses),
+        Promoted = [','|ReorderedClauses]    
     ;
         Promoted = Conjunction
     ).

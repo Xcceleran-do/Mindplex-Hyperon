@@ -211,29 +211,141 @@
 !(test (clamp01 -5.0) 0.0)
 !(test (clamp01 100.0) 1.0)
 
+;; ============================================================
+;; Test cases for pick-consequent
+;; ============================================================
+
+;; Explicit non-engagement target
+!(test
+  (pick-consequent Outcome
+    ((HasTopic $x agi) (HasFormat $x explainer) (Outcome $x completed)))
+  (Outcome $x completed))
+
+;; Another distinct target predicate, to further prove no hardcoding
+!(test
+  (pick-consequent WillComplete
+    ((HasTopic $x news) (WillComplete $x true)))
+  (WillComplete $x true))
+
+;; No match for the given target -> empty
+!(test
+  (pick-consequent Outcome
+    ((HasTopic $x agi) (HasFormat $x explainer)))
+  empty)
+
+;; Backward-compat 1-arg overload still defaults to engagement
+!(test
+  (pick-consequent
+    ((audience-expertise $x "intermediate") (engagement $x "Low")))
+  (engagement $x "Low"))
+
+
+;; ============================================================
 ;; Test cases for build-rule
-!(test
-  (build-rule (((audience-expertise $x "intermediate") (engagement $x "Low")) (STV 0.4 0.9)) rule_1)
-  (: rule_1 (Implication (Premises (audience-expertise $x "intermediate")) (Conclusions (engagement $x "Low"))) (STV 0.4 0.9)))
+;; ============================================================
 
+;; Non-engagement target: Outcome
 !(test
-  (build-rule (((style $x humor) (word-length $x short) (engagement $x "High")) (STV 1.0 1.0)) rule_2)
-  (: rule_2 (Implication (Premises (style $x humor) (word-length $x short)) (Conclusions (engagement $x "High"))) (STV 1.0 1.0)))
-!(test
-  (build-rule (((audience-expertise $x "intermediate") (engagement $x "Low")) (STV 1.5 -0.2)) rule_3)
-  (: rule_3 (Implication (Premises (audience-expertise $x "intermediate")) (Conclusions (engagement $x "Low"))) (STV 1.0 0.0)))
+  (build-rule Outcome
+    (((HasTopic $x agi) (HasFormat $x explainer) (Outcome $x completed))
+     (CTV (STV 0.75 0.857) (STV 0.45 0.9375)))
+    rule_1)
+  (: rule_1
+     (Implication (Premises (HasTopic $x agi) (HasFormat $x explainer))
+                   (Conclusions (Outcome $x completed)))
+     (CTV (STV 0.75 0.857) (STV 0.45 0.9375))))
 
+;; A THIRD distinct target predicate: WillComplete
+!(test
+  (build-rule WillComplete
+    (((style $x humor) (word-length $x short) (WillComplete $x true))
+     (CTV (STV 1.0 1.0) (STV 0.5 0.7)))
+    rule_2)
+  (: rule_2
+     (Implication (Premises (style $x humor) (word-length $x short))
+                   (Conclusions (WillComplete $x true)))
+     (CTV (STV 1.0 1.0) (STV 0.5 0.7))))
+
+;; Clamping still works under a non-default target
+!(test
+  (build-rule Outcome
+    (((audience-expertise $x "intermediate") (Outcome $x "Low"))
+     (CTV (STV 1.5 -0.2) (STV -0.3 1.4)))
+    rule_3)
+  (: rule_3
+     (Implication (Premises (audience-expertise $x "intermediate"))
+                   (Conclusions (Outcome $x "Low")))
+     (CTV (STV 1.0 0.0) (STV 0.0 1.0))))
+
+;; Old single-STV shape no longer matches, regardless of target
+!(test
+  (build-rule Outcome
+    (((audience-expertise $x "intermediate") (Outcome $x "Low"))
+     (STV 0.4 0.9))
+    rule_4)
+  ())
+
+;; Backward-compat 2-arg overload defaults to engagement specifically
+;; -- this is the ONE test that should still use engagement, since
+;; its whole point is confirming the default.
+!(test
+  (build-rule
+    (((audience-expertise $x "intermediate") (engagement $x "Low"))
+     (CTV (STV 0.4 0.9) (STV 0.2 0.85)))
+    rule_5)
+  (: rule_5
+     (Implication (Premises (audience-expertise $x "intermediate"))
+                   (Conclusions (engagement $x "Low")))
+     (CTV (STV 0.4 0.9) (STV 0.2 0.85))))
+
+
+;; ============================================================
 ;; Test cases for patterns->rules
+;; ============================================================
+
+;; Explicit non-engagement target, multiple patterns
+!(test
+  (patterns->rules Outcome
+    ( (((HasTopic $x agi) (HasFormat $x explainer) (Outcome $x completed))
+       (CTV (STV 0.75 0.857) (STV 0.45 0.9375)))
+      (((HasTopic $x crypto) (Outcome $x completed))
+       (CTV (STV 0.5 0.6) (STV 0.4 0.7))) )
+    1)
+  ( (: rule_1
+       (Implication (Premises (HasTopic $x agi) (HasFormat $x explainer))
+                     (Conclusions (Outcome $x completed)))
+       (CTV (STV 0.75 0.857) (STV 0.45 0.9375)))
+    (: rule_2
+       (Implication (Premises (HasTopic $x crypto))
+                     (Conclusions (Outcome $x completed)))
+       (CTV (STV 0.5 0.6) (STV 0.4 0.7))) ))
+
+;; Mixed batch: one pattern matches the target, one doesn't produce
+;; a rule because it's still old-style STV -- proves skip-on-failure
+;; still works correctly under a non-default target too.
+!(test
+  (patterns->rules Outcome
+    ( (((HasTopic $x agi) (Outcome $x completed))
+       (CTV (STV 0.75 0.857) (STV 0.45 0.9375)))
+      (((HasTopic $x news) (Outcome $x completed))
+       (STV 0.5 0.6)) )
+    1)
+  ( (: rule_1
+       (Implication (Premises (HasTopic $x agi))
+                     (Conclusions (Outcome $x completed)))
+       (CTV (STV 0.75 0.857) (STV 0.45 0.9375))) ))
+
+;; Backward-compat 1-arg overload (defaults to engagement) -- the
+;; ONE test in this block that should use engagement, since that's
+;; exactly what it's checking.
 !(test
   (patterns->rules
-    ((((audience-expertise $x1 "intermediate") (engagement $x1 "Low")) (STV 0.41 0.93))))
-  ((: rule_1 (Implication (Premises (audience-expertise $x1 "intermediate")) (Conclusions (engagement $x1 "Low"))) (STV 0.41 0.93))))
+    ( (((audience-expertise $x "intermediate") (engagement $x "Low"))
+       (CTV (STV 0.4 0.9) (STV 0.2 0.85))) ))
+  ( (: rule_1
+       (Implication (Premises (audience-expertise $x "intermediate"))
+                     (Conclusions (engagement $x "Low")))
+       (CTV (STV 0.4 0.9) (STV 0.2 0.85))) ))
 
-!(test
-  (patterns->rules
-    ((((audience-expertise $x1 "intermediate") (engagement $x1 "Low")) (STV 0.41 0.93))
-     (((audience-expertise $x2 "mixed") (engagement $x2 "Medium")) (STV 0.61 0.88))))
-  ((: rule_1 (Implication (Premises (audience-expertise $x1 "intermediate")) (Conclusions (engagement $x1 "Low"))) (STV 0.41 0.93))
-   (: rule_2 (Implication (Premises (audience-expertise $x2 "mixed")) (Conclusions (engagement $x2 "Medium"))) (STV 0.61 0.88))))
-
-!(test (patterns->rules ()) ())
+;; Empty pattern list, non-default target
+!(test (patterns->rules Outcome () 1) ())

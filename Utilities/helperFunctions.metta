@@ -404,49 +404,68 @@
 ;; ============================================================
 ;; utilities
 ;; ============================================================
-;; Returns the engagement fact from a list of atoms, or `empty`
-(: pick-consequent (-> Expression Atom))
-(= (pick-consequent $atoms)
-   (let $matches (filter-atom $atoms $a (== (car-atom $a) engagement))
+;; ============================================================
+;; Returns the target-predicate fact from a list of atoms, or
+;; `empty` if none is found. Generalized to accept the target
+;; predicate explicitly instead of assuming `engagement`.
+(: pick-consequent (-> Atom Expression Atom))
+(= (pick-consequent $target-pred $atoms)
+   (let $matches (filter-atom $atoms $a (== (car-atom $a) $target-pred))
      (if (== $matches ()) empty (car-atom $matches))))
+
+;; Backward-compatible overload: defaults to `engagement` for any
+;; caller still using the original single-argument form.
+(= (pick-consequent $atoms) (pick-consequent engagement $atoms))
+
 ;; Clamps a number into the closed interval [0.0, 1.0].
 (: clamp01 (-> Number Number))
 (= (clamp01 $n)
    (let $lo (max-atom ($n 0.0))
      (min-atom ($lo 1.0))))
+
 ;; ============================================================
 ;; build-rule
-;; Takes a whole mined pattern — (atoms-list (STV s c)) — and a
-;; rule name, and builds the Implication/STV rule atom directly.
-;;If $pattern doesn't match the (atoms (STV s c)) shape, the outer unify
-;; returns () and no rule is built for that pattern.
+;; Takes a whole mined pattern — (atoms-list (CTV (STV s-pos c-pos)
+;; (STV s-neg c-neg))) — a target predicate, and a rule name, and
+;; builds the Implication/CTV rule atom directly.
+;; If $pattern doesn't match the (atoms (CTV (STV..)(STV..))) shape,
+;; the outer unify returns () and no rule is built for that pattern.
 ;; ============================================================
-(: build-rule (-> Expression Atom Atom))
-(= (build-rule $pattern $name)
-   (if (= $pattern ($atoms (STV $s $c)))
+(: build-rule (-> Atom Expression Atom Atom))
+(= (build-rule $target-pred $pattern $name)
+   (if (= $pattern ($atoms (CTV (STV $s-pos $c-pos) (STV $s-neg $c-neg))))
      (let* (
-            ($consequent      (pick-consequent $atoms))
+            ($consequent      (pick-consequent $target-pred $atoms))
             ($premises        (exclude-item $consequent $atoms))
             ($premises-expr   (cons-atom Premises $premises))
             ($conclusion-expr (Conclusions $consequent))
            )
        (: $name (Implication $premises-expr $conclusion-expr)
-          (STV (clamp01 $s) (clamp01 $c))))
+          (CTV (STV (clamp01 $s-pos) (clamp01 $c-pos))
+               (STV (clamp01 $s-neg) (clamp01 $c-neg)))))
      ()))
+
+;; Backward-compatible overload: defaults to `engagement` as the
+;; target predicate for any caller still using the 2-arg form.
+(= (build-rule $pattern $name) (build-rule engagement $pattern $name))
+
 ;; ============================================================
 ;; patterns->rules —
 ;; Recursive driver: builds a rule per pattern, starting from
 ;; index $i, skipping any pattern that fails to produce a rule.
 ;; ============================================================
-(: patterns->rules (-> Expression Number Expression))
-(= (patterns->rules () $i) ())
-(= (patterns->rules $patterns $i)
+(: patterns->rules (-> Atom Expression Number Expression))
+(= (patterns->rules $target-pred () $i) ())
+(= (patterns->rules $target-pred $patterns $i)
    (let ($h $t) (decons-atom $patterns)
-     (let $rule (build-rule $h (atom_concat rule_ $i))
-       (let $rest (patterns->rules $t (+ $i 1))
+     (let $rule (build-rule $target-pred $h (atom_concat rule_ $i))
+       (let $rest (patterns->rules $target-pred $t (+ $i 1))
          (if (== $rule ())
              $rest
              (cons-atom $rule $rest))))))
 
 ;; Overload: default starting index of 1.
-(= (patterns->rules $patterns) (patterns->rules $patterns 1))
+(= (patterns->rules $target-pred $patterns) (patterns->rules $target-pred $patterns 1))
+
+;; Backward-compatible overload: defaults to `engagement`.
+(= (patterns->rules $patterns) (patterns->rules engagement $patterns 1))

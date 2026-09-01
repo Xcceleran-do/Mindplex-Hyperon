@@ -842,33 +842,46 @@
 
 )
 
-;; Documentation for antecedent:
-;;
-;; Description:
-;;   This function computes the antecedent portion of a pattern by filtering and collapsing a list of atoms.
-;;   - It first combines all input atoms using `superpose`, which merges them into a single list.
-;;   - Then, it checks if the combined list `$sup` matches the pattern `(engagement $x $y)`.
-;;     - If it does match, the result is discarded (`empty`).
-;;     - Otherwise, `$sup` is returned as the antecedent.
-;;   - Finally, `collapse` flattens any nested structures into a single-level list.
-;;
-;; Parameters:
-;;   $atoms - A list of atoms representing parts of a pattern (e.g., attributes or propositions).
-;;
-;; Returns:
-;;   A flattened list of atoms that forms the antecedent of the pattern,
-;;   excluding any elements that are solely an engagement relation.
-(= (engagement-clause? $atom)
+
+;; Function: target-clause?
+;; -----------------------------------------------------------------------------
+;; Purpose:
+;;   Checks whether a given atom is a clause of the specified target predicate
+;;   (e.g. `engagement`, `Outcome`, `WillComplete`).
+;; Inputs:
+;;   - `$target-pred`: The predicate symbol identifying the target/consequence
+;;                      (e.g. `engagement`, `Outcome`).
+;;   - `$atom`: A single clause to test (e.g. `(engagement case1 high)`).
+;; Output:
+;;   - True if `$atom` matches the shape `($target-pred $x $y)`.
+;;   - False otherwise.
+
+(= (target-clause? $target-pred $atom)
     (case $atom
-        (((engagement $x $y) True)
+        ((($target-pred $x $y) True)
          ($other False))))
 
-(= (remove-engagement-clauses ()) ())
-(= (remove-engagement-clauses $clauses)
+
+;; Function: remove-target-clauses
+;; -----------------------------------------------------------------------------
+;; Purpose:
+;;   Recursively strips all clauses belonging to `$target-pred` out of a list
+;;   of clauses, leaving only the body/antecedent clauses behind.
+;;
+;; Inputs:
+;;   - `$target-pred`: The predicate symbol to filter out.
+;;   - `$clauses`: A list of clauses (e.g. body + target clauses combined).
+;;
+;; Output:
+;;   - A new list of clauses with every `$target-pred` clause removed,
+;;     preserving the order of the remaining clauses.
+
+(= (remove-target-clauses $target-pred ()) ())
+(= (remove-target-clauses $target-pred $clauses)
     (let ($head $tail) (decons-atom $clauses)
-        (if (engagement-clause? $head)
-            (remove-engagement-clauses $tail)
-            (cons-atom $head (remove-engagement-clauses $tail)))))
+        (if (target-clause? $target-pred $head)
+            (remove-target-clauses $target-pred $tail)
+            (cons-atom $head (remove-target-clauses $target-pred $tail)))))
 
 (= (wrap-conjunction $clauses)
     (if (== $clauses ())
@@ -877,9 +890,99 @@
             (cons-atom , $clauses)
             (car-atom $clauses))))
 
-(= (antecedent $atoms)
+
+;; Function: antecedent
+;; -----------------------------------------------------------------------------
+;; Purpose:
+;;   Extracts the body (antecedent) of a mined pattern by removing whichever
+;;   clause(s) belong to the target predicate.
+;;
+;; Inputs:
+;;   - `$target-pred`: The predicate symbol identifying the target/consequence.
+;;   - `$atoms`: The full pattern (a conjunction of clauses, possibly starting
+;;               with `,`).
+;;
+;; Output:
+;;   - The pattern with the target clause(s) removed, re-wrapped as a
+;;     conjunction if more than one clause remains, or as a single clause
+;;     otherwise.
+
+(= (antecedent $target-pred $atoms)
     (let $clauses (if (== (car-atom $atoms) ,) (cdr-atom $atoms) ($atoms))
-        (wrap-conjunction (remove-engagement-clauses $clauses))))
+        (wrap-conjunction (remove-target-clauses $target-pred $clauses))))
+
+;; Backward-compatible overload: defaults to the `engagement` target
+;; predicate for any caller still using the original single-argument form.
+(= (antecedent $atoms) (antecedent engagement $atoms))
+
+;; =============================================================================
+;; Function: jointSupport
+;; -----------------------------------------------------------------------------
+;; Purpose:
+;;   Counts cases satisfying ALL clauses in a conjunction by matching the
+;;   full conjunction pattern directly against the db using MeTTa's native
+;;   conjunction matching with `,`. No STV wrapper needed — facts stored
+;;   as raw (pred case val) 3-element atoms.
+;; =============================================================================
+(= (jointSupport $pattern $db)
+    (let $matches (collapse (match $db $pattern $pattern))
+        (size-atom (only_unique $matches))))
+
+;; =============================================================================
+;; Function: bodySupport
+;; -----------------------------------------------------------------------------
+;; Purpose:
+;;   Counts cases satisfying ALL body clauses (target clause stripped).
+;;   Uses same direct conjunction matching as jointSupport.
+;; =============================================================================
+(= (bodySupport $target-pred $pattern $db)
+    (let $body (antecedent $target-pred $pattern)
+        (let $matches (collapse (match $db $body $body))
+            (size-atom (only_unique $matches)))))
+
+;; =============================================================================
+;; Function: targetSupport
+;; -----------------------------------------------------------------------------
+;; Purpose:
+;;   Counts cases where the target predicate holds with a specific value.
+;;   Matches raw (pred case val) 3-element atoms directly.
+;; =============================================================================
+(= (targetSupport $target-pred $target-value $db)
+    (counter $db ($target-pred $_ $target-value)))
+
+;; Function: pattern-stats
+;; -----------------------------------------------------------------------------
+;; Purpose:
+;;   Computes the four raw counts needed to build a PeTTaChainer CTV rule for
+;;   a mined pattern: joint support, body support, universe size, and target
+;;   support. 
+;; =============================================================================
+(= (pattern-stats $target-pred $target-value $pattern $db)
+    ( (jointSupport $pattern $db)                      ; nAY
+      (bodySupport $target-pred $pattern $db)          ; nA
+      (db_size $db)                           ; N 
+      (targetSupport $target-pred $target-value $db)   ; nY
+    ))
+
+
+;; Function: compute-ctv
+;; -----------------------------------------------------------------------------
+;; Purpose:
+;;   Converts (nAY nA N nY) into a CTV. Guards against division by zero:
+;;   - if nA = 0 (no articles satisfy the body), p-pos/c-pos default to 0.0/0.0
+;;     rather than dividing by zero — there's no evidence to support a rule.
+;;   - if N - nA = 0 (body covers the entire universe), p-neg/c-neg default
+;;     to 0.0/0.0 for the same reason — no articles exist to estimate P(Y|¬A).
+(= (compute-ctv $stats)
+    (let ($nAY $nA $N $nY) $stats
+        (let* (
+            ($p-y-given-a (if (== $nA 0) 0.0 (// $nAY $nA)))
+            ($c-pos       (if (== $nA 0) 0.0 (// $nA (+ $nA 800))))
+            ($n-not-a (- $N $nA))
+            ($n-not-a-y (- $nY $nAY))
+            ($p-y-given-not-a (if (== $n-not-a 0) 0.0 (// $n-not-a-y $n-not-a)))
+            ($c-neg           (if (== $n-not-a 0) 0.0 (// $n-not-a (+ $n-not-a 800)))))
+        (CTV (STV $p-y-given-a $c-pos) (STV $p-y-given-not-a $c-neg)))))
 
 
  ; THIS IMPLEMENTATION CONSIDERS THE VARIABLE NAMES

@@ -58,36 +58,43 @@
         (candidatePatternMaker $dbspace (superpose $specializedPattern) $minsup))
 )
 
-; --------------------------------------------
+;; --------------------------------------------
 ;;  formatter
-; --------------------------------------------
-;; Formats conjunctions with deterministic ordering and support annotation.
+;; --------------------------------------------
+;; Formats conjunctions with deterministic ordering and CTV annotation.
 ;; 1:- Iterate over (conjunct ...) items
-;; 2:- Compute support with sup-num; skip if < $minSup
-;; 3:- Promote engagement clause and emit (supportOf (, $sorted) $support)
-;(: formatter (-> SpaceType SpaceType Number Atom ))
+;; 2:- Compute support with jointSupport; skip if < $minSup
+;; 3:- Compute CTV via pattern-stats/compute-ctv against $target-pred/$target-value
+;; 4:- Promote engagement clause and emit (supportOf (conjunction CTV) support-count)
+(= (formatter (conjunct $conjunct) $dbspace $minSup $target-pred $target-value)
+    (let $cnt (jointSupport $conjunct $dbspace)
+        (if (>= $cnt $minSup)
+            (let* (
+                ($stats     (pattern-stats $target-pred $target-value $conjunct $dbspace))
+                ($CTV       (compute-ctv $stats))
+                ($organized (promote_engagement_conj $conjunct))
+                ($result    (supportOf ($organized $CTV) $cnt))
+            )
+            $result)
+            ())))
 
-(= (formatter (conjunct $conjunct) $dbspace $minSup) 
-    (let $cnt (counter $dbspace $conjunct)
-        ;; calculate EMPTV
-        (let $EMPTV (trace! $conjunct (emp-tv $conjunct $dbspace))
-            (if (>= $cnt $minSup)
-                (let $organized (promote_engagement_conj $conjunct)
-                    (trace! $organized (supportOf ($organized $EMPTV) $cnt)))
-                (empty)))))
-        
+;; Backward-compatible overload: defaults to engagement/"High"
+(= (formatter (conjunct $conjunct) $dbspace $minSup)
+    (formatter (conjunct $conjunct) $dbspace $minSup engagement "High"))
+
 ; --------------------------------------------------------
 ;; End-to-end frequent pattern mining pipeline.
 ;; Steps:
 ;;  1:- Build specialization templates from DB and filter to candidates (absSpeCan)
 ;;  2:- Generate size-$depth conjunctions with unique_combinations_star (single hub var)
-;;  3:- Format passing conjunctions as (supportOf (, ...) n) with sorted clauses
-;(: frequency-pattern-miner (-> SpaceType SpaceType SpaceType SpaceType SpaceType Number Number Atoms))
-
-(= (frequency-pattern-miner $dbspace $minsup $depth)
+;;  3:- Format passing conjunctions as (supportOf (, ...) CTV n) with sorted clauses,
+;;      CTV computed relative to $target-pred/$target-value
+(= (frequency-pattern-miner $dbspace $minsup $depth $target-pred $target-value)
    (let $candidatePatterns (collapse (absSpeCan $dbspace $minsup))
         (let $conjuncts (unique_combinations_star $candidatePatterns $depth)
-        (collapse (formatter (superpose $conjuncts) $dbspace $minsup))))
+        (collapse (formatter (superpose $conjuncts) $dbspace $minsup $target-pred $target-value))))
 )
 
-; !(unique_combinations_star ((length $x "high") (length $x "low") (length $x "medium") (tone $x "Conversational") (tone $x "Humorous") (tone $x "Motivational") (tone $x "Gentle") (tone $x "Educational") (tone $x "Analytical") (writing_style $x "Conversational") (writing_style $x "Descriptive") (writing_style $x "Informal") (writing_style $x "Narrative") (writing_style $x "Formal") ) 3)
+;; Backward-compatible overload: defaults to `engagement`/`"High"`.
+(= (frequency-pattern-miner $dbspace $minsup $depth)
+   (frequency-pattern-miner $dbspace $minsup $depth engagement "High"))
