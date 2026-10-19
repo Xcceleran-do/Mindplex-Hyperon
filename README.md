@@ -1,41 +1,79 @@
-
 # Mindplex Hyperon
 
-Mindplex Hyperon is a robust, transparent, and explainable recommendation engine that leverages [AtomSpace](https://github.com/opencog/atomspace/), a metagraph-based knowledge graph developed by the OpenCog project. AtomSpace provides a flexible, semantic framework for representing and querying relationships between concepts, supporting advanced reasoning and AI-driven applications.
+Mindplex Hyperon turns Mindplex articles into a symbolic knowledge graph for visual exploration, pattern mining, and explainable reasoning.
 
-The core aim of Mindplex Hyperon is to build recommendations that are not only accurate but also interpretable and trustworthy. By utilizing AtomSpace, the engine can mimic user behavior from historical data, constructing an agent that predicts how a user will interact with future content or features. This agent-based modeling enables the system to provide recommendations with clear, logical explanations, helping users understand the reasoning behind each suggestion.
+This branch uses these components:
 
-Key features include:
-- Transparent and explainable recommendations
-- User-centric agent modeling based on interaction history
-- Integration with AtomSpace for semantic knowledge representation
-- Support for logic-based graph processing and advanced analytics
+- **Mindplex Hyperon** fetches articles, serves the UI, and coordinates the workflow.
+- [**metadata-extractor2PLN**](https://github.com/yotors/metadata-extracter2PLN) converts article metadata and text into PeTTa-formatted facts.
+- [**NL2PLN**](https://github.com/yotors/NL2PLN) translates natural-language statements and questions into validated PeTTaChainer input.
+- [**PeTTaChainer**](https://github.com/yotors/PeTTaChainer) persists knowledge bases and provides backward and forward reasoning.
+- [**PeTTa**](https://github.com/yotors/PeTTa) runs the pattern miner locally as a Git submodule.
 
-Mindplex Hyperon sets a new standard for recommendation systems by focusing on transparency, explainability, and robust knowledge graph integration. The project is designed for extensibility, allowing researchers and developers to build upon its foundation for a wide range of AI and data-driven applications.
+## Requirements
 
-## Testing
+- Docker with Docker Compose
+- Mindplex credentials or a valid Mindplex API token
+- A Gemini key for NL2PLN and an ASI:One or Gemini key for metadata extraction
 
-Each feature has associated test cases located in the `features/tests` directory. The test files are named with a `-test` suffix to facilitate CI/CD recognition. 
+## Setup
 
-- **Feature One Tests**: Located in `features/tests/FeatureOne-test.metta`
-- **Feature Two Tests**: Located in `features/tests/FeatureTwo-test.metta`
+Clone the repository and initialize PeTTa, which is required by the local pattern miner:
 
-## CI/CD
+```bash
+git submodule update --init --recursive PeTTa
+cp .env.example .env
+```
 
-This project utilizes GitHub Actions for continuous integration and deployment. The CI/CD workflow is configured to run all test files upon every pull request to ensure that new changes do not break existing functionality.
+Set the generated service secrets, provider credentials, and Mindplex credentials in `.env`:
 
-## Contributing
+```dotenv
+POSTGRES_PASSWORD=replace-with-a-random-password
+METADATA_EXTRACTOR_API_KEY=mindplex:replace-with-at-least-32-random-characters
+NL2PLN_API_KEY=replace-with-at-least-32-random-characters
+PETTACHAINER_API_KEY=replace-with-at-least-32-random-characters
 
-We welcome contributions to Mindplex Hyperon! Please refer to the [CONTRIBUTING.md](CONTRIBUTING.md) file for guidelines on how to contribute, including the requirement for tests in every pull request and naming conventions.
+GEMINI_API_KEY=
+ASI_ONE_API_KEY=
+ASI_API_KEY=
 
-## Setup Instructions
+# Use a Mindplex service account or existing tokens
+MINDPLEX_SERVICE_EMAIL=
+MINDPLEX_SERVICE_PASSWORD=
+MINDPLEX_API_TOKEN=
+MINDPLEX_API_REFRESH_TOKEN=
+```
 
-To set up the project locally, clone the repository and install any necessary dependencies. Follow the instructions in the `CONTRIBUTING.md` file for detailed setup and contribution guidelines.
+Start the application:
 
-## Usage Examples
+```bash
+docker compose up --build
+```
 
-Refer to the individual feature files for usage examples and implementation details. Each feature is designed to be modular and can be integrated into larger systems as needed.
+Compose builds the dependency repositories from GitHub and starts the complete stack. Open [http://localhost:3001](http://localhost:3001). The health endpoint is [http://localhost:3001/api/health](http://localhost:3001/api/health).
 
-## Documentation 
+## Basic workflow
 
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Xcceleran-do/Mindplex-Hyperon)
+1. Enter a Mindplex username and ingest their articles.
+2. Explore the extracted attributes in the knowledge graph.
+3. Select multiple attributes to show articles matching all selections.
+4. Run pattern mining to discover supported rules.
+5. Query the backward chainer for explanations grounded in the dataset and mined rules.
+
+Ingestion results are cached for three days by default. Use **Force refresh** in the UI when a fresh extraction is required.
+
+## Useful commands
+
+```bash
+# Follow application logs
+docker compose logs -f
+
+# Rebuild only the frontend
+docker compose build frontend
+docker compose up -d --no-deps frontend
+
+# Stop the application
+docker compose down
+```
+
+Runtime datasets and authentication tokens are stored in Docker-mounted data locations and are not committed to the repository.

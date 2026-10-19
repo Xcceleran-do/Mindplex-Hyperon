@@ -1,0 +1,21 @@
+!(import! &self ../../frequent-pattern-miner/conj_exp)
+
+(= (benchmark-candidates)
+   ((engagement "$x" low)
+    (f01 "$x" v01) (f02 "$x" v02) (f03 "$x" v03)
+    (f04 "$x" v04) (f05 "$x" v05) (f06 "$x" v06)
+    (f07 "$x" v07) (f08 "$x" v08) (f09 "$x" v09)
+    (f10 "$x" v10) (f11 "$x" v11) (f12 "$x" v12)
+    (f13 "$x" v13) (f14 "$x" v14) (f15 "$x" v15)
+    (f16 "$x" v16) (f17 "$x" v17) (f18 "$x" v18)
+    (f19 "$x" v19)))
+
+(= (benchmark-native $depth)
+   (let* (($start (current-time))
+          ($results (unique-combinations-star (benchmark-candidates) $depth))
+          ($end (current-time)))
+     (benchmark native $depth (size-atom $results) (- $end $start))))
+
+!(benchmark-native 3)
+!(benchmark-native 4)
+!(benchmark-native 5)

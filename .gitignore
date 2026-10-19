@@ -1,0 +1,48 @@
+# Python
+*.pyc
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.ruff_cache/
+*.env
+*.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+
+# VS Code
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+.omegaclaw-mindplex/
+.mindplex-auth/
+
+# Build
+build/
+dist/
+*.egg-info/
+
+# Node.js (if applicable)
+node_modules/
+
+# Environment files
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Misc
+*.swp
+*.bak
