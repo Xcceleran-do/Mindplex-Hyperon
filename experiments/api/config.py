@@ -44,9 +44,8 @@ CHAINER_METTA_SETUP = f"""
 """
 
 MINING_METTA_SETUP = f"""
-!(import! &self {PROJECT_ROOT}/PeTTa/lib/lib_import.metta)
 !(import! &self {PROJECT_ROOT}/PeTTa/lib/lib_spaces)
-!(import_prolog_functions_from_file "{PROJECT_ROOT}/experiments/frequent-pattern-miner/conj_exp.pl" (unique_combinations_star cut-first-char promote_engagement_conj))
+!(import! &self {PROJECT_ROOT}/experiments/frequent-pattern-miner/conj_exp)
 {CHAINER_METTA_SETUP}
 !(import! &self {PROJECT_ROOT}/experiments/frequent-pattern-miner/frequent-pattern-miner)
 !(import! &self {PROJECT_ROOT}/experiments/pattern-miner/pattern-miner)

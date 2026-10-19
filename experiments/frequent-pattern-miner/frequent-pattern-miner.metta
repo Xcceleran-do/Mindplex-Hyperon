@@ -22,11 +22,11 @@
 ;; Output: the instantiated pattern with a variable on the open side, or Empty
 ; (:candidatePatternMaker (-> SpaceType (Specialized Pattern) Number Expression Expression))
 ( = (candidatePatternMaker $dbspace ($link left $rValue) $minsup)
-        (if (sup-eval $dbspace ($link $x $rValue) $minsup) ($link (cut-first-char l$x) $rValue) (empty))
+        (if (sup-eval $dbspace ($link $x $rValue) $minsup) ($link "$x" $rValue) (empty))
 )
 
 ( = (candidatePatternMaker $dbspace ($link $lValue right) $minsup)
-    (if (sup-eval $dbspace ($link $lValue $y) $minsup) ($link $lValue (cut-first-char r$y)) (empty))
+    (if (sup-eval $dbspace ($link $lValue $y) $minsup) ($link $lValue "$y") (empty))
 )
 
 
@@ -72,7 +72,7 @@
             (let* (
                 ($stats     (pattern-stats $target-pred $target-value $conjunct $dbspace))
                 ($CTV       (compute-ctv $stats))
-                ($organized (promote_engagement_conj $conjunct))
+                ($organized (promote-engagement-conj $conjunct))
                 ($result    (supportOf ($organized $CTV) $cnt))
             )
             $result)
@@ -91,7 +91,7 @@
 ;;      CTV computed relative to $target-pred/$target-value
 (= (frequency-pattern-miner $dbspace $minsup $depth $target-pred $target-value)
    (let $candidatePatterns (collapse (absSpeCan $dbspace $minsup))
-        (let $conjuncts (unique_combinations_star $candidatePatterns $depth)
+        (let $conjuncts (unique-combinations-star $candidatePatterns $depth)
         (collapse (formatter (superpose $conjuncts) $dbspace $minsup $target-pred $target-value))))
 )
 

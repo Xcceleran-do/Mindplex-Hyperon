@@ -1,0 +1,126 @@
+(= (required-functors) (engagement))
+(= (placeholder-names) ("$x" "$y"))
+
+(= (clause-placeholders $term)
+   (unique-atom (collect-placeholders $term)))
+
+(= (collect-placeholders $term)
+   (if (is-expr $term)
+       (collect-placeholders-list $term)
+       (if (is-member $term (placeholder-names)) ($term) ())))
+
+(= (collect-placeholders-list $l)
+   (if (== $l ())
+       ()
+       (let ($h $t) (decons-atom $l)
+            (union-atom (collect-placeholders $h)
+                        (collect-placeholders-list $t)))))
+(= (functor-of $e) (car-atom $e))
+
+(= (build-infos $expr)
+      ($expr (clause-placeholders $expr) (functor-of $expr)))
+
+(= (collect-hubs $infos) (unique-atom (all-placeholders $infos)))
+
+(= (all-placeholders $infos)
+   (if (== $infos ())
+       ()
+       (let (($e $ks $f) $t) (decons-atom $infos)
+            (union-atom $ks (all-placeholders $t)))))
+
+(= (pool-with-hub ($e $ks $f) $hub)
+   (if (is-member $hub $ks) ($e $ks $f) (empty)))
+(= (choose-combo $pool $plen $hub $k $sel $used-functors $used-placeholders $missing)
+   (if (== $k 0)
+       (if (== $missing ())
+           ((reverse $sel) (cons-atom $hub $used-placeholders))
+           (empty))
+       (if (< $plen $k)
+           (empty)
+           (let* ((($info $rest) (decons-atom $pool))
+                  ($rlen (- $plen 1)))
+             (if (can-add $hub $info $used-functors $used-placeholders)
+                 (let* ((($e $ks $f) $info)
+                        ($non-hub (exclude-item $hub $ks))
+                        ($functors2 (cons-atom $f $used-functors))
+                        ($placeholders2 (union-atom $non-hub $used-placeholders))
+                        ($missing2 (exclude-item $f $missing)))
+                   (superpose
+                      ((choose-combo $rest $rlen $hub (- $k 1)
+                                     (cons-atom $e $sel) $functors2
+                                     $placeholders2 $missing2)
+                       (choose-combo $rest $rlen $hub $k $sel
+                                     $used-functors $used-placeholders $missing))))
+                 (choose-combo $rest $rlen $hub $k $sel
+                               $used-functors $used-placeholders $missing))))))
+
+(= (can-add $hub ($e $ks $f) $used-functors $used-placeholders)
+   (if (not (is-member $f $used-functors))
+       (== (intersection-atom
+              (exclude-item $hub $ks)
+              $used-placeholders)
+           ())
+       False))
+(= (generate-combo $infos $hubs $k)
+   (let $hub (superpose $hubs)
+     (let* (($pool (collapse (pool-with-hub (superpose $infos) $hub)))
+            ($plen (size-atom $pool)))
+       (if (and (>= $plen $k) (pool-covers-required $pool))
+           (choose-combo $pool $plen $hub $k () () () (required-functors))
+           (empty)))))
+
+(= (pool-covers-required $pool)
+   (subset-of (required-functors) (info-functors $pool)))
+
+(= (info-functors $infos)
+   (collapse (let ($e $ks $f) (superpose $infos) $f)))
+
+(= (subset-of $xs $ys)
+   (if (== $xs ())
+       True
+       (let ($h $t) (decons-atom $xs)
+            (if (is-member $h $ys) (subset-of $t $ys) False))))
+(= (replace-key $term $key $var)
+   (if (is-expr $term)
+       (replace-key-list $term $key $var)
+       (if (== $term $key) $var $term)))
+
+(= (replace-key-list $ls $key $var)
+   (if (== $ls ())
+       ()
+       (let ($h $t) (decons-atom $ls)
+            (cons-atom (replace-key $h $key $var)
+                       (replace-key-list $t $key $var)))))
+
+(= (promote-placeholders $term $names)
+   (if (== $names ())
+       $term
+       (let* ((($name $rest) (decons-atom $names))
+              ($var (parse $name)))
+         (promote-placeholders (replace-key $term $name $var) $rest))))
+
+(= (finalize ($combo $names))
+   (conjunct (cons-atom , (promote-placeholders $combo $names))))
+
+(= (unique-combinations-star $exprs $size)
+   (let $n (size-atom $exprs)
+        (if (<= $size 0)
+            ()
+            (if (> $size $n)
+                ()
+                (let* (($infos (collapse (build-infos (superpose $exprs))))
+                       ($raw (collapse
+                                (generate-combo $infos (collect-hubs $infos) $size))))
+                  (collapse (finalize (superpose $raw))))))))
+(= (promote-engagement-conj $conjunction)
+   (let ($others $required) (split-required (cdr-atom $conjunction))
+        (cons-atom , (append $others $required))))
+
+(= (split-required $cs)
+   (if (== $cs ())
+       (() ())
+       (let* ((($h $t) (decons-atom $cs))
+              (($others $required) (split-required $t)))
+         (if (is-member (functor-of $h) (required-functors))
+             ($others (cons-atom $h $required))
+             ((cons-atom $h $others) $required)))))
